@@ -2,6 +2,7 @@ import type { PatientInput, RuntimeContext, StateExtractionResult } from "@/type
 import type { ClinicalStageNode, PromptItem } from "@/lib/protocol/source-fidelity-types";
 import { assessRuntimePatientInput, deriveS02CollectionTurnAction, deriveS02RatingTurnAction, isS02CollectionField, isS02RatingCorrectionField, requiresSemanticInputAssessment } from "@/lib/runtime/runtime-input-assessment";
 import { matchEnumChoice, parseDeterministicPromptInput, parsePrivatePlaceholderLabelsInput } from "@/lib/runtime/runtime-deterministic-input";
+import { applySessionConditionDerivations } from "@/lib/runtime/session-condition-derivations";
 
 export function normalizeText(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
@@ -1401,6 +1402,14 @@ export async function extractRuntimeState(input: {
     const pairedCount = Number(nextFields[`${pairedField}Count`] ?? 0);
     nextFields[completeField] = pairedCount > 0 && (count >= pairedCount || nextFields[`${listField}NoMore`] === true);
   }
+
+  // S05's residual-shame node and S06's yellow/red homework block are each
+  // reachable through exactly one conditional edge, on a field the catalog read
+  // but nothing wrote -- so both branches were unreachable, including the one
+  // enforcing TBCT-S06-NO-YELLOW-RED-HOMEWORK. Derived here, from values these
+  // sessions already record, for the same reason participantRejectsRemainder is
+  // derived above rather than asked for.
+  applySessionConditionDerivations(nextFields);
 
   return {
     fields: nextFields,
