@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { selectDistortionCandidates } from "@/lib/protocol/sessions/s01-distortion-candidates";
+import { selectDistortionCandidates } from "@/patient/sessions/s01/distortion-candidates";
 
 export const runtime = "nodejs";
 const bodySchema = z.object({

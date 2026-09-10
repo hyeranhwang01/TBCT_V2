@@ -14,14 +14,14 @@ import type {
   SourceFidelityStatus,
   SourceTrace,
 } from "@/lib/protocol/source-fidelity-types";
-import * as s01 from "@/lib/protocol/sessions/s01";
-import * as s02 from "@/lib/protocol/sessions/s02";
-import * as s03 from "@/lib/protocol/sessions/s03";
-import * as s04 from "@/lib/protocol/sessions/s04";
-import * as s05 from "@/lib/protocol/sessions/s05";
-import * as s06 from "@/lib/protocol/sessions/s06";
-import * as s07 from "@/lib/protocol/sessions/s07";
-import * as s08 from "@/lib/protocol/sessions/s08";
+import * as s01 from "@/patient/sessions/s01/spec";
+import * as s02 from "@/patient/sessions/s02/spec";
+import * as s03 from "@/patient/sessions/s03/spec";
+import * as s04 from "@/patient/sessions/s04/spec";
+import * as s05 from "@/patient/sessions/s05/spec";
+import * as s06 from "@/patient/sessions/s06/spec";
+import * as s07 from "@/patient/sessions/s07/spec";
+import * as s08 from "@/patient/sessions/s08/spec";
 
 export const CANONICAL_PROTOCOL_ID = "tbct-br-001";
 export const CANONICAL_SOURCE_VERSION = `tbct-source-${TBCT_SOURCE_TEXT_HASH.slice(0, 12)}`;

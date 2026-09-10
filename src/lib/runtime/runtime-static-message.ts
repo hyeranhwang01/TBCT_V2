@@ -1,12 +1,12 @@
 import { resolvePromptLocaleText } from "@/lib/runtime/runtime-release-normalizer";
-import * as s01 from "@/lib/runtime/static-messages/s01";
-import * as s02 from "@/lib/runtime/static-messages/s02";
-import * as s03 from "@/lib/runtime/static-messages/s03";
-import * as s04 from "@/lib/runtime/static-messages/s04";
-import * as s05 from "@/lib/runtime/static-messages/s05";
-import * as s06 from "@/lib/runtime/static-messages/s06";
-import * as s07 from "@/lib/runtime/static-messages/s07";
-import * as s08 from "@/lib/runtime/static-messages/s08";
+import * as s01 from "@/patient/sessions/s01/messages";
+import * as s02 from "@/patient/sessions/s02/messages";
+import * as s03 from "@/patient/sessions/s03/messages";
+import * as s04 from "@/patient/sessions/s04/messages";
+import * as s05 from "@/patient/sessions/s05/messages";
+import * as s06 from "@/patient/sessions/s06/messages";
+import * as s07 from "@/patient/sessions/s07/messages";
+import * as s08 from "@/patient/sessions/s08/messages";
 import type { PromptItem } from "@/lib/protocol/source-fidelity-types";
 import type { RuntimeContext } from "@/types/runtime-session";
 

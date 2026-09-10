@@ -11,10 +11,10 @@ import { recordModelUsage } from "@/lib/assessment/model-observability";
 import type { PatientRendererRequest } from "@/lib/patient-renderer/patient-renderer-contract";
 import { isDialogueAgentEnabled, resolveDialogueAgentMessage } from "@/lib/dialogue-agent/dialogue-agent-orchestrator";
 import { defaultFallbackPatientText, resolveModelGroundingText } from "@/lib/runtime/runtime-release-normalizer";
-import { resolveRepeatedFallbackText as resolveS01RepeatedFallbackText } from "@/lib/runtime/static-messages/s01";
-import { resolveRepeatedFallbackText as resolveS02RepeatedFallbackText } from "@/lib/runtime/static-messages/s02";
-import { resolveRepeatedFallbackText as resolveS03RepeatedFallbackText } from "@/lib/runtime/static-messages/s03";
-import { composeDistortionCandidateText, selectDistortionCandidatesDeterministically, type DistortionCandidate } from "@/lib/protocol/sessions/s01-distortion-candidates";
+import { resolveRepeatedFallbackText as resolveS01RepeatedFallbackText } from "@/patient/sessions/s01/messages";
+import { resolveRepeatedFallbackText as resolveS02RepeatedFallbackText } from "@/patient/sessions/s02/messages";
+import { resolveRepeatedFallbackText as resolveS03RepeatedFallbackText } from "@/patient/sessions/s03/messages";
+import { composeDistortionCandidateText, selectDistortionCandidatesDeterministically, type DistortionCandidate } from "@/patient/sessions/s01/distortion-candidates";
 
 async function callPatientRenderer(request: PatientRendererRequest, context: { sessionId: string; turnId: string }) {
   if (typeof window === "undefined") { const { renderPatientReflection } = await import("@/lib/patient-renderer/anthropic-patient-renderer"); return renderPatientReflection(request, context); }
@@ -32,7 +32,7 @@ async function callPatientRenderer(request: PatientRendererRequest, context: { s
 // callPatientRenderer's dynamic-import/fetch split above.
 async function callDistortionClassifier(request: { locale: string; situation: string; automaticThought: string; emotion?: string }, context: { sessionId: string; turnId: string }): Promise<{ candidates: DistortionCandidate[] }> {
   if (typeof window === "undefined") {
-    const { selectDistortionCandidates } = await import("@/lib/protocol/sessions/s01-distortion-candidates");
+    const { selectDistortionCandidates } = await import("@/patient/sessions/s01/distortion-candidates");
     const result = await selectDistortionCandidates(request, context);
     return { candidates: result.candidates };
   }

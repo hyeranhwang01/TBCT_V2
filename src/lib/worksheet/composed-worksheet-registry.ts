@@ -1,12 +1,12 @@
 import type { ComponentType } from "react";
-import { S01Worksheet } from "@/components/runtime/worksheet-renderers/s01-worksheet";
-import { S02Worksheet } from "@/components/runtime/worksheet-renderers/s02-worksheet";
-import { S03Worksheet } from "@/components/runtime/worksheet-renderers/s03-worksheet";
-import { S04Worksheet } from "@/components/runtime/worksheet-renderers/s04-worksheet";
-import { S05Worksheet } from "@/components/runtime/worksheet-renderers/s05-worksheet";
-import { S06Worksheet } from "@/components/runtime/worksheet-renderers/s06-worksheet";
-import { S07Worksheet } from "@/components/runtime/worksheet-renderers/s07-worksheet";
-import { S08Worksheet } from "@/components/runtime/worksheet-renderers/s08-worksheet";
+import { S01Worksheet } from "@/patient/sessions/s01/worksheet";
+import { S02Worksheet } from "@/patient/sessions/s02/worksheet";
+import { S03Worksheet } from "@/patient/sessions/s03/worksheet";
+import { S04Worksheet } from "@/patient/sessions/s04/worksheet";
+import { S05Worksheet } from "@/patient/sessions/s05/worksheet";
+import { S06Worksheet } from "@/patient/sessions/s06/worksheet";
+import { S07Worksheet } from "@/patient/sessions/s07/worksheet";
+import { S08Worksheet } from "@/patient/sessions/s08/worksheet";
 import type { WorksheetView } from "@/types/worksheet";
 
 export interface ComposedWorksheetProps {

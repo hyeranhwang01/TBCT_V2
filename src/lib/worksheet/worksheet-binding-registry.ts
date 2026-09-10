@@ -1,12 +1,12 @@
 import type { WorksheetBinding } from "@/types/worksheet";
-import { TBCT_S01_BINDINGS } from "@/lib/worksheet/worksheet-bindings/tbct-s01";
-import { TBCT_S02_BINDINGS } from "@/lib/worksheet/worksheet-bindings/tbct-s02";
-import { TBCT_S03_BINDINGS } from "@/lib/worksheet/worksheet-bindings/tbct-s03";
-import { TBCT_S04_BINDINGS } from "@/lib/worksheet/worksheet-bindings/tbct-s04";
-import { TBCT_S05_BINDINGS } from "@/lib/worksheet/worksheet-bindings/tbct-s05";
-import { TBCT_S06_BINDINGS } from "@/lib/worksheet/worksheet-bindings/tbct-s06";
-import { TBCT_S07_BINDINGS } from "@/lib/worksheet/worksheet-bindings/tbct-s07";
-import { TBCT_S08_BINDINGS } from "@/lib/worksheet/worksheet-bindings/tbct-s08";
+import { TBCT_S01_BINDINGS } from "@/patient/sessions/s01/worksheet-binding";
+import { TBCT_S02_BINDINGS } from "@/patient/sessions/s02/worksheet-binding";
+import { TBCT_S03_BINDINGS } from "@/patient/sessions/s03/worksheet-binding";
+import { TBCT_S04_BINDINGS } from "@/patient/sessions/s04/worksheet-binding";
+import { TBCT_S05_BINDINGS } from "@/patient/sessions/s05/worksheet-binding";
+import { TBCT_S06_BINDINGS } from "@/patient/sessions/s06/worksheet-binding";
+import { TBCT_S07_BINDINGS } from "@/patient/sessions/s07/worksheet-binding";
+import { TBCT_S08_BINDINGS } from "@/patient/sessions/s08/worksheet-binding";
 
 // Add a session's binding module here to extend worksheet coverage. Every
 // entry must reference a real canonicalFieldKey (see the per-session file's

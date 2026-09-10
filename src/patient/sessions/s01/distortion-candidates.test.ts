@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { S01_COGNITIVE_DISTORTIONS, S01_DISTORTION_IDS } from "@/lib/protocol/sessions/s01-cognitive-distortions";
-import { composeDistortionCandidateText, sanitizeCandidates, selectDistortionCandidatesDeterministically } from "@/lib/protocol/sessions/s01-distortion-candidates";
+import { S01_COGNITIVE_DISTORTIONS, S01_DISTORTION_IDS } from "@/patient/sessions/s01/cognitive-distortions";
+import { composeDistortionCandidateText, sanitizeCandidates, selectDistortionCandidatesDeterministically } from "@/patient/sessions/s01/distortion-candidates";
 
 describe("S01_COGNITIVE_DISTORTIONS registry", () => {
   it("has exactly 15 approved distortions, each fully populated with a unique id", () => {

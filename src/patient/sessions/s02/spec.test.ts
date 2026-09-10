@@ -3,7 +3,7 @@ import { createCanonicalTestRuntimeSession, getRuntimeSession } from "@/lib/api/
 import { startRuntimeSession, submitPatientInput } from "@/lib/api/runtime-execution-api";
 import { getLocalDb } from "@/lib/db/tbct-local-db";
 import { parsePrivatePlaceholderLabelsInput } from "@/lib/runtime/runtime-deterministic-input";
-import { resolveStaticText } from "@/lib/runtime/static-messages/s02";
+import { resolveStaticText } from "@/patient/sessions/s02/messages";
 import type { PromptItem } from "@/lib/protocol/source-fidelity-types";
 import { resolveDialogueAgentMessage } from "@/lib/dialogue-agent/dialogue-agent-orchestrator";
 

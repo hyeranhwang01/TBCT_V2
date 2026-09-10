@@ -12,11 +12,11 @@
 // visit directly at /preview/worksheets.
 
 import { useState } from "react";
-import { S02Worksheet } from "@/components/runtime/worksheet-renderers/s02-worksheet";
-import { S03Worksheet } from "@/components/runtime/worksheet-renderers/s03-worksheet";
+import { S02Worksheet } from "@/patient/sessions/s02/worksheet";
+import { S03Worksheet } from "@/patient/sessions/s03/worksheet";
 import { ScoreChip } from "@/components/runtime/worksheet-renderers/shared";
-import { TBCT_S02_BINDINGS } from "@/lib/worksheet/worksheet-bindings/tbct-s02";
-import { TBCT_S03_BINDINGS } from "@/lib/worksheet/worksheet-bindings/tbct-s03";
+import { TBCT_S02_BINDINGS } from "@/patient/sessions/s02/worksheet-binding";
+import { TBCT_S03_BINDINGS } from "@/patient/sessions/s03/worksheet-binding";
 import type { WorksheetBinding, WorksheetFieldStatus, WorksheetFieldView, WorksheetView } from "@/types/worksheet";
 
 function makeField(binding: WorksheetBinding, value: unknown, status: WorksheetFieldStatus = "participant_confirmed"): WorksheetFieldView {
