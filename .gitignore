@@ -10,3 +10,4 @@ verifybuild
 .env*
 
 *.log
+.next-dev-local

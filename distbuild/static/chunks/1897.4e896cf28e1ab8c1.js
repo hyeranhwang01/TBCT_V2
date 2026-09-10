@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunk_N_E=self.webpackChunk_N_E||[]).push([[1897],{51897:(e,t,u)=>{u.r(t),u.d(t,{RuntimeEscalationsPage:()=>a});var s=u(12115),n=u(20063);function a(){let e=(0,n.useRouter)();return(0,s.useEffect)(()=>{e.replace("/runtime/safety/events")},[e]),null}}}]);
