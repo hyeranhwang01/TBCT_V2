@@ -72,8 +72,40 @@ function reflectThenAskForNextRatingKo(input: { listField: unknown; ratingsField
   return parts.join(" ") || undefined;
 }
 
+function continueAfterRatingCorrection(input: {
+  listField: unknown;
+  ratingsField: unknown;
+  askVerb: string;
+  isKorean: boolean;
+}) {
+  const list = stringList(input.listField);
+  const ratings = ratingNumbers(input.ratingsField);
+  const next = list[ratings.length];
+  if (!next) return undefined;
+  return input.isKorean
+    ? `알겠습니다. 말씀하신 항목은 평가 목록에서 제외했어요. ${input.askVerb} ${next}에 대해서는 어떻게 평가하시겠어요?`
+    : `Understood — I removed that item from the rating list. ${input.askVerb} ${next}?`;
+}
+
 export function resolveStaticText(promptItem: PromptItem, fields: Record<string, unknown>, locale?: string): string | undefined {
   const isKorean = (locale ?? "").toLowerCase().startsWith("ko");
+
+  if (promptItem.id === "tbct-s02-n02-p06-problem-confirmation") {
+    if (fields.problemsDuplicate === true) {
+      return isKorean
+        ? "이미 목록에 있는 내용이라 중복으로 추가하지는 않았어요. 기존 문제 항목은 그대로 유지할게요."
+        : "That is already on the list, so I did not add it twice. I'll keep the existing problem entry as it is.";
+    }
+    return isKorean ? "알겠습니다 — 목록에 추가할게요." : "Got it — I'll add that to the list.";
+  }
+  if (promptItem.id === "tbct-s02-n07-p07-goal-confirmation") {
+    if (fields.goalsDuplicate === true) {
+      return isKorean
+        ? "이미 목록에 있는 내용이라 중복으로 추가하지는 않았어요. 기존 목표 항목은 그대로 유지할게요."
+        : "That is already on the list, so I did not add it twice. I'll keep the existing goal entry as it is.";
+    }
+    return isKorean ? "정말 멋진 목표네요 — 추가해 드릴게요." : "That's a wonderful goal — I'll add that.";
+  }
 
   // CCPH scale UX pass: the participant must actually understand the 0-5
   // scale before rating starts, not just have the anchor text technically
@@ -155,6 +187,14 @@ export function resolveStaticText(promptItem: PromptItem, fields: Record<string,
     if (fields.currentProblemScoreUncertain === true) {
       return composeScoreUncertaintyClarification({ listField: fields.problems, ratingsField: fields.problemRatings, range: fields.currentProblemScoreUncertainRange, isKorean });
     }
+    if (fields.problemRatingCorrectionApplied === true) {
+      return continueAfterRatingCorrection({
+        listField: fields.problems,
+        ratingsField: fields.problemRatings,
+        askVerb: isKorean ? "같은 0에서 5까지의 색상 척도로" : "Using the same 0 to 5 color scale, how would you rate",
+        isKorean,
+      });
+    }
     return isKorean
       ? reflectThenAskForNextRatingKo({ listField: fields.problems, ratingsField: fields.problemRatings, askVerb: "같은 0에서 5까지의 색상 척도로" })
       : reflectThenAskForNextRating({ listField: fields.problems, ratingsField: fields.problemRatings, askVerb: "Using the same 0 to 5 color scale, how would you rate" });
@@ -162,6 +202,14 @@ export function resolveStaticText(promptItem: PromptItem, fields: Record<string,
   if (promptItem.id === "tbct-s02-n09-p01-reflect-goal-score") {
     if (fields.currentGoalScoreUncertain === true) {
       return composeScoreUncertaintyClarification({ listField: fields.goals, ratingsField: fields.goalRatings, range: fields.currentGoalScoreUncertainRange, isKorean });
+    }
+    if (fields.goalRatingCorrectionApplied === true) {
+      return continueAfterRatingCorrection({
+        listField: fields.goals,
+        ratingsField: fields.goalRatings,
+        askVerb: isKorean ? "지금 이 목표를 추구하는 것이 얼마나 어렵거나 힘들게 느껴지시나요 —" : "Right now, how difficult or distressing does it feel to pursue",
+        isKorean,
+      });
     }
     // §5.2 부수 수정: askVerb no longer claims "the same scale" (CCGH's
     // anchors differ from CCPH's, only the colors repeat).
@@ -195,7 +243,8 @@ export const koreanText: Record<string, string> = {
   "tbct-s02-n02-p03-problem-avoidance": "요즘 계속 피하고 있거나 걱정하고 있는 일이 있으신가요?",
   "tbct-s02-n02-p04-problem-therapy-goal": "무엇 때문에 치료를 받으러 오셨나요, 또는 가장 바꾸고 싶은 게 무엇인가요?",
   "tbct-s02-n02-p05-problem-forward-importance": "지금 가장 힘들게 하는 것, 그리고 해결되면 정말 달라질 것 같은 일들을 떠올려 보세요.",
-  "tbct-s02-n02-p06-problem-confirmation": "알겠습니다 — 목록에 추가할게요.",
+  // problem-confirmation is resolved dynamically above so it can distinguish
+  // a newly added item from a duplicate that the runtime deliberately kept out.
   "tbct-s02-n02-p07-problem-reframe": "그거 정말 힘드셨겠어요. 좀 더 도움이 되는 방식으로 정리해 볼까요 — '[situation]에 어떻게 대처하고 있는지'로 표현해 보면 어떨까요? 그러면 상황 자체는 통제할 수 없더라도, 그 안에서 본인의 여정을 계속 추적해 나갈 수 있어요. 이렇게 느껴지시나요?",
   "tbct-s02-n03-p02-acknowledge-private-placeholder": "그런 게 있다는 걸 알려주셔서 감사해요. 그것도 용기가 필요한 일이에요. 다른 것들과 함께 계속 추적해 나갈 거고, 준비되셨을 때 — 혹은 끝내 그럴 필요가 없으시더라도 — 더 이야기하고 싶으시면 언제든 그렇게 하시면 됩니다.",
   "tbct-s02-n03-p03-continue-without-placeholder": "네, 그럼요 — 괜찮습니다. 그럼 계속 진행할게요.",
@@ -210,7 +259,8 @@ export const koreanText: Record<string, string> = {
   "tbct-s02-n07-p04-goal-freedom": "무엇이 있으면 좀 더 편안하고, 좀 더 본인다우며, 좀 더 자유롭게 느껴지실까요?",
   "tbct-s02-n07-p05-goal-dream": "오랫동안 하고 싶었거나 되고 싶었던 것 — 장기적인 꿈이라도 — 본인에게 중요하게 느껴지는 게 있으신가요?",
   "tbct-s02-n07-p06-goal-overlap": "그건 우리 목록에 넣어야 할 문제이기도 하고, 목표이기도 한 것 같네요. 둘 다에 추가해 드릴까요?",
-  "tbct-s02-n07-p07-goal-confirmation": "정말 멋진 목표네요 — 추가해 드릴게요.",
+  // goal-confirmation is likewise dynamic; a fixed Korean entry here would
+  // overwrite its duplicate-aware text in resolvePromptLocaleText.
   "tbct-s02-n08-p01-goal-rating-card-check": "아직 평가 카드를 가지고 계신가요?",
   "tbct-s02-n09-p02-acknowledge-difficult-goal": "지금은 멀게 느껴지더라도, 정말 의미 있는 목표네요. 이런 목표들이야말로 치료를 통해 풀리는 경우가 많아요.",
   "tbct-s02-n09-p03-acknowledge-achieved-goal": "훌륭해요 — 이미 이걸 이루며 살고 계신 것 같네요!",

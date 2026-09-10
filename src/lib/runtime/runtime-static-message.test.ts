@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { resolveStaticPatientMessage } from "@/lib/runtime/runtime-static-message";
-import { resolveModelGroundingText } from "@/lib/runtime/runtime-release-normalizer";
+import { promptRequiresPatientInput, resolveModelGroundingText } from "@/lib/runtime/runtime-release-normalizer";
+import { CANONICAL_PROMPT_ITEMS } from "@/lib/protocol/source-fidelity-catalog";
 import type { PromptItem } from "@/lib/protocol/source-fidelity-types";
 
 // Regression test for a real leak a Korean patient hit in production: a
@@ -67,6 +68,79 @@ describe("resolveStaticPatientMessage: S02 CCPH/CCGH six-anchor scale text stays
       expect(result!.patientMessage.length).toBeLessThanOrEqual(600);
     });
   }
+});
+
+describe("resolveStaticPatientMessage: S02 rating corrections are acknowledged without replaying a stale score", () => {
+  it.each([
+    ["tbct-s02-n05-p01-reflect-problem-score", "ko-KR", { problems: ["문제A", "문제C"], problemRatings: [5], problemRatingCorrectionApplied: true }, ["제외", "문제C"]],
+    ["tbct-s02-n05-p01-reflect-problem-score", "en-US", { problems: ["Problem A", "Problem C"], problemRatings: [5], problemRatingCorrectionApplied: true }, ["removed", "Problem C"]],
+    ["tbct-s02-n09-p01-reflect-goal-score", "ko-KR", { goals: ["목표A", "목표C"], goalRatings: [5], goalRatingCorrectionApplied: true }, ["제외", "목표C"]],
+    ["tbct-s02-n09-p01-reflect-goal-score", "en-US", { goals: ["Goal A", "Goal C"], goalRatings: [5], goalRatingCorrectionApplied: true }, ["removed", "Goal C"]],
+  ] as const)("%s in %s", (promptItemId, locale, fields, mustContain) => {
+    const result = resolveStaticPatientMessage(makePromptWithFallback(promptItemId, ""), locale, { fields, riskSignals: [], iterationCounts: {}, riskLevel: "low" });
+    expect(result).not.toBeNull();
+    for (const phrase of mustContain) expect(result!.patientMessage).toContain(phrase);
+    expect(result!.patientMessage).not.toContain(locale === "ko-KR" ? "5점" : "is a 5");
+  });
+});
+
+describe("S02 passive reflections do not demand a meaningless patient reply", () => {
+  it.each([
+    "tbct-s02-n05-p02-acknowledge-distress",
+    "tbct-s02-n05-p03-acknowledge-manageable",
+    "tbct-s02-n06-p02-problem-total-personal",
+    "tbct-s02-n09-p02-acknowledge-difficult-goal",
+    "tbct-s02-n09-p03-acknowledge-achieved-goal",
+    "tbct-s02-n10-p02-goal-total-personal",
+  ])("%s advances immediately after delivery", (promptItemId) => {
+    const promptItem = CANONICAL_PROMPT_ITEMS.find((candidate) => candidate.id === promptItemId);
+    expect(promptItem).toBeDefined();
+    expect(promptRequiresPatientInput(promptItem!)).toBe(false);
+  });
+});
+
+describe("S01 three-person insight reflects the participant's actual answers", () => {
+  const promptItemId = "tbct-s01-n07-p01-three-person-insight";
+
+  it("does not claim that feelings and actions differed when the participant gave the same answers", () => {
+    const fields = {
+      candidateOneEmotion: "불안해요",
+      candidateTwoEmotion: "불안해요",
+      candidateThreeEmotion: "불안해요",
+      candidateOneBehavior: "피할 것 같아요",
+      candidateTwoBehavior: "피할 것 같아요",
+      candidateThreeBehavior: "피할 것 같아요",
+    };
+    const result = resolveStaticPatientMessage(makePromptWithFallback(promptItemId, ""), "ko-KR", { fields, riskSignals: [], iterationCounts: {}, riskLevel: "low" });
+    expect(result?.patientMessage).toContain("비슷하게 느껴진 부분");
+    expect(result?.patientMessage).not.toContain("기분과 행동도 달라졌");
+  });
+
+  it("uses the direct contrast when both the feelings and actions actually differed", () => {
+    const fields = {
+      candidateOneEmotion: "기뻐요",
+      candidateTwoEmotion: "슬퍼요",
+      candidateThreeEmotion: "화가 나요",
+      candidateOneBehavior: "웃어요",
+      candidateTwoBehavior: "자리를 피해요",
+      candidateThreeBehavior: "따져 물어요",
+    };
+    const result = resolveStaticPatientMessage(makePromptWithFallback(promptItemId, ""), "ko-KR", { fields, riskSignals: [], iterationCounts: {}, riskLevel: "low" });
+    expect(result?.patientMessage).toContain("기분과 행동도 달라졌");
+  });
+});
+
+describe("S02 list confirmations match the duplicate state", () => {
+  it.each([
+    ["tbct-s02-n02-p06-problem-confirmation", "ko-KR", { problemsDuplicate: true }, "중복으로 추가하지는 않았어요"],
+    ["tbct-s02-n02-p06-problem-confirmation", "en-US", { problemsDuplicate: true }, "did not add it twice"],
+    ["tbct-s02-n07-p07-goal-confirmation", "ko-KR", { goalsDuplicate: true }, "중복으로 추가하지는 않았어요"],
+    ["tbct-s02-n07-p07-goal-confirmation", "en-US", { goalsDuplicate: true }, "did not add it twice"],
+  ] as const)("%s in %s does not falsely claim a duplicate was added", (promptItemId, locale, fields, expected) => {
+    const result = resolveStaticPatientMessage(makePromptWithFallback(promptItemId, ""), locale, { fields, riskSignals: [], iterationCounts: {}, riskLevel: "low" });
+    expect(result?.patientMessage).toContain(expected);
+    expect(result?.patientMessage).not.toContain(locale === "ko-KR" ? "목록에 추가할게요" : "I'll add that");
+  });
 });
 
 describe("resolveStaticPatientMessage", () => {

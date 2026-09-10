@@ -362,7 +362,12 @@ function applyCurrentRatingItemCorrection(input: {
   const ratings = Array.isArray(input.fields[input.ratingsField]) ? (input.fields[input.ratingsField] as number[]) : [];
   const removeIndex = ratings.length;
   if (removeIndex >= list.length) return null;
-  const correctedFields: Record<string, unknown> = { ...input.fields, [input.listField]: list.filter((_, index) => index !== removeIndex) };
+  const correctionPrefix = input.ratingsField === "problemRatings" ? "problem" : "goal";
+  const correctedFields: Record<string, unknown> = {
+    ...input.fields,
+    [input.listField]: list.filter((_, index) => index !== removeIndex),
+    [`${correctionPrefix}RatingCorrectionApplied`]: true,
+  };
   refreshListRatingPointers(correctedFields);
   for (const [key, value] of Object.entries(correctedFields)) {
     if (Array.isArray(value)) correctedFields[`${key}Count`] = value.length;
@@ -1199,6 +1204,10 @@ export async function extractRuntimeState(input: {
       if (typeof value === "number" && Number.isFinite(value)) {
         nextFields[field] = [...current, value];
         nextFields[CUMULATIVE_RATING_FIELDS[field]] = value;
+        const correctionPrefix = field === "problemRatings" ? "problem" : field === "goalRatings" ? "goal" : null;
+        if (correctionPrefix) {
+          nextFields[`${correctionPrefix}RatingCorrectionApplied`] = false;
+        }
         // A resolved rating clears any earlier between-two-scores
         // uncertainty flag, so score-clarification doesn't keep firing once
         // the participant has actually settled on a value.

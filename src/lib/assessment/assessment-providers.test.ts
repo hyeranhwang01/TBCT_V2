@@ -31,6 +31,10 @@ function ratingCorrectionRequest(patientInput: string, locale = "en-US"): Assess
   return { locale, inputType: "text", patientInput, nodeGoal: "rate the current problem", allowedFields: ["problemRatings"], allowedTransitions: [], safetyCategories: [] };
 }
 
+function s01SituationRequest(patientInput: string, locale = "en-US"): AssessmentRequest {
+  return { locale, inputType: "text", patientInput, nodeGoal: "describe a personally experienced situation", allowedFields: ["situationThoughtDistinction"], allowedTransitions: [], safetyCategories: [] };
+}
+
 describe("DeterministicAssessmentModel: open-list turn classification (Phase 2 gate)", () => {
   it.each([
     ["What question?", "clarification_request"],
@@ -73,6 +77,25 @@ describe("DeterministicAssessmentModel: open-list turn classification (Phase 2 g
   it("Korean regression: meta/clarification patterns are unaffected by the English additions", async () => {
     const result = await getAssessmentModel().assessInput(openListRequest("무슨 질문이요?", "ko-KR"));
     expect(result.turnAction).toBe("clarification_request");
+  });
+});
+
+describe("DeterministicAssessmentModel: S01 situation relevance", () => {
+  it.each([
+    ["오늘 날씨가 어때?", "ko-KR"],
+    ["What's the weather today?", "en-US"],
+  ])("%s is redirected instead of being stored as the participant's situation", async (text, locale) => {
+    const result = await getAssessmentModel().assessInput(s01SituationRequest(text, locale));
+    expect(result.inputValid).toBe(false);
+    expect(result.relevance).toBe("irrelevant");
+    expect(result.intent).toBe("topic_shift");
+    expect(result.completionStatus).toBe("needs_clarification");
+  });
+
+  it("does not reject a genuine personal event merely because weather is involved", async () => {
+    const result = await getAssessmentModel().assessInput(s01SituationRequest("비 때문에 약속이 취소돼서 속상했어요.", "ko-KR"));
+    expect(result.inputValid).toBe(true);
+    expect(result.relevance).toBe("relevant");
   });
 });
 

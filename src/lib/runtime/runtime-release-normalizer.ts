@@ -404,12 +404,24 @@ const IMMEDIATE_COMPLETION_EFFECTS = new Set(["pause_session", "complete_session
 // placeholder, then answer the rating-card question) at this exact step.
 // tbct-s02-n07-p07-goal-confirmation ("That's a wonderful goal -- I'll add
 // that.") is the same pattern on the goals side, checked and fixed
-// alongside problem-confirmation per an explicit follow-up request.
+// alongside problem-confirmation per an explicit follow-up request. The six
+// rating/total reflections below are also statements with no question and
+// no output field; a transcript-level S02 run showed that treating the
+// generic "reflection" type as input-required inserted otherwise invisible
+// filler turns after the final problem/goal rating and both total summaries.
+// Keep the exception exact-ID scoped so genuine reflective questions in
+// other sessions still wait for the participant.
 const PASSIVE_ACKNOWLEDGMENT_PROMPT_IDS = new Set([
   "tbct-s02-n11-p02-recorded-summary",
   "tbct-s02-n02-p06-problem-confirmation",
   "tbct-s02-n03-p02-acknowledge-private-placeholder",
   "tbct-s02-n07-p07-goal-confirmation",
+  "tbct-s02-n05-p02-acknowledge-distress",
+  "tbct-s02-n05-p03-acknowledge-manageable",
+  "tbct-s02-n06-p02-problem-total-personal",
+  "tbct-s02-n09-p02-acknowledge-difficult-goal",
+  "tbct-s02-n09-p03-acknowledge-achieved-goal",
+  "tbct-s02-n10-p02-goal-total-personal",
 ]);
 
 export function promptRequiresPatientInput(promptItem: PromptItem) {

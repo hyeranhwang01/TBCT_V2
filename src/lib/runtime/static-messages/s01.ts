@@ -17,7 +17,29 @@ const APPROVED_TEXT: Record<string, string> = {
   "tbct-s01-n01-p01-warm-acknowledgement": "Thank you for being here. I'd like us to start with something that will help us look at everything more clearly together.",
 };
 
-export function resolveStaticText(promptItem: PromptItem): string | undefined {
+function normalizedAnswer(value: unknown) {
+  return typeof value === "string" ? value.trim().toLowerCase().replace(/[^a-z0-9가-힣]+/g, " ").trim() : "";
+}
+
+function hasDifferentAnswers(values: unknown[]) {
+  const answers = values.map(normalizedAnswer).filter(Boolean);
+  return answers.length === values.length && new Set(answers).size > 1;
+}
+
+export function resolveStaticText(promptItem: PromptItem, fields: Record<string, unknown> = {}, locale?: string): string | undefined {
+  if (promptItem.id === "tbct-s01-n07-p01-three-person-insight") {
+    const emotionsDiffer = hasDifferentAnswers([fields.candidateOneEmotion, fields.candidateTwoEmotion, fields.candidateThreeEmotion]);
+    const behaviorsDiffer = hasDifferentAnswers([fields.candidateOneBehavior, fields.candidateTwoBehavior, fields.candidateThreeBehavior]);
+    const isKorean = (locale ?? "").toLowerCase().startsWith("ko");
+    if (emotionsDiffer && behaviorsDiffer) {
+      return isKorean
+        ? "세 사람 모두 똑같은 말을 들었지만, 생각이 서로 달랐죠. 그리고 그 생각에 따라 기분과 행동도 달라졌습니다. 여기서 어떤 점이 보이시나요?"
+        : "All three people heard the same words, but their thoughts were different — and their feelings and actions differed too. What do you notice from that?";
+    }
+    return isKorean
+      ? "세 사람 모두 똑같은 말을 들었지만 서로 다른 생각을 했죠. 방금 답에서는 기분이나 행동이 비슷하게 느껴진 부분도 있었고요. 생각이 달라질 때 반응에 어떤 영향을 줄 수 있다고 보시나요?"
+      : "All three people heard the same words but had different thoughts. Some of the feelings or actions you pictured were similar. How do you think a different thought could still influence a person's response?";
+  }
   return APPROVED_TEXT[promptItem.id];
 }
 
@@ -68,7 +90,9 @@ export const koreanText: Record<string, string> = {
   "tbct-s01-n05-p02-candidate-two-behavior": "그러면 어떻게 행동할 것 같나요?",
   "tbct-s01-n06-p01-candidate-three-emotion": "그리고 세 번째 사람입니다. 그 사람은 “혹시 비꼬는 건가?”라고 생각했습니다. 그러면 어떤 기분이 들 것 같나요?",
   "tbct-s01-n06-p02-candidate-three-behavior": "그러면 어떻게 행동할 것 같나요?",
-  "tbct-s01-n07-p01-three-person-insight": "세 사람 모두 똑같은 말을 들었지만, 생각이 서로 달랐죠. 그리고 그 생각 때문에 기분과 행동도 달라졌습니다. 여기서 어떤 점이 보이시나요?",
+  // three-person-insight is intentionally resolved above from the three
+  // participant-provided emotion/behavior pairs. Keeping a fixed entry here
+  // would make resolvePromptLocaleText overwrite that contextual Korean text.
 
   // Return to the participant's own situation+thought (Phase 4), and the
   // new discrete Emotion/Behavior/Body prompts that replace the old
@@ -124,8 +148,8 @@ const REPEATED_FALLBACK_REPHRASE: Record<string, { en: string; ko: string }> = {
     ko: "이번엔 행동 부분만요 — 그런 기분이었다면 어떻게 행동할 것 같나요?",
   },
   "tbct-s01-n07-p01-three-person-insight": {
-    en: "Let me put it more simply: same words, different thoughts -- and that changed how each person felt and acted. What stands out to you about that?",
-    ko: "조금 더 쉽게 말씀드릴게요: 똑같은 말을 들었지만 생각이 달랐고, 그래서 기분과 행동도 달라졌어요. 여기서 어떤 점이 눈에 띄시나요?",
+    en: "Let me put it more simply: the words were the same, but each person interpreted them differently. How might those different thoughts influence a person's response?",
+    ko: "조금 더 쉽게 말씀드릴게요. 들은 말은 같았지만 세 사람은 서로 다르게 해석했어요. 이런 서로 다른 생각이 사람의 반응에 어떤 영향을 줄 수 있을까요?",
   },
   "tbct-s01-n08-p01-personal-emotion": {
     en: "Thinking back to that thought you mentioned -- what feeling came with it?",

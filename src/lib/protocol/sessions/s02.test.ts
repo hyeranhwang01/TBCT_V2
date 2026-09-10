@@ -261,8 +261,9 @@ describe("S02 -- full required E2E scenario (refusal fix + CCPH/CCGH scale UX)",
     view = await current(session.id);
     expect(view.session.runtimeContext.fields.problemRatings).toEqual([4]);
 
-    // acknowledge-distress fires (currentProblemScore 4 is in [4,5]) and
-    // requires one more turn before the node completes.
+    // Compatibility guard: this acknowledgment now auto-advances because it
+    // contains no question. The branch remains so this older long-form flow
+    // test can also run against a historical release snapshot if needed.
     if (view.currentPromptItem?.id === "tbct-s02-n05-p02-acknowledge-distress") {
       await submitPatientInput(session.id, { kind: "text", value: "네" });
     }
@@ -435,6 +436,31 @@ describe("S02 -- manual-control follow-up fixes (problem-confirmation + rating-c
     expect(result.turnOutcome).toBe("normal");
     const after = await current(session.id);
     expect(after.session.runtimeContext.fields.problemScaleCardAvailable).toBe(true);
+  }, 15_000);
+});
+
+describe("S02 -- passive reflection auto-progression", () => {
+  beforeEach(async () => {
+    const db = getLocalDb();
+    await db.transaction("rw", db.tables, async () => {
+      await Promise.all(db.tables.map((table) => table.clear()));
+    });
+  });
+
+  it("moves from a high final problem rating to goal collection without asking the patient to answer an acknowledgment", async () => {
+    const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s02", locale: "ko-KR" });
+    await startRuntimeSession(session.id);
+    await submitPatientInput(session.id, { kind: "text", value: "업무를 계속 미루고 있어요" });
+    await submitPatientInput(session.id, { kind: "text", value: "더 없어요" });
+    await submitPatientInput(session.id, { kind: "text", value: "아니요" });
+    await submitPatientInput(session.id, { kind: "text", value: "아니요" });
+    await submitPatientInput(session.id, { kind: "text", value: "네" });
+    await submitPatientInput(session.id, { kind: "text", value: "5" });
+
+    const view = await current(session.id);
+    expect(view.messages.some((message) => message.promptItemId === "tbct-s02-n05-p02-acknowledge-distress")).toBe(true);
+    expect(view.messages.some((message) => message.promptItemId === "tbct-s02-n06-p02-problem-total-personal")).toBe(true);
+    expect(view.currentPromptItem?.id).toBe("tbct-s02-n07-p01-goal-framing");
   }, 15_000);
 });
 
@@ -1257,6 +1283,10 @@ describe("S02 -- Phase 3: rating item correction lifecycle", () => {
     expect(view.session.runtimeContext.fields.currentGoalText).toBe("목표C");
     expect(view.session.runtimeContext.fields.allGoalsRated).not.toBe(true);
     expect(view.currentPromptItem?.id).toBe("tbct-s02-n09-p01-reflect-goal-score");
+    const latestAssistantMessage = [...view.messages].reverse().find((message) => message.role === "assistant");
+    expect(latestAssistantMessage?.content).toContain("제외");
+    expect(latestAssistantMessage?.content).toContain("목표C");
+    expect(latestAssistantMessage?.content).not.toContain("5점");
   }, 15_000);
 
   it("Test 12: iteration budget -- a correction among 5 goals never consumes an iteration slot", async () => {
@@ -1294,6 +1324,10 @@ describe("S02 -- Phase 3: rating item correction lifecycle", () => {
     expect(view.session.runtimeContext.fields.problemRatings).toEqual([5]);
     expect(view.session.runtimeContext.fields.currentProblemText).toBe("문제C");
     expect(view.session.runtimeState?.promptIterationCounts?.["tbct-s02-n05-p01-reflect-problem-score"] ?? 0).toBe(before);
+    const latestAssistantMessage = [...view.messages].reverse().find((message) => message.role === "assistant");
+    expect(latestAssistantMessage?.content).toContain("제외");
+    expect(latestAssistantMessage?.content).toContain("문제C");
+    expect(latestAssistantMessage?.content).not.toContain("5점");
   }, 15_000);
 
   it("Test 14: a genuine clarification request ('이 목표가 무슨 뜻이에요?') does not delete the current item", async () => {

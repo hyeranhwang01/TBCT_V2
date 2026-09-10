@@ -204,7 +204,7 @@ const OPEN_LIST_META_PATTERNS: RegExp[] = [
   /\bi\s+(?:already\s+)?(?:said|mentioned|told\s+you)\s+(?:that|this)\b(?:\s+(?:already|before))?/i,
   /\bi\s+don'?t\s+understand\s+(?:the\s+)?(?:question|that)\b/i,
 ];
-const OPEN_LIST_UNRELATED_MARKERS = /다람쥐|날씨\s*좋|배고파|고양이\s*귀엽|강아지\s*귀엽|\bsquirrel|nice\s+weather|i'?m\s+hungry|cute\s+(?:cat|dog|puppy|kitten)\b/i;
+const CLEAR_SMALL_TALK_MARKERS = /다람쥐|날씨\s*좋|오늘\s*날씨(?:가|는)?\s*(?:어때|어떻)|배고파|고양이\s*귀엽|강아지\s*귀엽|\bsquirrel|nice\s+weather|(?:what(?:'s|\s+is)|how(?:'s|\s+is))\s+the\s+weather|weather\s+today|i'?m\s+hungry|cute\s+(?:cat|dog|puppy|kitten)\b/i;
 // A bare readiness/acknowledgement reply ("네 알겠습니다.", "okay") is not a
 // second list candidate -- without this, one lands as an extra "problems"/
 // "goals" entry the moment the participant confirms they understood the
@@ -228,7 +228,7 @@ function classifyOpenListTurn(rawText: string): "accept_answer" | "clarification
   if (OPEN_LIST_STOP_PATTERNS.some((pattern) => pattern.test(normalized))) return "collection_stop";
   if (OPEN_LIST_META_PATTERNS.some((pattern) => pattern.test(normalized))) return "clarification_request";
   if (OPEN_LIST_ACKNOWLEDGEMENT_ONLY.test(normalized.replace(/[.!?。！？，,]/g, "").trim())) return "unresolved";
-  if (OPEN_LIST_UNRELATED_MARKERS.test(normalized)) return "unresolved";
+  if (CLEAR_SMALL_TALK_MARKERS.test(normalized)) return "unresolved";
   if (OPEN_LIST_CANDIDATE_MARKERS.test(normalized)) return "accept_answer";
   if (OPEN_LIST_POSSIBILITY_QUESTION_MARKER.test(normalized) && normalized.includes("?")) return "clarification_request";
   // Same minimum-content bar isMeaningfulTextResponse's own generic fallback
@@ -324,7 +324,13 @@ class DeterministicAssessmentModel implements AssessmentModel {
     const hangul = (normalized.match(/[\uac00-\ud7a3]/g) ?? []).length;
     const nonAnswer = ["hi", "hello", "hey", "test", "testing", "ok", "okay", "yes", "no", "idk", "fuiissiidojfosid"].includes(normalized);
     const distinction = /distinction/i.test(`${request.inputType} ${request.expectedAnswerDescription ?? ""}`);
-    const valid = !nonAnswer && normalized.length > 1 && (!distinction || words.length >= 2 || hangul >= 4);
+    // The S01 opening explicitly asks for a personally experienced situation.
+    // Reject only unmistakable small-talk questions here: broad topic-word
+    // filtering would incorrectly reject a real event such as a cancelled
+    // appointment because of rain.
+    const unrelatedSituationSmallTalk = request.allowedFields.includes("situationThoughtDistinction")
+      && CLEAR_SMALL_TALK_MARKERS.test(normalized);
+    const valid = !unrelatedSituationSmallTalk && !nonAnswer && normalized.length > 1 && (!distinction || words.length >= 2 || hangul >= 4);
     const directRisk = /\b(?:want to die|wanna die|kill myself|suicid|suisid)\b/i.test(normalized);
     const indirectRisk = /\b(?:disappear(?: forever)?|not wake up|better off without me|better off dead|no reason to live|everything to end|can't go on|cannot go on)\b/i.test(normalized);
     const extractedFields: Record<string, unknown> = {};
@@ -339,7 +345,7 @@ class DeterministicAssessmentModel implements AssessmentModel {
       ? extractedCount === request.allowedFields.length ? "complete" : extractedCount > 0 ? "incomplete" : "needs_clarification"
       : valid ? "complete" : "needs_clarification";
     const turnAction = isRatingOneItemAtATimeRequest(request) ? classifyRatingCorrectionTurn(raw) : classifyOpenListTurn(raw);
-    return { inputValid: valid, relevance: valid ? "relevant" : "unclear", intent: directRisk || indirectRisk ? "distress_disclosure" : valid ? "answer" : "other", extractedFields, completionStatus, safetyLevel: directRisk ? "high" : indirectRisk ? "moderate" : "none", safetySignals: directRisk ? ["direct_suicidal_language"] : indirectRisk ? ["indirect_safety_language"] : [], recommendedTransition: null, internalSummary: null, turnAction };
+    return { inputValid: valid, relevance: valid ? "relevant" : unrelatedSituationSmallTalk ? "irrelevant" : "unclear", intent: directRisk || indirectRisk ? "distress_disclosure" : unrelatedSituationSmallTalk ? "topic_shift" : valid ? "answer" : "other", extractedFields, completionStatus, safetyLevel: directRisk ? "high" : indirectRisk ? "moderate" : "none", safetySignals: directRisk ? ["direct_suicidal_language"] : indirectRisk ? ["indirect_safety_language"] : [], recommendedTransition: null, internalSummary: null, turnAction };
   }
 }
 

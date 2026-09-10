@@ -77,6 +77,23 @@ describe("S01 Opening redesign", () => {
     expect(content).not.toMatch(/\bemotion\b|\bbehavior\b|\bbody\b|racing heart/);
   }, 15_000);
 
+  it("redirects unmistakable small talk at the opening without storing it as the participant's situation", async () => {
+    const session = await createCanonicalTestRuntimeSession({ locale: "ko-KR" });
+    await startRuntimeSession(session.id);
+
+    const result = await submitPatientInput(session.id, { kind: "text", value: "오늘 날씨가 어때?" });
+    expect(result.turnOutcome).toBe("clarification");
+
+    const afterSmallTalk = await currentPrompt(session.id);
+    expect(afterSmallTalk.currentPromptItem!.id).toBe("tbct-s01-n01-p02-telegraphic-situation");
+    const worksheetAfterSmallTalk = await getWorksheetView(session.id, "tbct-s01");
+    expect(worksheetAfterSmallTalk?.fields.find((f) => f.definition.worksheetFieldKey === "situationThoughtDistinction")?.value).toBeNull();
+
+    await submitPatientInput(session.id, { kind: "text", value: "회의에서 제 의견이 무시돼서 속상했어요." });
+    const afterRealSituation = await currentPrompt(session.id);
+    expect(afterRealSituation.currentPromptItem!.id).toBe("tbct-s01-n02-p01-situation-or-thought");
+  }, 15_000);
+
   it("OP-5: uncertainty on the Initial Thought Probe is accepted, not treated as invalid, and does not stall the session", async () => {
     const session = await createCanonicalTestRuntimeSession({ locale: "en-US" });
     await startRuntimeSession(session.id);
