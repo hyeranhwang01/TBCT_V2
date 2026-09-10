@@ -1366,7 +1366,7 @@ export async function executeCurrentNode(sessionId: string, prefetchedView?: Run
     // No checkpoint here, deliberately -- this is an intermediate step of a
     // passive-node auto-chain (an explanation/transition node that needed no
     // patient input), not a real resting point. createRuntimeCheckpoint is 3
-    // sequential DB round trips (src/lib/api/runtime-session-api.ts:308-329),
+    // sequential DB round trips (src/shared/api/runtime-session-api.ts:308-329),
     // and it used to run once per chained node -- a chain of N passive nodes
     // paid for N checkpoints nobody could usefully restore to (a clinician's
     // restoreRuntimeSession always resumes the LATEST checkpoint, so a
@@ -1438,7 +1438,7 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
   };
   const extracted = await extractRuntimeState({ patientInput, currentNode, currentPromptItem, currentContext: initialSession.runtimeContext, locale: turnLocale });
   // Worksheet projection is a best-effort read-side mirror of the canonical
-  // extracted fields (src/lib/worksheet/worksheet-projection.ts) -- never
+  // extracted fields (src/shared/worksheet/worksheet-projection.ts) -- never
   // allowed to FAIL a real turn (errors are swallowed below), but it IS
   // awaited: this used to be fire-and-forget, which raced the client's own
   // post-turn cache invalidation (see patient-session-page.tsx's refresh())

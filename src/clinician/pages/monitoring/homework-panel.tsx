@@ -8,7 +8,7 @@ import { listHomeworkEntries, listHomeworkRecordsByParticipant } from "@/shared/
 import { HOMEWORK_CATEGORY_BY_SESSION, HOMEWORK_LABEL_BY_SESSION, type HomeworkEntryRecord, type HomeworkRecord, type HomeworkStatus } from "@/types/homework";
 
 // The clinician-facing counterpart to the patient homework pages
-// (src/components/pages/homework/s0N-*.tsx) -- read-only, split into one
+// (src/patient/sessions/s0N/homework.tsx) -- read-only, split into one
 // tab per session (S01..S08) rather than a single mixed list, so records
 // from different follow-up activities don't run together. Follows the
 // same Card + SectionHeader pattern as the "Clinical notes" panel right

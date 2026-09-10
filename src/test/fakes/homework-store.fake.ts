@@ -1,7 +1,7 @@
 import type { HomeworkEntryRecord, HomeworkRecord } from "@/types/homework";
 import type { HomeworkStoreOp } from "@/shared/runtime/homework-store-ops";
 
-// Minimal in-memory stand-in for src/lib/server/homework-store.ts, mirroring
+// Minimal in-memory stand-in for src/shared/data/server/homework-store.ts, mirroring
 // the same pattern as worksheet-store.fake.ts / safety-store.fake.ts.
 
 function makeId(prefix: string) {

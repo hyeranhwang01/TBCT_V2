@@ -20,8 +20,8 @@ import type {
 // interventions, follow-ups, clinicians, notifications, reports, handoffs,
 // resume requests, trigger suppressions) now lives in Neon Postgres, not
 // local IndexedDB -- every function here keeps its original name and
-// signature so call sites across the app (src/lib/api/safety-operations-api.ts
-// for clinician screens, src/lib/api/runtime-execution-api.ts for the
+// signature so call sites across the app (src/shared/api/safety-operations-api.ts
+// for clinician screens, src/shared/api/runtime-execution-api.ts for the
 // patient-facing runtime) are unaffected.
 async function callStore<T>(op: SafetyStoreOp): Promise<T> {
   const response = await runtimeFetch(resolveStoreUrl(SAFETY_STORE_ENDPOINT), {

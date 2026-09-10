@@ -10,7 +10,7 @@ import type {
 } from "@/types/runtime-session";
 import type { RuntimeStoreOp } from "@/shared/runtime/runtime-store-ops";
 
-// In-memory stand-in for src/lib/server/runtime-session-store.ts, used only
+// In-memory stand-in for src/shared/data/server/runtime-session-store.ts, used only
 // by the test fetch interceptor (src/test/setup.ts) so unit tests stay fast,
 // offline, and independent of the live Neon database. Mirrors the exact same
 // op contract and behavior (including the two transactional operations) as
@@ -151,7 +151,7 @@ function commitAssistantTurn(input: {
   const current = sessions.get(input.sessionId);
   if (!current) throw new Error("Runtime session not found");
   const turnId = typeof input.assistantMessage.metadata?.turnId === "string" ? input.assistantMessage.metadata.turnId : undefined;
-  // Mirrors the real store (src/lib/server/runtime-session-store.ts): a
+  // Mirrors the real store (src/shared/data/server/runtime-session-store.ts): a
   // repeat_until PromptItem is delivered more than once for the same
   // nodeId/promptItemId by design, so prefer clientTurnId to identify a
   // true duplicate commit and only fall back to nodeId/promptItemId for an

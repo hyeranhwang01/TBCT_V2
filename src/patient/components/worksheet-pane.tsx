@@ -15,7 +15,7 @@ import type { WorksheetFieldStatus, WorksheetFieldView } from "@/types/worksheet
 import type { RuntimeMessage } from "@/types/runtime-session";
 
 // The interactive visual worksheet -- a typed projection of
-// RuntimeContext.fields (see src/lib/worksheet/worksheet-projection.ts for
+// RuntimeContext.fields (see src/shared/worksheet/worksheet-projection.ts for
 // the write-path contract).
 //
 // variant="clinician" (Patient Monitoring's Worksheet tab): the full

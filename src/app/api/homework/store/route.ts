@@ -5,8 +5,8 @@ import type { HomeworkStoreOp } from "@/shared/runtime/homework-store-ops";
 export const runtime = "nodejs";
 
 // Single RPC endpoint for the homework/follow-up-activity store (see
-// src/lib/runtime/homework-store-ops.ts for the op contract).
-// src/lib/repositories/homework-repository.ts is a thin fetch client over
+// src/shared/runtime/homework-store-ops.ts for the op contract).
+// src/shared/data/repositories/homework-repository.ts is a thin fetch client over
 // this route, matching the pattern of the worksheet/runtime/participant stores.
 export async function POST(request: Request) {
   try {

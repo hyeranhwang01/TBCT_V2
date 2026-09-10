@@ -2,7 +2,7 @@
 // RuntimeContext.fields (src/types/runtime-session.ts) remains the
 // canonical clinical field state; everything here is a typed projection of
 // it, never an independent write target. See
-// src/lib/worksheet/worksheet-projection.ts for the write-path contract.
+// src/shared/worksheet/worksheet-projection.ts for the write-path contract.
 
 export type WorksheetFieldStatus =
   | "empty"

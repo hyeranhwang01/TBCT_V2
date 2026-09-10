@@ -1,7 +1,7 @@
 import type { AuditEntry } from "@/types";
 import type { ProtocolStudioStoreOp } from "@/shared/runtime/protocol-studio-store-ops";
 
-// Minimal in-memory stand-in for src/lib/server/protocol-studio-store.ts,
+// Minimal in-memory stand-in for src/shared/data/server/protocol-studio-store.ts,
 // following the same pattern as safety-store.fake.ts / participant-store.fake.ts.
 // saveAuditEntry is called from deep inside ordinary write paths (protocol
 // node/session mutations, clinical asset writes), so any test that touches

@@ -5,7 +5,7 @@ import type { GoalTrackingRecord, HomeworkTrackingRecord, LongitudinalMemory, Me
 
 // Longitudinal memories (including clinician_note entries, i.e. clinician
 // notes added from Patient Monitoring) now live in Neon Postgres alongside
-// the participant roster (src/lib/server/participant-store.ts) -- so a note
+// the participant roster (src/shared/data/server/participant-store.ts) -- so a note
 // added by a clinician is visible from any browser/session, not just the
 // one it was written in. Memory candidates, goal/homework tracking, and
 // usage logs are not yet part of this migration and remain local-only.

@@ -13,7 +13,7 @@ import type {
 } from "@/types/safety-operations";
 import type { SafetyStoreOp } from "@/shared/runtime/safety-store-ops";
 
-// Minimal in-memory stand-in for src/lib/server/safety-monitoring-store.ts.
+// Minimal in-memory stand-in for src/shared/data/server/safety-monitoring-store.ts.
 // Every normal (non-crisis) runtime turn unconditionally calls
 // cleanupExpiredTriggerSuppressions/findActiveTriggerSuppression, so those two
 // need to work offline even for tests that never touch clinician escalation.

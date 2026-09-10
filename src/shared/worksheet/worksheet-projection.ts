@@ -1,5 +1,5 @@
 // The write-path contract for the worksheet layer. RuntimeContext.fields
-// (persisted inside runtime_sessions.data, see src/lib/runtime/runtime-context.ts)
+// (persisted inside runtime_sessions.data, see src/shared/runtime/runtime-context.ts)
 // remains the single canonical source of truth. Nothing in this module
 // writes worksheet_field_values from anywhere other than that canonical
 // state, and worksheet-originated edits are written back through the same

@@ -5,8 +5,8 @@ import type { ProtocolStudioStoreOp } from "@/shared/runtime/protocol-studio-sto
 export const runtime = "nodejs";
 
 // Single RPC endpoint for the Protocol Studio audit log (see
-// src/lib/runtime/protocol-studio-store-ops.ts for the op contract).
-// src/lib/repositories/audit-log-repository.ts is a thin fetch client over
+// src/shared/runtime/protocol-studio-store-ops.ts for the op contract).
+// src/shared/data/repositories/audit-log-repository.ts is a thin fetch client over
 // this route.
 export async function POST(request: Request) {
   try {

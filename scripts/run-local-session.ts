@@ -8,7 +8,7 @@
 // absolute http://localhost:3000/... URL for every *-store call, which needs
 // a running, authenticated dev server backed by a real DATABASE_URL. It also
 // forces a scripted synthetic patient and never prints the conversation text
-// (src/lib/runtime/testing/simulated-patient-runner.ts / audit script).
+// (src/shared/runtime/testing/simulated-patient-runner.ts / audit script).
 //
 // This script instead monkey-patches globalThis.fetch the same way
 // src/test/setup.ts does for `vitest run` -- redirecting every *-store

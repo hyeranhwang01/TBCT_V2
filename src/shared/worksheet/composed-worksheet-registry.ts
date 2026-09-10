@@ -24,7 +24,7 @@ export interface ComposedWorksheetProps {
 
 // Session-specific "recreate the figure in real HTML/CSS" worksheets --
 // each one has a genuinely different layout matching that session's own
-// manual figure (see src/components/runtime/worksheet-renderers/s0N-worksheet.tsx).
+// manual figure (see src/patient/sessions/s0N/worksheet.tsx).
 // All eight sessions use this approach; the coordinate-mapped photo-overlay
 // renderer (figure-registry + FigureWorkspace) that S03 used previously has
 // been retired in favor of s03-worksheet.tsx, for consistency with every

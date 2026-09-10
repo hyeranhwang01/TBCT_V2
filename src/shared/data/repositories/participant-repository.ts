@@ -3,7 +3,7 @@ import { PARTICIPANT_STORE_ENDPOINT, type ParticipantStoreOp } from "@/shared/ru
 import { resolveStoreUrl, runtimeFetch } from "@/shared/runtime/resolve-store-url";
 import type { RuntimeParticipant, ParticipantConsentEvent, LongitudinalRecord } from "@/types/longitudinal-memory";
 
-// The participant roster now lives in Neon Postgres (src/lib/server/participant-store.ts),
+// The participant roster now lives in Neon Postgres (src/shared/data/server/participant-store.ts),
 // not local IndexedDB -- this is what lets a participant created from the
 // patient-facing runtime show up in the clinician Patient Monitoring
 // screens. Every function below keeps its original name/signature so call

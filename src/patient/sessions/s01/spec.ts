@@ -264,7 +264,7 @@ export const spec: SessionSpec = {
       // gate blocked progression on an external prop this runtime has no way
       // to actually verify). identify-distortion's candidates are now
       // computed by runtime-orchestrator.ts from the S01-only
-      // S01_COGNITIVE_DISTORTIONS registry (src/lib/protocol/sessions/
+      // S01_COGNITIVE_DISTORTIONS registry (src/patient/sessions/
       // s01-cognitive-distortions.ts) -- Claude may only select ids that
       // exist in that registry, never invent or diagnose one; final
       // selection is left to the participant.

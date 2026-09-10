@@ -8,7 +8,7 @@
 // existing components/bindings and never touches session runtime logic,
 // worksheet-binding registries, or any other session's code.
 //
-// Not linked from the app's own navigation/router (src/components/studio-app.tsx) --
+// Not linked from the app's own navigation/router (src/app/studio-app.tsx) --
 // visit directly at /preview/worksheets.
 
 import { useState } from "react";

@@ -15,7 +15,7 @@ import { dialogueContractSchema } from "@/shared/dialogue-agent/dialogue-agent-c
 
 // The runtime conversation store now lives in Postgres in production
 // (src/app/api/runtime/session-store/route.ts), reached via fetch() from
-// src/lib/repositories/runtime-session-repository.ts. Tests must stay fast,
+// src/shared/data/repositories/runtime-session-repository.ts. Tests must stay fast,
 // offline, and independent of the live database, so requests to that one
 // endpoint are intercepted here and served from an in-memory fake with the
 // exact same op contract; everything else falls through to the real fetch.

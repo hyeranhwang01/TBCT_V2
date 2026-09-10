@@ -7,9 +7,9 @@ import { getParticipantByAuthUserId } from "@/shared/data/server/participant-sto
 export const runtime = "nodejs";
 
 // Single RPC endpoint for the runtime conversation store (see
-// src/lib/runtime/runtime-store-ops.ts for the op contract). This is the
+// src/shared/runtime/runtime-store-ops.ts for the op contract). This is the
 // operational read/write path for patient <-> assistant sessions --
-// src/lib/repositories/runtime-session-repository.ts is a thin fetch client
+// src/shared/data/repositories/runtime-session-repository.ts is a thin fetch client
 // over this route, so every call site across the app is unaffected by the
 // storage backend living in Postgres now instead of local IndexedDB.
 //

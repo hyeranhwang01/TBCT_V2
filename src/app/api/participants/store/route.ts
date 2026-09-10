@@ -6,11 +6,11 @@ import { getAuthenticatedCaller } from "@/shared/supabase/server";
 export const runtime = "nodejs";
 
 // Single RPC endpoint for the participant roster + longitudinal memory
-// (clinician notes) store (see src/lib/runtime/participant-store-ops.ts for
+// (clinician notes) store (see src/shared/runtime/participant-store-ops.ts for
 // the op contract). This is the shared read/write path so a participant
 // created from the patient-facing runtime is visible from the clinician
 // Patient Monitoring screens, and vice versa --
-// src/lib/repositories/participant-repository.ts and (for clinician-note
+// src/shared/data/repositories/participant-repository.ts and (for clinician-note
 // operations) longitudinal-memory-repository.ts are thin fetch clients over
 // this route.
 //

@@ -50,7 +50,7 @@ const PATIENT_ALIAS = "이서연";
 // followed immediately by a real answer to confirm recovery.
 // The deterministic (free) assessment model only recognizes a short,
 // hardcoded non-answer list verbatim (see DeterministicAssessmentModel in
-// src/lib/assessment/assessment-providers.ts) -- it has no semantic
+// src/shared/assessment/assessment-providers.ts) -- it has no semantic
 // understanding, so a Korean "몰라요" style answer just gets recorded as-is.
 // "idk"/"okay" are the phrases guaranteed to trip the same clarification
 // path for free, so we use those for the trap turn and keep every other

@@ -21,7 +21,7 @@ export { firstText, ratingNumbers, reflectThenAskForNextRating } from "@/shared/
 
 // Each session owns its own dynamic-text branches, its own safety-pause
 // line (if it has one), and its own slice of the approved static-text map --
-// see src/lib/runtime/static-messages/s0N.ts. Every one of those checks an
+// see src/patient/sessions/s0N/messages.ts. Every one of those checks an
 // exact-string PromptItem ID that already encodes its own session number
 // and is globally unique, so there's no possible cross-session overlap --
 // dispatching straight to the matching session's own handler by parsing the

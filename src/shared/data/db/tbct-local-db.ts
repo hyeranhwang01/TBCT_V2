@@ -118,8 +118,8 @@ export class TbctLocalDatabase extends Dexie {
   // to. The runtime conversation store (patient <-> assistant sessions,
   // messages, logs, checkpoints, escalations, provider/validation events,
   // execution traces) moved to Neon Postgres -- see
-  // src/lib/repositories/runtime-session-repository.ts and
-  // src/lib/server/runtime-session-store.ts. The table/index declarations and
+  // src/shared/data/repositories/runtime-session-repository.ts and
+  // src/shared/data/server/runtime-session-store.ts. The table/index declarations and
   // migration versions below are kept only because captureSourceFidelityBackup()
   // still reads pre-existing rows out of runtimeSessions/runtimeExecutionLogs
   // for its one-time legacy backup snapshot; removing them would break that

@@ -1,5 +1,5 @@
 // Standardized clinical screening check-ins -- see
-// src/lib/standardized-assessments/instruments.ts for item text/scoring
+// src/shared/standardized-assessments/instruments.ts for item text/scoring
 // (PHQ-9, GAD-7) and sql/011_standardized_assessments.sql for the schema.
 
 export type StandardizedInstrumentId = "phq9" | "gad7";

@@ -61,7 +61,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 // ---------------------------------------------------------------------------
 // Persona: 민지, 29세. 우울감, 무기력, 죄책감, 사회적 위축, 수면 문제를 겪는
 // 가상의 내담자. 아래 답변 풀은 실제 검증에 쓰이는 syntheticPatientInput
-// (src/lib/runtime/testing/session-fidelity-fixtures.ts)과 동일한 구조
+// (src/shared/runtime/testing/session-fidelity-fixtures.ts)과 동일한 구조
 // (validation.kind 기반 분기 + 필드명 정규식 매칭)를 따르되, 자유서술 내용만
 // 이 우울 시나리오에 맞게 교체한 것이다. 구조적 검증(rating/boolean/enum)은
 // 원본과 동일한 로직을 그대로 재사용해 프로토콜을 깨지 않는다.

@@ -1,7 +1,7 @@
 import type { MoodCheckin } from "@/types/mood-checkin";
 
 /** Today's date as "YYYY-MM-DD" in Asia/Seoul -- same timezone convention
- * as src/lib/server/mood-checkin-store.ts's todayInSeoul(), duplicated
+ * as src/shared/data/server/mood-checkin-store.ts's todayInSeoul(), duplicated
  * here (not imported) since that one lives in a server-only module and
  * this needs to run in the browser too, for immediate UI feedback before
  * a round trip. */

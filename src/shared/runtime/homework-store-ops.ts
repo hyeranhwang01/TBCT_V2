@@ -2,8 +2,8 @@
 // (Neon Postgres, sql/007_homework.sql). Mirrors the pattern in
 // worksheet-store-ops.ts/safety-store-ops.ts: no server-only imports, so
 // this is safe to import from both the repository client
-// (src/lib/repositories/homework-repository.ts) and the server-side store
-// implementation (src/lib/server/homework-store.ts).
+// (src/shared/data/repositories/homework-repository.ts) and the server-side store
+// implementation (src/shared/data/server/homework-store.ts).
 import type { HomeworkEntryRecord, HomeworkRecord, HomeworkStatus } from "@/types/homework";
 
 export type HomeworkStoreOp =

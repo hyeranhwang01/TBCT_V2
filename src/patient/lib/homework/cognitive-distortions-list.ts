@@ -1,5 +1,5 @@
 // Verbatim from the TBCT source manual's "Cognitive Distortions Reference
-// List" (Chapters 16-17; see src/lib/protocol/tbct-source-text.generated.ts
+// List" (Chapters 16-17; see src/shared/protocol/tbct-source-text.generated.ts
 // lines ~203-220), reused here for S1's "Weekly Examples" homework so the
 // participant picks a distortion for each new example from the SAME list
 // introduced in Session 1 -- Claude/the app never selects it for them.

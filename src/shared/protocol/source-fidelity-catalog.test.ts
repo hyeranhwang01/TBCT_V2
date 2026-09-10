@@ -49,7 +49,7 @@ describe("canonical TBCT source-fidelity catalog", () => {
 
   // Session-specific content checks (S05/S06/S07/S08's own corruption
   // status and validation controls) now live in their own
-  // src/lib/protocol/sessions/s0N.test.ts, next to that session's own
+  // src/patient/sessions/s0N.test.ts, next to that session's own
   // spec -- only genuinely cross-session invariants stay here.
 
   it("resolves legacy identifiers only as aliases to source-derived IDs", () => {

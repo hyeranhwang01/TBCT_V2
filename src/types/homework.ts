@@ -4,7 +4,7 @@
 // practice-example log, S6 practice tries, S8 daily appeals) additionally
 // accumulate HomeworkEntryRecord rows. The per-session shape of `data`/entry
 // `data` is intentionally untyped here (Record<string, unknown>) -- each
-// session's own module in src/lib/homework/ owns and types its own shape;
+// session's own module in src/patient/lib/homework/ owns and types its own shape;
 // this file only owns what's common across all eight.
 
 export type HomeworkStatus = "not_started" | "in_progress" | "completed" | "ongoing" | "review_available";

@@ -9,7 +9,7 @@ import type {
 } from "@/types/worksheet";
 import type { WorksheetStoreOp } from "@/shared/runtime/worksheet-store-ops";
 
-// Minimal in-memory stand-in for src/lib/server/worksheet-store.ts, mirroring
+// Minimal in-memory stand-in for src/shared/data/server/worksheet-store.ts, mirroring
 // the same pattern as safety-store.fake.ts / participant-store.fake.ts /
 // protocol-studio-store.fake.ts. Discovered missing only when the
 // dialogue-agent stale-worksheet-value test first exercised
@@ -52,7 +52,7 @@ export async function dispatchFakeWorksheetStoreOp(op: WorksheetStoreOp): Promis
         templatesByKey.set(key, record);
         fieldDefinitionsByTemplateVersion.set(record.id, []);
       }
-      // Mirrors src/lib/server/worksheet-store.ts's own backfill: a field
+      // Mirrors src/shared/data/server/worksheet-store.ts's own backfill: a field
       // added to this session's bindings after the template version already
       // existed still needs a definition row, on every call, not only the
       // first one -- see that file's comment for the production bug this

@@ -7,7 +7,7 @@ import { getAuthenticatedCaller } from "@/shared/supabase/server";
 export const runtime = "nodejs";
 
 // Single RPC endpoint for the standardized clinical screening store (see
-// src/lib/runtime/standardized-assessment-store-ops.ts for the op
+// src/shared/runtime/standardized-assessment-store-ops.ts for the op
 // contract). Unlike several of this app's other *-store routes (see the
 // login feature's plan for the write-side authorization gaps flagged
 // there), this one is gated per-op -- PHQ-9/GAD-7 responses include a

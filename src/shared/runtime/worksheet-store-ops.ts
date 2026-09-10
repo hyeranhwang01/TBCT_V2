@@ -2,8 +2,8 @@
 // Postgres, sql/006_worksheets.sql). Mirrors the pattern in
 // runtime-store-ops.ts/safety-store-ops.ts: no server-only imports, so this
 // is safe to import from both the repository client
-// (src/lib/repositories/worksheet-repository.ts) and the server-side store
-// implementation (src/lib/server/worksheet-store.ts).
+// (src/shared/data/repositories/worksheet-repository.ts) and the server-side store
+// implementation (src/shared/data/server/worksheet-store.ts).
 import type {
   WorksheetCollectionItemRecord,
   WorksheetEventRecord,

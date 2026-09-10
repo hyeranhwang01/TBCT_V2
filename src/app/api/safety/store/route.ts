@@ -5,11 +5,11 @@ import type { SafetyStoreOp } from "@/shared/runtime/safety-store-ops";
 export const runtime = "nodejs";
 
 // Single RPC endpoint for the clinician safety-monitoring store (see
-// src/lib/runtime/safety-store-ops.ts for the op contract). This is the
+// src/shared/runtime/safety-store-ops.ts for the op contract). This is the
 // operational read/write path for safety events, triage, interventions,
 // follow-ups, clinicians, notifications, reports, handoffs, resume
 // requests, and trigger suppressions --
-// src/lib/repositories/safety-event-repository.ts is a thin fetch client
+// src/shared/data/repositories/safety-event-repository.ts is a thin fetch client
 // over this route, so every call site (both patient-facing runtime and
 // clinician safety screens) is unaffected by the storage backend living in
 // Postgres now instead of local IndexedDB.

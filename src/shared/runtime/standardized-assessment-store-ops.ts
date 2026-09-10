@@ -2,9 +2,9 @@
 // store (Neon/Supabase Postgres, sql/011_standardized_assessments.sql).
 // Mirrors the pattern in homework-store-ops.ts: no server-only imports, so
 // this is safe to import from both the repository client
-// (src/lib/repositories/standardized-assessment-repository.ts) and the
+// (src/shared/data/repositories/standardized-assessment-repository.ts) and the
 // server-side store implementation
-// (src/lib/server/standardized-assessment-store.ts).
+// (src/shared/data/server/standardized-assessment-store.ts).
 import type { StandardizedAssessmentResponse } from "@/types/standardized-assessment";
 
 export type StandardizedAssessmentStoreOp =

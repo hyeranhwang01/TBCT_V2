@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 // Server-only Supabase client (Route Handlers, middleware) -- reads the
 // session from the request's cookies so a route handler can learn which
 // authenticated user is calling it, then uses that identity for
-// authorization checks (see src/lib/server/*-store.ts). Cookie writes are
+// authorization checks (see src/shared/data/server/*-store.ts). Cookie writes are
 // wrapped in try/catch: called from a context that can't mutate cookies
 // (there isn't one in this app's Route-Handler-only setup, but the
 // @supabase/ssr docs require guarding it since the same client shape is

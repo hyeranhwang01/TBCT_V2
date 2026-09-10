@@ -1,7 +1,7 @@
 import type { LongitudinalMemory, RuntimeParticipant } from "@/types/longitudinal-memory";
 import type { ParticipantStoreOp } from "@/shared/runtime/participant-store-ops";
 
-// Minimal in-memory stand-in for src/lib/server/participant-store.ts, used
+// Minimal in-memory stand-in for src/shared/data/server/participant-store.ts, used
 // only so offline tests that touch the participant roster (e.g. session
 // creation resolving/creating a demo participant) don't fail on a relative
 // fetch() URL. Not a full behavioral mirror -- just enough CRUD to keep the

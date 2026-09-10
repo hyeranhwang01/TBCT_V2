@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 // and ban/unban them. This is the direct answer to "anyone can self-signup
 // as a clinician, with no gatekeeping" -- see the admin-role feature's own
 // plan. Every user id -> email/role lookup here uses the service-role
-// admin client (src/lib/supabase/admin.ts), since an ordinary client can
+// admin client (src/shared/supabase/admin.ts), since an ordinary client can
 // never see another user's identity.
 export async function GET() {
   const caller = await getAuthenticatedCaller();

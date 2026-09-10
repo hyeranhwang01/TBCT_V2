@@ -34,7 +34,7 @@ function getAdminClient() {
 }
 
 /** Every registered clinician's email -- used to decide who receives a
- * safety-alert email (src/lib/notifications/send-safety-alert.ts) when no
+ * safety-alert email (src/shared/notifications/send-safety-alert.ts) when no
  * specific clinician is assigned to the participant yet. Paginates through
  * every registered user since `listUsers` caps at 1000/page by default;
  * fine at this app's current scale, revisit if the clinician roster grows

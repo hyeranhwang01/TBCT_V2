@@ -140,7 +140,7 @@ function isLocaleConsistentFallbackText(value: string, locale: string) {
 }
 
 // Korean translations for the curated/approved static texts in each
-// session's own src/lib/runtime/static-messages/s0N.ts (plus the 5
+// session's own src/patient/sessions/s0N/messages.ts (plus the 5
 // safety-pause messages) -- the highest-traffic, most clinically
 // load-bearing moments in each session (scale explanations, safety pauses,
 // CRP/Trial chair prompts). This does NOT cover the ~200 remaining prompts

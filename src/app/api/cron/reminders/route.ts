@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 // Direct server-side store imports, NOT the fetch-based
-// @/lib/api/participant-api / @/lib/api/runtime-session-api (those go
+// @/shared/api/participant-api / @/shared/api/runtime-session-api (those go
 // through repositories whose callStore() hits "/api/*/store" over HTTP --
 // fine from a browser, but those routes require a logged-in caller's
 // session cookie, which a cron job never has. This route's own trust
 // boundary is isAuthorizedCronRequest() below, so it reads straight from
-// Postgres instead, the same way src/lib/supabase/admin.ts bypasses
+// Postgres instead, the same way src/shared/supabase/admin.ts bypasses
 // per-user auth with the service-role key.
 import { listParticipants } from "@/shared/data/server/participant-store";
 import { listRuntimeSessionRecords } from "@/shared/data/server/runtime-session-store";

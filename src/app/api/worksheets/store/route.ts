@@ -5,8 +5,8 @@ import type { WorksheetStoreOp } from "@/shared/runtime/worksheet-store-ops";
 export const runtime = "nodejs";
 
 // Single RPC endpoint for the session worksheet store (see
-// src/lib/runtime/worksheet-store-ops.ts for the op contract).
-// src/lib/repositories/worksheet-repository.ts is a thin fetch client over
+// src/shared/runtime/worksheet-store-ops.ts for the op contract).
+// src/shared/data/repositories/worksheet-repository.ts is a thin fetch client over
 // this route, matching the pattern of the runtime/participant/safety stores.
 export async function POST(request: Request) {
   try {

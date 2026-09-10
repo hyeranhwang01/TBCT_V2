@@ -49,7 +49,7 @@ export type SessionSourceMetadata = {
   safetyRange: SourceRange;
   /** Source-text corruption/transcription-review markers scoped to specific
    * line ranges within this session (only s06 and s07 have any) --
-   * co-located per-session (see src/lib/protocol/sessions/*.ts) rather than
+   * co-located per-session (see src/patient/sessions/*.ts) rather than
    * a separate shared lookup, so a session owner never touches a shared
    * file to flag or clear one. See traceFor/fidelityFor below. */
   reviewRanges?: Array<{ range: SourceRange; warning: string }>;

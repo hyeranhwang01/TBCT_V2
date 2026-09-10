@@ -1,11 +1,11 @@
 // Daily mood check-ins -- see sql/013_mood_checkins.sql for the schema and
-// src/lib/mood-checkins/streak.ts for the streak calculation.
+// src/shared/mood-checkins/streak.ts for the streak calculation.
 
 export interface MoodCheckin {
   id: string;
   participantId: string;
   /** "YYYY-MM-DD", always in Asia/Seoul -- see
-   * src/lib/server/mood-checkin-store.ts's todayInSeoul(). One row per
+   * src/shared/data/server/mood-checkin-store.ts's todayInSeoul(). One row per
    * participant per day; a same-day resubmission updates this row rather
    * than creating a new one (sql/013's UNIQUE constraint). */
   checkinDate: string;

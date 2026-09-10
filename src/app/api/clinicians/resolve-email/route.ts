@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 // Resolves a clinician's Supabase Auth user id (as stored in
 // RuntimeParticipant.assignedClinician, see participant-api.ts) to their
 // email, for display in the Patient Monitoring UI. Uses the service-role
-// admin client (src/lib/supabase/admin.ts) since an ordinary client can only
+// admin client (src/shared/supabase/admin.ts) since an ordinary client can only
 // ever see its own session's identity, never another user's. Gated to
 // clinician callers -- a patient has no legitimate reason to resolve a
 // clinician's identity through this route.

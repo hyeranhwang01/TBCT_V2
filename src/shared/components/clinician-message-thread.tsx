@@ -16,7 +16,7 @@ function formatTimestamp(value: string) {
 }
 
 /** Async patient<->clinician message thread -- shared by the patient-
- * facing page (src/components/pages/patient-messages-page.tsx) and the
+ * facing page (src/patient/pages/patient-messages-page.tsx) and the
  * clinician-facing panel on the patient detail page. One flat thread per
  * participant; "mine" styling compares against the logged-in user's own
  * auth id, not their role, so it stays correct regardless of which side

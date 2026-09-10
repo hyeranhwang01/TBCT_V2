@@ -9,10 +9,10 @@ import { installWebStoragePolyfill } from "@/test/polyfills/web-storage";
 // app code reads it too (demo-actor, i18n, session-catalog).
 //
 // Deliberately NOT reset between tests. jsdom's Storage persisted for the
-// lifetime of one test file, and src/lib/api/pilot-study-api.test.ts relies on
+// lifetime of one test file, and src/clinician/lib/api/pilot-study-api.test.ts relies on
 // that: its last test sets no actor and exercises the redaction branch left
 // behind by the previous one. Tests that want isolation clear storage
-// themselves -- see src/lib/db/tbct-source-fidelity-backup.test.ts's own
+// themselves -- see src/shared/data/db/tbct-source-fidelity-backup.test.ts's own
 // beforeEach. Each test file gets a fresh environment, so nothing leaks
 // across files.
 installWebStoragePolyfill();
