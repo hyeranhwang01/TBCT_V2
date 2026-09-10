@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { createCanonicalTestRuntimeSession, getRuntimeSession } from "@/lib/api/runtime-session-api";
-import { startRuntimeSession, submitPatientInput } from "@/lib/api/runtime-execution-api";
-import { getLocalDb } from "@/lib/db/tbct-local-db";
-import { getWorksheetView } from "@/lib/worksheet/worksheet-projection";
-import { syntheticPatientInput } from "@/lib/runtime/testing/session-fidelity-fixtures";
+import { createCanonicalTestRuntimeSession, getRuntimeSession } from "@/shared/api/runtime-session-api";
+import { startRuntimeSession, submitPatientInput } from "@/shared/api/runtime-execution-api";
+import { getLocalDb } from "@/shared/data/db/tbct-local-db";
+import { getWorksheetView } from "@/shared/worksheet/worksheet-projection";
+import { syntheticPatientInput } from "@/shared/runtime/testing/session-fidelity-fixtures";
 
 type RuntimeSessionView = NonNullable<Awaited<ReturnType<typeof getRuntimeSession>>>;
 

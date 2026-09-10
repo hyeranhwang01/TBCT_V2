@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Button, Card, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
-import { completeScreening, getPilotParticipantRegistry } from "@/lib/api/pilot-study-api";
+import { completeScreening, getPilotParticipantRegistry } from "@/clinician/lib/api/pilot-study-api";
 
 export function RuntimePilotScreeningPage() {
   const queryClient = useQueryClient();

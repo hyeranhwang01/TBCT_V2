@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { Button } from "@/shared/components/ui/primitives";
-import { fadeIn, fadeScale } from "@/lib/motion/motion-variants";
-import { useReducedMotionPreference } from "@/lib/motion/use-reduced-motion-preference";
-import { useT } from "@/lib/i18n/context";
-import type { TourStep } from "@/lib/onboarding/tour-steps";
+import { fadeIn, fadeScale } from "@/shared/motion/motion-variants";
+import { useReducedMotionPreference } from "@/shared/motion/use-reduced-motion-preference";
+import { useT } from "@/shared/i18n/context";
+import type { TourStep } from "@/shared/onboarding/tour-steps";
 
 const EDGE_MARGIN = 12;
 const TOOLTIP_WIDTH = 320;

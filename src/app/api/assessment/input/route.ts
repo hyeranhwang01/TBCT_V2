@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { assessmentRequestSchema } from "@/lib/assessment/assessment-contract";
-import { getAssessmentModel } from "@/lib/assessment/assessment-providers";
+import { assessmentRequestSchema } from "@/shared/assessment/assessment-contract";
+import { getAssessmentModel } from "@/shared/assessment/assessment-providers";
 
 export const runtime = "nodejs";
 export async function POST(request: Request) {

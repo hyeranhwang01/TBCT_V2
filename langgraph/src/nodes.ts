@@ -1,8 +1,8 @@
 import { interrupt } from "@langchain/langgraph";
-import type { ClinicalStageNode, PromptItem } from "@/lib/protocol/source-fidelity-types";
+import type { ClinicalStageNode, PromptItem } from "@/shared/protocol/source-fidelity-types";
 import type { RuntimeContext } from "@/types/runtime-session";
-import { extractRuntimeState } from "@/lib/runtime/runtime-context";
-import { resolveStaticPatientMessage } from "@/lib/runtime/runtime-static-message";
+import { extractRuntimeState } from "@/shared/runtime/runtime-context";
+import { resolveStaticPatientMessage } from "@/shared/runtime/runtime-static-message";
 import { applyEffect } from "./effects";
 import { observeRules } from "./observe";
 import type { TraceEvent, TrialStateType, TrialUpdate } from "./state";

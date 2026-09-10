@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Button, Card, EmptyState, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
-import { getSafetyNotifications, markAllSafetyNotificationsRead, markSafetyNotificationRead } from "@/lib/api/safety-operations-api";
+import { getSafetyNotifications, markAllSafetyNotificationsRead, markSafetyNotificationRead } from "@/shared/api/safety-operations-api";
 
 export function RuntimeSafetyNotificationsPage() {
   const queryClient = useQueryClient();

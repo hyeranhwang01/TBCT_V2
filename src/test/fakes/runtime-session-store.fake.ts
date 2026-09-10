@@ -8,7 +8,7 @@ import type {
   RuntimeValidationEvent,
   SessionExecutionLog,
 } from "@/types/runtime-session";
-import type { RuntimeStoreOp } from "@/lib/runtime/runtime-store-ops";
+import type { RuntimeStoreOp } from "@/shared/runtime/runtime-store-ops";
 
 // In-memory stand-in for src/lib/server/runtime-session-store.ts, used only
 // by the test fetch interceptor (src/test/setup.ts) so unit tests stay fast,

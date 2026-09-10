@@ -9,13 +9,13 @@ import { SessionProgressChart } from "@/patient/components/session-progress-char
 import { MfaSettings } from "@/shared/components/auth/mfa-settings";
 import { DataPrivacySection } from "@/patient/components/data-privacy-section";
 import { Badge, Button, Card, EmptyState, Field, PageSkeleton, inputClass } from "@/shared/components/ui/primitives";
-import { getOrCreateParticipantForUiLocale, getParticipantRecord, updateParticipantProfile, updateParticipantConsent, updateNotificationPreferences } from "@/lib/api/participant-api";
-import { getParticipantLongitudinalDashboard } from "@/lib/api/longitudinal-memory-api";
-import { getPatientProgressSeries } from "@/lib/worksheet/worksheet-projection";
-import { propagateLocaleToOpenSessions } from "@/lib/api/patient-locale-sync";
-import { useT } from "@/lib/i18n/context";
-import { mapToUiLocale } from "@/lib/i18n/locales";
-import { useAuth } from "@/lib/auth/auth-context";
+import { getOrCreateParticipantForUiLocale, getParticipantRecord, updateParticipantProfile, updateParticipantConsent, updateNotificationPreferences } from "@/shared/api/participant-api";
+import { getParticipantLongitudinalDashboard } from "@/shared/api/longitudinal-memory-api";
+import { getPatientProgressSeries } from "@/shared/worksheet/worksheet-projection";
+import { propagateLocaleToOpenSessions } from "@/patient/lib/api/patient-locale-sync";
+import { useT } from "@/shared/i18n/context";
+import { mapToUiLocale } from "@/shared/i18n/locales";
+import { useAuth } from "@/shared/auth/auth-context";
 
 export function PatientProfilePage() {
   // Aliased: this page already has its own local `locale`/`setLocale` state

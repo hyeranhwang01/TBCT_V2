@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Badge, Button, Card, EmptyState, Field, PageHeader, PageSkeleton, SectionHeader, SourceReferenceChip, StatusBadge, textareaClass } from "@/shared/components/ui/primitives";
-import { getSafetyRuleUsage, getSafetyRulesApi } from "@/lib/api/protocol-api";
+import { getSafetyRuleUsage, getSafetyRulesApi } from "@/clinician/lib/api/protocol-api";
 
 export function SafetyPage() {
   const searchParams = useSearchParams();

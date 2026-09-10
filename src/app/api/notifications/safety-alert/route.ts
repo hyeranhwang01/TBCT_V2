@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { sendSafetyAlertEmail } from "@/lib/notifications/send-safety-alert";
-import { getAuthenticatedCaller } from "@/lib/supabase/server";
+import { sendSafetyAlertEmail } from "@/shared/notifications/send-safety-alert";
+import { getAuthenticatedCaller } from "@/shared/supabase/server";
 
 export const runtime = "nodejs";
 

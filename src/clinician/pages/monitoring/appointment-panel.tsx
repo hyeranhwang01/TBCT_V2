@@ -5,9 +5,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Bell, CalendarClock, CalendarPlus, Clock3, Plus } from "lucide-react";
 import { Badge, Button, Card, Field, IllustratedEmptyState, SectionHeader, inputClass } from "@/shared/components/ui/primitives";
-import { createAppointment, listAppointmentsByParticipant, updateAppointmentStatus } from "@/lib/api/appointment-api";
-import { useRealtimeInvalidate } from "@/lib/supabase/use-realtime-invalidate";
-import { useT } from "@/lib/i18n/context";
+import { createAppointment, listAppointmentsByParticipant, updateAppointmentStatus } from "@/shared/api/appointment-api";
+import { useRealtimeInvalidate } from "@/shared/supabase/use-realtime-invalidate";
+import { useT } from "@/shared/i18n/context";
 import type { AppointmentStatus } from "@/types/appointment";
 
 const STATUS_TONE: Record<AppointmentStatus, "primary" | "success" | "neutral" | "critical"> = {

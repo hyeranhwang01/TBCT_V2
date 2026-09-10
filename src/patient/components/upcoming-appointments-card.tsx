@@ -2,9 +2,9 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Badge, Card } from "@/shared/components/ui/primitives";
-import { listAppointmentsByParticipant } from "@/lib/api/appointment-api";
-import { useRealtimeInvalidate } from "@/lib/supabase/use-realtime-invalidate";
-import { useT } from "@/lib/i18n/context";
+import { listAppointmentsByParticipant } from "@/shared/api/appointment-api";
+import { useRealtimeInvalidate } from "@/shared/supabase/use-realtime-invalidate";
+import { useT } from "@/shared/i18n/context";
 
 function formatDateTime(iso: string) {
   return new Date(iso).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", weekday: "short", hour: "2-digit", minute: "2-digit" });

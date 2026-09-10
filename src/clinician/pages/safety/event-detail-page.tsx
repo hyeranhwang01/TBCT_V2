@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Badge, Button, Card, EmptyState, Field, Modal, PageHeader, PageSkeleton, inputClass, textareaClass } from "@/shared/components/ui/primitives";
-import { DEMO_ACTORS } from "@/lib/demo-actor";
+import { DEMO_ACTORS } from "@/shared/demo-actor";
 import {
   acknowledgeClinicianHandoff,
   acknowledgeSafetyEvent,
@@ -36,10 +36,10 @@ import {
   cancelSafetyFollowUp,
   startHumanIntervention,
   startSafetyFollowUp,
-} from "@/lib/api/safety-operations-api";
-import { fadeUp } from "@/lib/motion/motion-variants";
-import { useReducedMotionPreference } from "@/lib/motion/use-reduced-motion-preference";
-import { useStudioStore } from "@/stores/studio-store";
+} from "@/shared/api/safety-operations-api";
+import { fadeUp } from "@/shared/motion/motion-variants";
+import { useReducedMotionPreference } from "@/shared/motion/use-reduced-motion-preference";
+import { useStudioStore } from "@/shared/stores/studio-store";
 
 export function RuntimeSafetyEventDetailPage() {
   const params = useParams<{ eventId: string }>();

@@ -3,11 +3,11 @@ import { NextResponse } from "next/server";
 // see src/app/api/cron/reminders/route.ts's own doc comment for why: a cron
 // job has no logged-in caller's session cookie, so the fetch-based
 // repositories (gated on that cookie) would reject it.
-import { listStaleIncompleteRecords } from "@/lib/server/homework-store";
-import { getParticipant } from "@/lib/server/participant-store";
-import { getUserEmail } from "@/lib/supabase/admin";
-import { sendHomeworkReminderEmail } from "@/lib/notifications/send-homework-reminder";
-import { isAuthorizedCronRequest } from "@/lib/runtime/cron-auth";
+import { listStaleIncompleteRecords } from "@/shared/data/server/homework-store";
+import { getParticipant } from "@/shared/data/server/participant-store";
+import { getUserEmail } from "@/shared/supabase/admin";
+import { sendHomeworkReminderEmail } from "@/shared/notifications/send-homework-reminder";
+import { isAuthorizedCronRequest } from "@/shared/runtime/cron-auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;

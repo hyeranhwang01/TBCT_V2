@@ -1,4 +1,4 @@
-import type { PromptItem } from "@/lib/protocol/source-fidelity-types";
+import type { PromptItem } from "@/shared/protocol/source-fidelity-types";
 
 const APPROVED_TEXT: Record<string, string> = {
   "tbct-s05-n05-p02-new-contributor-next-round": "For the next round, is there another person, circumstance, or factor that contributed to what happened?",

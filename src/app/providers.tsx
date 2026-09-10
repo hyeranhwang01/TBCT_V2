@@ -3,8 +3,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Toaster } from "sonner";
-import { LocaleProvider } from "@/lib/i18n/context";
-import { AuthProvider } from "@/lib/auth/auth-context";
+import { LocaleProvider } from "@/shared/i18n/context";
+import { AuthProvider } from "@/shared/auth/auth-context";
 import { AppSplash } from "@/shared/components/ui/app-splash";
 
 export function Providers({ children }: { children: React.ReactNode }) {

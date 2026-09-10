@@ -12,7 +12,7 @@ import {
   PageSkeleton,
   SectionHeader,
 } from "@/shared/components/ui/primitives";
-import { getAuditEntries } from "@/lib/api/mock-api";
+import { getAuditEntries } from "@/clinician/lib/api/mock-api";
 import type { AuditEntry } from "@/types";
 
 export function AuditPage() {

@@ -1,4 +1,4 @@
-import type { PromptItem } from "@/lib/protocol/source-fidelity-types";
+import type { PromptItem } from "@/shared/protocol/source-fidelity-types";
 
 // Source (tbct-source-text.generated.ts:57-69) gives a single worked
 // "Example:" of this mandatory opening move -- a hypothetical participant

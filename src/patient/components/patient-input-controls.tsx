@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button, inputClass } from "@/shared/components/ui/primitives";
-import type { PromptItem } from "@/lib/protocol/source-fidelity-types";
+import type { PromptItem } from "@/shared/protocol/source-fidelity-types";
 import type { PatientInput } from "@/types/runtime-session";
-import { useSpeechRecognition } from "@/lib/speech/use-speech-recognition";
-import { choiceLabel } from "@/lib/runtime/patient-input-display";
+import { useSpeechRecognition } from "@/patient/lib/speech/use-speech-recognition";
+import { choiceLabel } from "@/shared/runtime/patient-input-display";
 
 type PatientPromptInput = Pick<PromptItem, "type" | "validation" | "outputFields">;
 

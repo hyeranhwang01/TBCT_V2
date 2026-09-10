@@ -5,12 +5,12 @@ import { useQuery } from "@tanstack/react-query";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Badge, Card, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
-import { useT } from "@/lib/i18n/context";
-import { listRuntimeParticipants } from "@/lib/api/participant-api";
-import { listRuntimeSessions } from "@/lib/api/runtime-session-api";
-import { getSafetyEvents } from "@/lib/api/safety-operations-api";
-import { getCohortAssessmentSummary } from "@/lib/api/standardized-assessment-api";
-import { bucketByWeek } from "@/lib/runtime/data-dashboard-metrics";
+import { useT } from "@/shared/i18n/context";
+import { listRuntimeParticipants } from "@/shared/api/participant-api";
+import { listRuntimeSessions } from "@/shared/api/runtime-session-api";
+import { getSafetyEvents } from "@/shared/api/safety-operations-api";
+import { getCohortAssessmentSummary } from "@/shared/api/standardized-assessment-api";
+import { bucketByWeek } from "@/shared/runtime/data-dashboard-metrics";
 import type { RuntimeSession } from "@/types/runtime-session";
 import type { SafetyEvent } from "@/types/safety-operations";
 

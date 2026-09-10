@@ -4,10 +4,10 @@ import { useParams, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Badge, Button, Card, EmptyState, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
-import { getRuntimeParticipant } from "@/lib/api/participant-api";
-import { getRuntimeSession } from "@/lib/api/runtime-session-api";
-import { getWorksheetView } from "@/lib/worksheet/worksheet-projection";
-import { getSafetyEvents } from "@/lib/api/safety-operations-api";
+import { getRuntimeParticipant } from "@/shared/api/participant-api";
+import { getRuntimeSession } from "@/shared/api/runtime-session-api";
+import { getWorksheetView } from "@/shared/worksheet/worksheet-projection";
+import { getSafetyEvents } from "@/shared/api/safety-operations-api";
 import { findSessionTitle } from "@/clinician/pages/monitoring/patient-monitoring-utils";
 
 function formatTimestamp(value?: string) {

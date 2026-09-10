@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Badge, Button, Card, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
-import { getSafetyDashboardData } from "@/lib/api/safety-operations-api";
+import { getSafetyDashboardData } from "@/shared/api/safety-operations-api";
 
 export function RuntimeSafetyDashboardPage() {
   const query = useQuery({ queryKey: ["safety-dashboard"], queryFn: getSafetyDashboardData });

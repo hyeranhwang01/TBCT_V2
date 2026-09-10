@@ -4,9 +4,9 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PatientShell } from "@/patient/components/patient-shell";
 import { Badge, Button, Card, EmptyState, Field, inputClass, textareaClass } from "@/shared/components/ui/primitives";
-import { appendHomeworkEntry, listHomeworkEntries } from "@/lib/api/homework-api";
-import { COGNITIVE_DISTORTIONS } from "@/lib/homework/cognitive-distortions-list";
-import { useT } from "@/lib/i18n/context";
+import { appendHomeworkEntry, listHomeworkEntries } from "@/patient/lib/api/homework-api";
+import { COGNITIVE_DISTORTIONS } from "@/patient/lib/homework/cognitive-distortions-list";
+import { useT } from "@/shared/i18n/context";
 import type { HomeworkRecord } from "@/types/homework";
 import type { RuntimeSession } from "@/types/runtime-session";
 

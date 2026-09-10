@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createCanonicalTestRuntimeSession, getRuntimeSession } from "@/lib/api/runtime-session-api";
-import { startRuntimeSession, submitPatientInput } from "@/lib/api/runtime-execution-api";
-import { getLocalDb } from "@/lib/db/tbct-local-db";
-import { resetAssessmentModelForTests, setAssessmentModelForTests } from "@/lib/assessment/assessment-providers";
-import type { AssessmentModel, AssessmentProviderHealth, AssessmentProviderMetadata, AssessmentRequest, AssessmentResult } from "@/lib/assessment/assessment-contract";
+import { createCanonicalTestRuntimeSession, getRuntimeSession } from "@/shared/api/runtime-session-api";
+import { startRuntimeSession, submitPatientInput } from "@/shared/api/runtime-execution-api";
+import { getLocalDb } from "@/shared/data/db/tbct-local-db";
+import { resetAssessmentModelForTests, setAssessmentModelForTests } from "@/shared/assessment/assessment-providers";
+import type { AssessmentModel, AssessmentProviderHealth, AssessmentProviderMetadata, AssessmentRequest, AssessmentResult } from "@/shared/assessment/assessment-contract";
 
 async function current(sessionId: string) {
   const view = await getRuntimeSession(sessionId);

@@ -1,6 +1,6 @@
 import type { RuntimeAction, ProtocolReleaseVersion } from "@/types/protocol-runtime";
 import type { RuntimeParticipant, MemoryRetrievalResult, MemoryUsageLog } from "@/types/longitudinal-memory";
-import type { ClinicalStageNode, PromptItem, SessionDefinition, SourceFidelityEdge } from "@/lib/protocol/source-fidelity-types";
+import type { ClinicalStageNode, PromptItem, SessionDefinition, SourceFidelityEdge } from "@/shared/protocol/source-fidelity-types";
 
 export type RuntimeSessionStatus =
   | "created"

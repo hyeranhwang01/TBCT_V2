@@ -1,9 +1,9 @@
-import type { PromptItem } from "@/lib/protocol/source-fidelity-types";
+import type { PromptItem } from "@/shared/protocol/source-fidelity-types";
 import type { RuntimeContext } from "@/types/runtime-session";
 import {
   applyPromptCompletionEffect,
   getPromptCompletionEffectType,
-} from "@/lib/api/runtime-execution-api";
+} from "@/shared/api/runtime-execution-api";
 import type { TraceEvent } from "./state";
 
 /**

@@ -11,12 +11,12 @@ import { Badge, Button, ConfirmActionDialog } from "@/shared/components/ui/primi
 import { LocaleToggle } from "@/shared/components/ui/locale-toggle";
 import { Logo } from "@/shared/components/ui/logo";
 import { ThemeToggle } from "@/shared/components/ui/theme-toggle";
-import { useT } from "@/lib/i18n/context";
-import { useAuth } from "@/lib/auth/auth-context";
-import { getOrCreateParticipantForUiLocale } from "@/lib/api/participant-api";
-import { applyPatientLocaleChange } from "@/lib/api/patient-locale-sync";
-import { fadeUp } from "@/lib/motion/motion-variants";
-import { useReducedMotionPreference } from "@/lib/motion/use-reduced-motion-preference";
+import { useT } from "@/shared/i18n/context";
+import { useAuth } from "@/shared/auth/auth-context";
+import { getOrCreateParticipantForUiLocale } from "@/shared/api/participant-api";
+import { applyPatientLocaleChange } from "@/patient/lib/api/patient-locale-sync";
+import { fadeUp } from "@/shared/motion/motion-variants";
+import { useReducedMotionPreference } from "@/shared/motion/use-reduced-motion-preference";
 
 export function PatientShell({
   title,

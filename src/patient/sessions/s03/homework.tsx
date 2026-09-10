@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { PatientShell } from "@/patient/components/patient-shell";
 import { Badge, Button, Card, Field, textareaClass } from "@/shared/components/ui/primitives";
-import { updateHomeworkRecord } from "@/lib/api/homework-api";
-import { useT } from "@/lib/i18n/context";
+import { updateHomeworkRecord } from "@/patient/lib/api/homework-api";
+import { useT } from "@/shared/i18n/context";
 import type { HomeworkRecord } from "@/types/homework";
 import type { RuntimeSession } from "@/types/runtime-session";
 

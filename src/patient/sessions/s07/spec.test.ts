@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CANONICAL_PROMPT_ITEMS, CANONICAL_SESSION_COMMON_RULES } from "@/lib/protocol/source-fidelity-catalog";
+import { CANONICAL_PROMPT_ITEMS, CANONICAL_SESSION_COMMON_RULES } from "@/shared/protocol/source-fidelity-catalog";
 
 describe("S07 (Consensual Role-Play) catalog content", () => {
   it("keeps source corruption visible rather than repairing it", () => {

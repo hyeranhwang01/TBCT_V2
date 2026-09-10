@@ -5,8 +5,8 @@ import { useParams, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Button, Card, EmptyState, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
-import { getSafetyReport } from "@/lib/repositories/safety-event-repository";
-import { exportSafetyReportJson } from "@/lib/api/safety-operations-api";
+import { getSafetyReport } from "@/shared/data/repositories/safety-event-repository";
+import { exportSafetyReportJson } from "@/shared/api/safety-operations-api";
 
 export function RuntimeSafetyReportDetailPage() {
   const params = useParams<{ reportId: string }>();

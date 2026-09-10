@@ -1,5 +1,5 @@
-import type { PromptItem } from "@/lib/protocol/source-fidelity-types";
-import { firstText } from "@/lib/runtime/static-messages/field-helpers";
+import type { PromptItem } from "@/shared/protocol/source-fidelity-types";
+import { firstText } from "@/shared/runtime/static-messages/field-helpers";
 
 const APPROVED_TEXT: Record<string, string> = {
   "tbct-s08-n14-p04-participant-verdict": "After considering all four blocks, what verdict does the jury reach: guilty or not guilty? The verdict is yours to state.",

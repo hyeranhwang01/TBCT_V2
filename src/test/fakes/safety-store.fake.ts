@@ -11,7 +11,7 @@ import type {
   SafetyTriggerSuppression,
   SessionResumeRequest,
 } from "@/types/safety-operations";
-import type { SafetyStoreOp } from "@/lib/runtime/safety-store-ops";
+import type { SafetyStoreOp } from "@/shared/runtime/safety-store-ops";
 
 // Minimal in-memory stand-in for src/lib/server/safety-monitoring-store.ts.
 // Every normal (non-crisis) runtime turn unconditionally calls

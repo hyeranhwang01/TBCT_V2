@@ -1,5 +1,5 @@
-import type { PromptItem } from "@/lib/protocol/source-fidelity-types";
-import { ratingNumbers, reflectThenAskForNextRating } from "@/lib/runtime/static-messages/field-helpers";
+import type { PromptItem } from "@/shared/protocol/source-fidelity-types";
+import { ratingNumbers, reflectThenAskForNextRating } from "@/shared/runtime/static-messages/field-helpers";
 
 const APPROVED_TEXT: Record<string, string> = {
   "tbct-s02-n03-p01-offer-private-placeholders": "Before we rate your problems, some people have something private they'd rather not describe in detail. If that's true for you, you don't have to explain it — you can just call it X, Y, or Z instead, and we'll still rate it. Would you like to add a problem like that?",

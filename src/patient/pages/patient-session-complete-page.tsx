@@ -5,11 +5,11 @@ import { useParams, usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { PatientShell } from "@/patient/components/patient-shell";
 import { Button, Card, EmptyState, PageSkeleton } from "@/shared/components/ui/primitives";
-import { getRuntimeSession } from "@/lib/api/runtime-session-api";
-import { getRuntimeSessionSummary } from "@/lib/api/session-summary-api";
-import { ensureHomeworkForSession } from "@/lib/api/homework-api";
+import { getRuntimeSession } from "@/shared/api/runtime-session-api";
+import { getRuntimeSessionSummary } from "@/shared/api/session-summary-api";
+import { ensureHomeworkForSession } from "@/patient/lib/api/homework-api";
 import { HOMEWORK_LABEL_BY_SESSION, hasHomeworkActivity } from "@/types/homework";
-import { useT } from "@/lib/i18n/context";
+import { useT } from "@/shared/i18n/context";
 
 export function PatientSessionCompletePage() {
   const { t } = useT();

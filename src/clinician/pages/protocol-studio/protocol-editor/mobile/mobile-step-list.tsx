@@ -1,8 +1,8 @@
 "use client";
 
 import { Badge, EmptyState } from "@/shared/components/ui/primitives";
-import { useT } from "@/lib/i18n/context";
-import { cn } from "@/lib/utils";
+import { useT } from "@/shared/i18n/context";
+import { cn } from "@/shared/utils";
 import { getClinicianStepLabels, type FlowNode } from "../types";
 
 // Same required/safety/conditional/repeated labels as the desktop

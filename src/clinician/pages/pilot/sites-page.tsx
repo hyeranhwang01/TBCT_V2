@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Card, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
-import { getPilotSitesOverview } from "@/lib/api/pilot-study-api";
+import { getPilotSitesOverview } from "@/clinician/lib/api/pilot-study-api";
 
 export function RuntimePilotSitesPage() {
   const query = useQuery({ queryKey: ["pilot-sites"], queryFn: getPilotSitesOverview });

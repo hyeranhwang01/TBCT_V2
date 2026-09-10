@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Badge, Card, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
-import { getPilotStudyConfiguration } from "@/lib/api/pilot-study-api";
+import { getPilotStudyConfiguration } from "@/clinician/lib/api/pilot-study-api";
 
 export function RuntimePilotConfigurationPage() {
   const query = useQuery({ queryKey: ["pilot-configuration"], queryFn: getPilotStudyConfiguration });

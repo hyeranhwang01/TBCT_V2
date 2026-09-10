@@ -3,10 +3,10 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { X, LoaderCircle, Inbox, TriangleAlert, CircleHelp, PanelRightOpen, Sparkles } from "lucide-react";
 import { useId, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
-import { drawerPanel, modalBackdrop, modalPanel, tooltipEnter } from "@/lib/motion/motion-variants";
-import { motionDuration, motionEase } from "@/lib/motion/motion-tokens";
-import { useReducedMotionPreference } from "@/lib/motion/use-reduced-motion-preference";
-import { cn, reviewStatusMap, severityMap, versionStatusMap } from "@/lib/utils";
+import { drawerPanel, modalBackdrop, modalPanel, tooltipEnter } from "@/shared/motion/motion-variants";
+import { motionDuration, motionEase } from "@/shared/motion/motion-tokens";
+import { useReducedMotionPreference } from "@/shared/motion/use-reduced-motion-preference";
+import { cn, reviewStatusMap, severityMap, versionStatusMap } from "@/shared/utils";
 
 type Tone = "neutral" | "primary" | "violet" | "success" | "warning" | "critical";
 

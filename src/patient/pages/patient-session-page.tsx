@@ -9,18 +9,18 @@ import { PatientShell } from "@/patient/components/patient-shell";
 import { PatientInputControls } from "@/patient/components/patient-input-controls";
 import { StreamingText, TypingIndicator } from "@/patient/components/streaming-text";
 import { WorksheetPane } from "@/patient/components/worksheet-pane";
-import { hasWorksheetBindings } from "@/lib/worksheet/worksheet-binding-registry";
+import { hasWorksheetBindings } from "@/shared/worksheet/worksheet-binding-registry";
 import { Badge, Button, Card, ConfirmActionDialog, EmptyState, PageSkeleton } from "@/shared/components/ui/primitives";
-import { fadeScale, fadeUp } from "@/lib/motion/motion-variants";
-import { useReducedMotionPreference } from "@/lib/motion/use-reduced-motion-preference";
-import { getPatientRuntimeSession, getRuntimeSession } from "@/lib/api/runtime-session-api";
-import { saveRemoteSessionAuditSnapshot } from "@/lib/audit/remote-session-audit";
-import { computeSessionProgressPercent } from "@/lib/runtime/session-progress-estimate";
-import { describePatientInputForDisplay } from "@/lib/runtime/patient-input-display";
-import { resumeRuntimeSession, retryStalledRuntimeNode, startRuntimeSession, submitPatientInput, terminateRuntimeSession } from "@/lib/api/runtime-execution-api";
+import { fadeScale, fadeUp } from "@/shared/motion/motion-variants";
+import { useReducedMotionPreference } from "@/shared/motion/use-reduced-motion-preference";
+import { getPatientRuntimeSession, getRuntimeSession } from "@/shared/api/runtime-session-api";
+import { saveRemoteSessionAuditSnapshot } from "@/patient/lib/audit/remote-session-audit";
+import { computeSessionProgressPercent } from "@/shared/runtime/session-progress-estimate";
+import { describePatientInputForDisplay } from "@/shared/runtime/patient-input-display";
+import { resumeRuntimeSession, retryStalledRuntimeNode, startRuntimeSession, submitPatientInput, terminateRuntimeSession } from "@/shared/api/runtime-execution-api";
 import type { PatientInput, PatientRuntimeSessionView } from "@/types/runtime-session";
-import { useBrowserTts } from "@/lib/speech/use-browser-tts";
-import { useT } from "@/lib/i18n/context";
+import { useBrowserTts } from "@/patient/lib/speech/use-browser-tts";
+import { useT } from "@/shared/i18n/context";
 
 function makeClientTurnId() {
   if (typeof globalThis.crypto?.randomUUID === "function") return `TURN-${globalThis.crypto.randomUUID()}`;

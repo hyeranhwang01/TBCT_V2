@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CANONICAL_PROMPT_ITEMS } from "@/lib/protocol/source-fidelity-catalog";
+import { CANONICAL_PROMPT_ITEMS } from "@/shared/protocol/source-fidelity-catalog";
 
 describe("S05 (Participation Grid) catalog content", () => {
   it("encodes the guilt-belief re-rating as a cognitive_belief control rather than leaving it as display text", () => {

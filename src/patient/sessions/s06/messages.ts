@@ -1,5 +1,5 @@
-import type { PromptItem } from "@/lib/protocol/source-fidelity-types";
-import { firstText } from "@/lib/runtime/static-messages/field-helpers";
+import type { PromptItem } from "@/shared/protocol/source-fidelity-types";
+import { firstText } from "@/shared/runtime/static-messages/field-helpers";
 
 const APPROVED_TEXT: Record<string, string> = {
   "tbct-s06-n01-p01-warm-opening": "Welcome. Whenever you're ready, tell me a bit about what's been difficult for you lately — I'll follow your lead.",

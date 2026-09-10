@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Card, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
-import { getPilotDataQualityOverview } from "@/lib/api/pilot-study-api";
+import { getPilotDataQualityOverview } from "@/clinician/lib/api/pilot-study-api";
 
 export function RuntimePilotDataQualityPage() {
   const query = useQuery({ queryKey: ["pilot-data-quality"], queryFn: getPilotDataQualityOverview });

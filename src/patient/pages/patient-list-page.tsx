@@ -10,14 +10,14 @@ import { MoodCheckinWidget } from "@/patient/components/mood-checkin-widget";
 import { UpcomingAppointmentsCard } from "@/patient/components/upcoming-appointments-card";
 import { OnboardingTour } from "@/shared/components/onboarding/onboarding-tour";
 import { Badge, Button, Card, EmptyState, PageSkeleton } from "@/shared/components/ui/primitives";
-import { listRuntimeSessionsForParticipant } from "@/lib/api/runtime-session-api";
-import { getOrCreateParticipantForUiLocale } from "@/lib/api/participant-api";
-import { PATIENT_TOUR_STEPS } from "@/lib/onboarding/tour-steps";
-import { useOnboardingTour } from "@/lib/onboarding/use-onboarding-tour";
+import { listRuntimeSessionsForParticipant } from "@/shared/api/runtime-session-api";
+import { getOrCreateParticipantForUiLocale } from "@/shared/api/participant-api";
+import { PATIENT_TOUR_STEPS } from "@/shared/onboarding/tour-steps";
+import { useOnboardingTour } from "@/shared/onboarding/use-onboarding-tour";
 import { HOMEWORK_LABEL_BY_SESSION, hasHomeworkActivity } from "@/types/homework";
-import { UI_LOCALE_STORAGE_KEY, useT } from "@/lib/i18n/context";
-import { mapToUiLocale } from "@/lib/i18n/locales";
-import { useAuth } from "@/lib/auth/auth-context";
+import { UI_LOCALE_STORAGE_KEY, useT } from "@/shared/i18n/context";
+import { mapToUiLocale } from "@/shared/i18n/locales";
+import { useAuth } from "@/shared/auth/auth-context";
 
 type ListedSession = Awaited<ReturnType<typeof listRuntimeSessionsForParticipant>>[number];
 

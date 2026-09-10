@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { listAllUsers, setUserBanned } from "@/lib/supabase/admin";
-import { getAuthenticatedCaller } from "@/lib/supabase/server";
+import { listAllUsers, setUserBanned } from "@/shared/supabase/admin";
+import { getAuthenticatedCaller } from "@/shared/supabase/server";
 
 export const runtime = "nodejs";
 

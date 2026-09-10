@@ -14,7 +14,7 @@ import {
   updatePromptItem,
   type PromptItem,
   type SessionCommonRules,
-} from "@/lib/session-catalog";
+} from "@/clinician/lib/session-catalog";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -23,8 +23,8 @@ import { applyNodeChanges, type Connection, type NodeChange } from "@xyflow/reac
 import { toast } from "sonner";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Badge, Button, EmptyState, Modal, PageHeader, PageSkeleton, SaveStatus, inputClass } from "@/shared/components/ui/primitives";
-import { useReducedMotionPreference } from "@/lib/motion/use-reduced-motion-preference";
-import { useT } from "@/lib/i18n/context";
+import { useReducedMotionPreference } from "@/shared/motion/use-reduced-motion-preference";
+import { useT } from "@/shared/i18n/context";
 import {
   attachSafetyRuleToNode,
   createProtocolEdge,
@@ -40,8 +40,8 @@ import {
   runRuntimeScenario,
   updateProtocolNodeApi,
   upsertProtocolDefinition,
-} from "@/lib/api/protocol-api";
-import { getClinicalAssetsApi, getExtractionReviewDraftApi, getProtocolDraftCandidateBySourceDraftIdApi } from "@/lib/api/clinical-assets-api";
+} from "@/clinician/lib/api/protocol-api";
+import { getClinicalAssetsApi, getExtractionReviewDraftApi, getProtocolDraftCandidateBySourceDraftIdApi } from "@/clinician/lib/api/clinical-assets-api";
 import type { LocalClinicalAsset, SourceEvidence, ProtocolDraftItem } from "@/types/clinical-assets";
 import type { ProtocolDefinition, ProtocolGraphNode, RuntimeExecutionLog } from "@/types/protocol-runtime";
 import { SessionPanel } from "./protocol-editor/session-panel";

@@ -1,6 +1,6 @@
 import { S01_COGNITIVE_DISTORTIONS, S01_DISTORTION_IDS, findDistortionById } from "@/patient/sessions/s01/cognitive-distortions";
-import { redactDirectIdentifiers } from "@/lib/assessment/privacy-redaction";
-import { recordModelUsage } from "@/lib/assessment/model-observability";
+import { redactDirectIdentifiers } from "@/shared/assessment/privacy-redaction";
+import { recordModelUsage } from "@/shared/assessment/model-observability";
 
 // S01's identify-distortion step must never let Claude invent or diagnose a
 // distortion (task redesign brief §1-3, .claude/TASK_SCOPE.json's

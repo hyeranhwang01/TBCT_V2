@@ -4,7 +4,7 @@ import { useParams, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Button, Card, EmptyState, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
-import { getPilotReportDetail } from "@/lib/api/pilot-study-api";
+import { getPilotReportDetail } from "@/clinician/lib/api/pilot-study-api";
 
 export function RuntimePilotReportDetailPage() {
   const params = useParams<{ reportId: string }>();

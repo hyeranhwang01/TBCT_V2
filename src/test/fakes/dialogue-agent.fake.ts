@@ -1,5 +1,5 @@
-import type { DialogueAgentResult, DialogueContract, DialogueDecision } from "@/lib/dialogue-agent/dialogue-agent-contract";
-import { contractMayRequireAssembly } from "@/lib/dialogue-agent/message-composition";
+import type { DialogueAgentResult, DialogueContract, DialogueDecision } from "@/shared/dialogue-agent/dialogue-agent-contract";
+import { contractMayRequireAssembly } from "@/shared/dialogue-agent/message-composition";
 
 // Deterministic stand-in for the real Anthropic dialogue agent
 // (anthropic-dialogue-agent.ts) -- tests need a REALISTIC classifier (not

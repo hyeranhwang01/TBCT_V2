@@ -1,4 +1,4 @@
-import type { ClinicalStageNode, PromptItem } from "@/lib/protocol/source-fidelity-types";
+import type { ClinicalStageNode, PromptItem } from "@/shared/protocol/source-fidelity-types";
 import type { RuntimeContext } from "@/types/runtime-session";
 
 /**

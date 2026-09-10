@@ -1,5 +1,5 @@
-import type { PromptItem } from "@/lib/protocol/source-fidelity-types";
-import { firstText } from "@/lib/runtime/static-messages/field-helpers";
+import type { PromptItem } from "@/shared/protocol/source-fidelity-types";
+import { firstText } from "@/shared/runtime/static-messages/field-helpers";
 
 const APPROVED_TEXT: Record<string, string> = {
   "tbct-s07-n01-p01-crp-offer": "I’d like to propose that today we work through a decision that feels important but difficult using Consensual Role-Play. You will not be pressured to take the feared action; what matters is what you learn. Would you like to try it?",

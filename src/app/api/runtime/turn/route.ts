@@ -1,7 +1,7 @@
-import { getAuthenticatedCaller } from "@/lib/supabase/server";
-import { runWithRuntimeRequestContext } from "@/lib/server/runtime-request-context";
-import { getParticipantByAuthUserId } from "@/lib/server/participant-store";
-import { getRuntimeSessionRecord } from "@/lib/server/runtime-session-store";
+import { getAuthenticatedCaller } from "@/shared/supabase/server";
+import { runWithRuntimeRequestContext } from "@/shared/data/server/runtime-request-context";
+import { getParticipantByAuthUserId } from "@/shared/data/server/participant-store";
+import { getRuntimeSessionRecord } from "@/shared/data/server/runtime-session-store";
 import type { PatientInput } from "@/types/runtime-session";
 
 export const runtime = "nodejs";
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   }
   try {
     const result = await runWithRuntimeRequestContext(request, async () => {
-      const { submitPatientInput } = await import("@/lib/api/runtime-execution-api");
+      const { submitPatientInput } = await import("@/shared/api/runtime-execution-api");
       return submitPatientInput(body.sessionId!, body.patientInput!, body.options);
     });
     return Response.json({ ok: true, result });

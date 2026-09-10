@@ -2,7 +2,7 @@
 
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card } from "@/shared/components/ui/primitives";
-import { useT } from "@/lib/i18n/context";
+import { useT } from "@/shared/i18n/context";
 import type { SessionProgressCard } from "@/types/worksheet";
 
 // Validated categorical pair (node scripts/validate_palette.js "#2a78d6,#eb6834"

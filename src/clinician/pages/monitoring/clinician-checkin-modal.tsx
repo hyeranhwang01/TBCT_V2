@@ -4,9 +4,9 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button, Modal } from "@/shared/components/ui/primitives";
-import { submitStandardizedAssessment } from "@/lib/api/standardized-assessment-api";
-import { INSTRUMENTS, responseOptionLabel } from "@/lib/standardized-assessments/instruments";
-import { useT } from "@/lib/i18n/context";
+import { submitStandardizedAssessment } from "@/shared/api/standardized-assessment-api";
+import { INSTRUMENTS, responseOptionLabel } from "@/shared/standardized-assessments/instruments";
+import { useT } from "@/shared/i18n/context";
 import type { StandardizedInstrumentId } from "@/types/standardized-assessment";
 
 interface ClinicianCheckinModalProps {

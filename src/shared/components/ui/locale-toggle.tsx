@@ -1,8 +1,8 @@
 "use client";
 
 import { Languages } from "lucide-react";
-import { useT } from "@/lib/i18n/context";
-import { cn } from "@/lib/utils";
+import { useT } from "@/shared/i18n/context";
+import { cn } from "@/shared/utils";
 
 /**
  * Compact ko <-> en toggle for this app's own UI chrome text (buttons,

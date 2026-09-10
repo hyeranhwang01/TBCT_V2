@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CANONICAL_PROMPT_ITEMS } from "@/lib/protocol/source-fidelity-catalog";
+import { CANONICAL_PROMPT_ITEMS } from "@/shared/protocol/source-fidelity-catalog";
 
 describe("S08 (Trial One) catalog content", () => {
   it("encodes the verdict and positive-belief prompts as participant-generated controls rather than leaving them as display text", () => {

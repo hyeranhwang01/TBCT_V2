@@ -3,10 +3,10 @@
 import { motion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Badge, Card, SectionHeader } from "@/shared/components/ui/primitives";
-import { fadeUp } from "@/lib/motion/motion-variants";
-import { motionDuration, motionEase } from "@/lib/motion/motion-tokens";
-import { useT } from "@/lib/i18n/context";
-import { cn } from "@/lib/utils";
+import { fadeUp } from "@/shared/motion/motion-variants";
+import { motionDuration, motionEase } from "@/shared/motion/motion-tokens";
+import { useT } from "@/shared/i18n/context";
+import { cn } from "@/shared/utils";
 import { getClinicianStepLabels, type FlowNode } from "./types";
 
 interface SessionPanelProps {

@@ -2,11 +2,11 @@ import { NextResponse } from "next/server";
 // Direct server-side store imports, not the fetch-based repository -- see
 // src/app/api/cron/reminders/route.ts's own doc comment for why: a cron
 // job has no logged-in caller's session cookie.
-import { listAppointmentsNeedingReminder, markReminderSent } from "@/lib/server/appointment-store";
-import { getParticipant } from "@/lib/server/participant-store";
-import { getUserEmail } from "@/lib/supabase/admin";
-import { sendAppointmentReminderEmail } from "@/lib/notifications/send-appointment-reminder";
-import { isAuthorizedCronRequest } from "@/lib/runtime/cron-auth";
+import { listAppointmentsNeedingReminder, markReminderSent } from "@/shared/data/server/appointment-store";
+import { getParticipant } from "@/shared/data/server/participant-store";
+import { getUserEmail } from "@/shared/supabase/admin";
+import { sendAppointmentReminderEmail } from "@/shared/notifications/send-appointment-reminder";
+import { isAuthorizedCronRequest } from "@/shared/runtime/cron-auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;

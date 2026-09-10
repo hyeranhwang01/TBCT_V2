@@ -17,8 +17,8 @@ import {
   getLatestExtractionReviewDraftApi,
   updateStructuredItem,
   validateExtractionDraft,
-} from "@/lib/api/clinical-assets-api";
-import { duplicateSessionEntry, getActiveSessionId, getSessionById, getSessionNodeCount, getSessionPromptCount, getSessionTotals, loadSessionDefinitions, loadSessionPlan, restoreDefaultSessionPlan, saveSessionPlan, setStartingSession, toggleSessionEntryActive, reorderSessionEntry } from "@/lib/session-catalog";
+} from "@/clinician/lib/api/clinical-assets-api";
+import { duplicateSessionEntry, getActiveSessionId, getSessionById, getSessionNodeCount, getSessionPromptCount, getSessionTotals, loadSessionDefinitions, loadSessionPlan, restoreDefaultSessionPlan, saveSessionPlan, setStartingSession, toggleSessionEntryActive, reorderSessionEntry } from "@/clinician/lib/session-catalog";
 import type { DraftValidationIssue, ExtractedBlock, StructuredTbctItem, TbctMappingType } from "@/types/clinical-assets";
 
 const mappingOptions: { value: TbctMappingType; label: string }[] = [

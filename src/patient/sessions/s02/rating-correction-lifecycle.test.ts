@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createCanonicalTestRuntimeSession, getRuntimeSession } from "@/lib/api/runtime-session-api";
-import { startRuntimeSession, submitPatientInput } from "@/lib/api/runtime-execution-api";
-import { getLocalDb } from "@/lib/db/tbct-local-db";
-import { resetAssessmentModelForTests, setAssessmentModelForTests } from "@/lib/assessment/assessment-providers";
-import type { AssessmentModel, AssessmentProviderHealth, AssessmentProviderMetadata, AssessmentRequest, AssessmentResult } from "@/lib/assessment/assessment-contract";
+import { createCanonicalTestRuntimeSession, getRuntimeSession } from "@/shared/api/runtime-session-api";
+import { startRuntimeSession, submitPatientInput } from "@/shared/api/runtime-execution-api";
+import { getLocalDb } from "@/shared/data/db/tbct-local-db";
+import { resetAssessmentModelForTests, setAssessmentModelForTests } from "@/shared/assessment/assessment-providers";
+import type { AssessmentModel, AssessmentProviderHealth, AssessmentProviderMetadata, AssessmentRequest, AssessmentResult } from "@/shared/assessment/assessment-contract";
 
 async function current(sessionId: string) {
   const view = await getRuntimeSession(sessionId);
@@ -77,7 +77,7 @@ describe("S02 -- Phase 3: rating correction assessment-failure fail-closed (cont
   // rating turn must fail-closed -- no stray digit stored as a rating, and
   // the current item must not be silently removed.
   it("provider failure never records a stray digit as a rating and never removes the current item", async () => {
-    const { getAssessmentModel } = await import("@/lib/assessment/assessment-providers");
+    const { getAssessmentModel } = await import("@/shared/assessment/assessment-providers");
     const real = getAssessmentModel();
     resetAssessmentModelForTests();
     const scripted = new PassthroughThenScriptedModel(real);

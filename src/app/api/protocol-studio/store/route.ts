@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { dispatchProtocolStudioStoreOp } from "@/lib/server/protocol-studio-store";
-import type { ProtocolStudioStoreOp } from "@/lib/runtime/protocol-studio-store-ops";
+import { dispatchProtocolStudioStoreOp } from "@/shared/data/server/protocol-studio-store";
+import type { ProtocolStudioStoreOp } from "@/shared/runtime/protocol-studio-store-ops";
 
 export const runtime = "nodejs";
 

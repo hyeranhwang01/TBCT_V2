@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Badge, Button, Card, EmptyState, PageHeader, PageSkeleton, SectionHeader, ValidationSeverityBadge } from "@/shared/components/ui/primitives";
-import { getProtocolGraphApi, runProtocolValidation } from "@/lib/api/protocol-api";
+import { getProtocolGraphApi, runProtocolValidation } from "@/clinician/lib/api/protocol-api";
 
 export function ValidationPage() {
   const searchParams = useSearchParams();

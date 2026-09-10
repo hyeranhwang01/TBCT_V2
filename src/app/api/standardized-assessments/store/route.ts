@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { dispatchStandardizedAssessmentStoreOp } from "@/lib/server/standardized-assessment-store";
-import { getParticipantByAuthUserId } from "@/lib/server/participant-store";
-import type { StandardizedAssessmentStoreOp } from "@/lib/runtime/standardized-assessment-store-ops";
-import { getAuthenticatedCaller } from "@/lib/supabase/server";
+import { dispatchStandardizedAssessmentStoreOp } from "@/shared/data/server/standardized-assessment-store";
+import { getParticipantByAuthUserId } from "@/shared/data/server/participant-store";
+import type { StandardizedAssessmentStoreOp } from "@/shared/runtime/standardized-assessment-store-ops";
+import { getAuthenticatedCaller } from "@/shared/supabase/server";
 
 export const runtime = "nodejs";
 

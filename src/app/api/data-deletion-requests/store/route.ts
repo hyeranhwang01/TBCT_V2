@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { dispatchDataDeletionRequestStoreOp } from "@/lib/server/data-deletion-request-store";
-import { getParticipant, getParticipantByAuthUserId } from "@/lib/server/participant-store";
-import { getUserEmail, listClinicianEmails } from "@/lib/supabase/admin";
-import { sendDataDeletionRequestNotificationEmail } from "@/lib/notifications/send-data-deletion-request-notification";
-import type { DataDeletionRequestStoreOp } from "@/lib/runtime/data-deletion-request-store-ops";
-import { getAuthenticatedCaller } from "@/lib/supabase/server";
+import { dispatchDataDeletionRequestStoreOp } from "@/shared/data/server/data-deletion-request-store";
+import { getParticipant, getParticipantByAuthUserId } from "@/shared/data/server/participant-store";
+import { getUserEmail, listClinicianEmails } from "@/shared/supabase/admin";
+import { sendDataDeletionRequestNotificationEmail } from "@/shared/notifications/send-data-deletion-request-notification";
+import type { DataDeletionRequestStoreOp } from "@/shared/runtime/data-deletion-request-store-ops";
+import { getAuthenticatedCaller } from "@/shared/supabase/server";
 
 export const runtime = "nodejs";
 

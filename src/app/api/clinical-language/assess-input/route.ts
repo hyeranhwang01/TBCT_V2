@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { clinicalInputAssessmentRequestSchema } from "@/lib/clinical-language/clinical-language-contract";
-import { assessClinicalInput } from "@/lib/clinical-language/clinical-language-server";
+import { clinicalInputAssessmentRequestSchema } from "@/shared/clinical-language/clinical-language-contract";
+import { assessClinicalInput } from "@/shared/clinical-language/clinical-language-server";
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();

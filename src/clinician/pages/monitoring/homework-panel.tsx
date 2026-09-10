@@ -3,8 +3,8 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Badge, Button, Card, EmptyState, Modal, PageSkeleton, SectionHeader } from "@/shared/components/ui/primitives";
-import { useT } from "@/lib/i18n/context";
-import { listHomeworkEntries, listHomeworkRecordsByParticipant } from "@/lib/repositories/homework-repository";
+import { useT } from "@/shared/i18n/context";
+import { listHomeworkEntries, listHomeworkRecordsByParticipant } from "@/shared/data/repositories/homework-repository";
 import { HOMEWORK_CATEGORY_BY_SESSION, HOMEWORK_LABEL_BY_SESSION, type HomeworkEntryRecord, type HomeworkRecord, type HomeworkStatus } from "@/types/homework";
 
 // The clinician-facing counterpart to the patient homework pages

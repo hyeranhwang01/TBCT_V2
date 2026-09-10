@@ -16,8 +16,8 @@ import {
   inputClass,
   textareaClass,
 } from "@/shared/components/ui/primitives";
-import { createClinicalAssetFromFile } from "@/lib/api/clinical-assets-api";
-import { resetLocalDb } from "@/lib/db/tbct-local-db";
+import { createClinicalAssetFromFile } from "@/clinician/lib/api/clinical-assets-api";
+import { resetLocalDb } from "@/shared/data/db/tbct-local-db";
 import type { AssetType, CreateClinicalAssetInput, LocalClinicalAsset } from "@/types/clinical-assets";
 
 const routePath = "/projects/demo/clinical-assets/new";

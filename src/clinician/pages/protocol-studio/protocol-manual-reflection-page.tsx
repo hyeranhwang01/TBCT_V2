@@ -6,8 +6,8 @@ import Link from "next/link";
 import { ArrowLeftRight, Check } from "lucide-react";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Badge, Button, Card, EmptyState, Field, Modal, PageHeader, inputClass, textareaClass } from "@/shared/components/ui/primitives";
-import { useT } from "@/lib/i18n/context";
-import { cn } from "@/lib/utils";
+import { useT } from "@/shared/i18n/context";
+import { cn } from "@/shared/utils";
 import {
   getSessionCommonRules,
   getSessionPrompts,
@@ -15,7 +15,7 @@ import {
   saveSessionCommonRules,
   sessionCatalog,
   updatePromptItem,
-} from "@/lib/session-catalog";
+} from "@/clinician/lib/session-catalog";
 
 /**
  * A companion chapter to the Protocol Editor (linked from its header, see

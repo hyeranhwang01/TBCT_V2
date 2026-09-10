@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Badge, Card, EmptyState, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
-import { getSafetyEvents } from "@/lib/api/safety-operations-api";
+import { getSafetyEvents } from "@/shared/api/safety-operations-api";
 
 export function RuntimeSafetyEventsPage() {
   const query = useQuery({ queryKey: ["safety-events"], queryFn: getSafetyEvents });

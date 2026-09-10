@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, EmptyState, SectionHeader } from "@/shared/components/ui/primitives";
 import { ScoreChip } from "@/patient/components/worksheet-renderers/shared";
-import { getListScoreHistory } from "@/lib/worksheet/worksheet-projection";
+import { getListScoreHistory } from "@/shared/worksheet/worksheet-projection";
 
 // Clinician-only "Progress" tab content (Patient Monitoring's session
 // detail screen). Only two sessions have a data shape that supports a real

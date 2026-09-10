@@ -1,4 +1,4 @@
-import type { PromptItem } from "@/lib/protocol/source-fidelity-types";
+import type { PromptItem } from "@/shared/protocol/source-fidelity-types";
 
 // Every session's own "SAFETY PROTOCOL (MANDATORY)" section gives the same
 // clinical instruction (pause immediately, acknowledge with compassion,

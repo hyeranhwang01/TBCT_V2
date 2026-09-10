@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button, Card, Field, inputClass } from "@/shared/components/ui/primitives";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { useT } from "@/lib/i18n/context";
+import { getSupabaseBrowserClient } from "@/shared/supabase/client";
+import { useT } from "@/shared/i18n/context";
 
 /** TOTP two-factor auth enrollment -- entirely Supabase's own
  * auth.mfa.* API (no new backend of ours). Shared by both the clinician

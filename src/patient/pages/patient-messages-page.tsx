@@ -3,10 +3,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { PatientShell } from "@/patient/components/patient-shell";
 import { Card, EmptyState, PageSkeleton } from "@/shared/components/ui/primitives";
-import { getOrCreateParticipantForUiLocale } from "@/lib/api/participant-api";
+import { getOrCreateParticipantForUiLocale } from "@/shared/api/participant-api";
 import { ClinicianMessageThread } from "@/shared/components/clinician-message-thread";
-import { useT } from "@/lib/i18n/context";
-import { useAuth } from "@/lib/auth/auth-context";
+import { useT } from "@/shared/i18n/context";
+import { useAuth } from "@/shared/auth/auth-context";
 
 export function PatientMessagesPage() {
   const { t, locale } = useT();

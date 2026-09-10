@@ -2,10 +2,10 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, Card } from "@/shared/components/ui/primitives";
-import { submitMoodCheckin, listMoodCheckins } from "@/lib/api/mood-checkin-api";
-import { computeStreak, todayInSeoul } from "@/lib/mood-checkins/streak";
-import { useT } from "@/lib/i18n/context";
-import { cn } from "@/lib/utils";
+import { submitMoodCheckin, listMoodCheckins } from "@/shared/api/mood-checkin-api";
+import { computeStreak, todayInSeoul } from "@/shared/mood-checkins/streak";
+import { useT } from "@/shared/i18n/context";
+import { cn } from "@/shared/utils";
 
 const MOOD_EMOJI: Record<1 | 2 | 3 | 4 | 5, string> = { 1: "😞", 2: "😕", 3: "😐", 4: "🙂", 5: "😄" };
 const MOOD_VALUES = [1, 2, 3, 4, 5] as const;

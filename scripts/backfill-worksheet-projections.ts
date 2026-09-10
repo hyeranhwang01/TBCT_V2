@@ -8,9 +8,9 @@
 // always saved. This does not touch RuntimeContext.fields at all -- it
 // only re-derives worksheet_field_values from what's already there, the
 // same write path a real turn would have used.
-import { listRuntimeSessions } from "../src/lib/api/runtime-session-api";
-import { projectRuntimeFieldsToWorksheet } from "../src/lib/worksheet/worksheet-projection";
-import { hasWorksheetBindings } from "../src/lib/worksheet/worksheet-binding-registry";
+import { listRuntimeSessions } from "../src/shared/api/runtime-session-api";
+import { projectRuntimeFieldsToWorksheet } from "../src/shared/worksheet/worksheet-projection";
+import { hasWorksheetBindings } from "../src/shared/worksheet/worksheet-binding-registry";
 
 const BASE_URL = process.env.RUNTIME_BASE_URL ?? "http://localhost:3011";
 const realFetch = globalThis.fetch;

@@ -5,12 +5,12 @@ import { motion } from "framer-motion";
 import { CheckCircle2, Circle } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, Button, Card, SectionHeader } from "@/shared/components/ui/primitives";
-import { confirmWorksheetField, editWorksheetField, getWorksheetView } from "@/lib/worksheet/worksheet-projection";
-import { getComposedWorksheet } from "@/lib/worksheet/composed-worksheet-registry";
+import { confirmWorksheetField, editWorksheetField, getWorksheetView } from "@/shared/worksheet/worksheet-projection";
+import { getComposedWorksheet } from "@/shared/worksheet/composed-worksheet-registry";
 import { QuestCompleteBadge, WorksheetSourceProvider, useJustFilled } from "@/patient/components/worksheet-renderers/shared";
-import { useRealtimeInvalidate } from "@/lib/supabase/use-realtime-invalidate";
-import { fadeUp } from "@/lib/motion/motion-variants";
-import { useReducedMotionPreference } from "@/lib/motion/use-reduced-motion-preference";
+import { useRealtimeInvalidate } from "@/shared/supabase/use-realtime-invalidate";
+import { fadeUp } from "@/shared/motion/motion-variants";
+import { useReducedMotionPreference } from "@/shared/motion/use-reduced-motion-preference";
 import type { WorksheetFieldStatus, WorksheetFieldView } from "@/types/worksheet";
 import type { RuntimeMessage } from "@/types/runtime-session";
 

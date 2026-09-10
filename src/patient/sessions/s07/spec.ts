@@ -1,5 +1,5 @@
-import { sourceText } from "@/lib/protocol/source-fidelity-catalog";
-import type { SessionSourceMetadata, SessionSpec } from "@/lib/protocol/source-fidelity-catalog";
+import { sourceText } from "@/shared/protocol/source-fidelity-catalog";
+import type { SessionSourceMetadata, SessionSpec } from "@/shared/protocol/source-fidelity-catalog";
 
 const metadata: SessionSourceMetadata = {
   number: 7,

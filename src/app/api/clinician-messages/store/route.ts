@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { dispatchClinicianMessageStoreOp } from "@/lib/server/clinician-message-store";
-import { getParticipant, getParticipantByAuthUserId } from "@/lib/server/participant-store";
-import type { ClinicianMessageRequest } from "@/lib/runtime/clinician-message-store-ops";
-import { getAuthenticatedCaller } from "@/lib/supabase/server";
-import { getUserEmail, listClinicianEmails } from "@/lib/supabase/admin";
-import { sendMessageNotificationEmail } from "@/lib/notifications/send-message-notification";
+import { dispatchClinicianMessageStoreOp } from "@/shared/data/server/clinician-message-store";
+import { getParticipant, getParticipantByAuthUserId } from "@/shared/data/server/participant-store";
+import type { ClinicianMessageRequest } from "@/shared/runtime/clinician-message-store-ops";
+import { getAuthenticatedCaller } from "@/shared/supabase/server";
+import { getUserEmail, listClinicianEmails } from "@/shared/supabase/admin";
+import { sendMessageNotificationEmail } from "@/shared/notifications/send-message-notification";
 
 export const runtime = "nodejs";
 

@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Card, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
-import { getPilotOverviewData } from "@/lib/api/pilot-study-api";
+import { getPilotOverviewData } from "@/clinician/lib/api/pilot-study-api";
 
 export function RuntimePilotDeviationsPage() {
   const query = useQuery({ queryKey: ["pilot-deviations"], queryFn: getPilotOverviewData });

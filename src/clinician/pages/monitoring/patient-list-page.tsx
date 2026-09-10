@@ -7,15 +7,15 @@ import { useQuery } from "@tanstack/react-query";
 import { Activity, ArrowRight, ArrowUpDown, CheckCircle2, ChevronRight, PauseCircle, Search, TriangleAlert } from "lucide-react";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Badge, Button, Card, EmptyState, PageHeader, PageSkeleton, inputClass } from "@/shared/components/ui/primitives";
-import { useT } from "@/lib/i18n/context";
-import { listRuntimeParticipants } from "@/lib/api/participant-api";
-import { listRuntimeSessions } from "@/lib/api/runtime-session-api";
-import { getSafetyEvents } from "@/lib/api/safety-operations-api";
-import { getCohortProgressSummary } from "@/lib/worksheet/worksheet-projection";
-import { listAllStandardizedAssessmentResponses, summarizeCohortAssessments, latestSelfHarmFlaggedParticipantIds } from "@/lib/api/standardized-assessment-api";
-import { useRealtimeInvalidate } from "@/lib/supabase/use-realtime-invalidate";
-import { useAuth } from "@/lib/auth/auth-context";
-import { cn } from "@/lib/utils";
+import { useT } from "@/shared/i18n/context";
+import { listRuntimeParticipants } from "@/shared/api/participant-api";
+import { listRuntimeSessions } from "@/shared/api/runtime-session-api";
+import { getSafetyEvents } from "@/shared/api/safety-operations-api";
+import { getCohortProgressSummary } from "@/shared/worksheet/worksheet-projection";
+import { listAllStandardizedAssessmentResponses, summarizeCohortAssessments, latestSelfHarmFlaggedParticipantIds } from "@/shared/api/standardized-assessment-api";
+import { useRealtimeInvalidate } from "@/shared/supabase/use-realtime-invalidate";
+import { useAuth } from "@/shared/auth/auth-context";
+import { cn } from "@/shared/utils";
 import {
   daysSince,
   findSessionTitle,

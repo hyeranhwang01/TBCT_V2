@@ -5,10 +5,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PatientShell } from "@/patient/components/patient-shell";
 import { Badge, Button, Card, EmptyState, Field, PageSkeleton, inputClass } from "@/shared/components/ui/primitives";
-import { getOrCreateParticipantForUiLocale, getParticipantConsentHistory, updateParticipantConsent } from "@/lib/api/participant-api";
-import { getParticipantMemories } from "@/lib/api/longitudinal-memory-api";
-import { useT } from "@/lib/i18n/context";
-import { useAuth } from "@/lib/auth/auth-context";
+import { getOrCreateParticipantForUiLocale, getParticipantConsentHistory, updateParticipantConsent } from "@/shared/api/participant-api";
+import { getParticipantMemories } from "@/shared/api/longitudinal-memory-api";
+import { useT } from "@/shared/i18n/context";
+import { useAuth } from "@/shared/auth/auth-context";
 
 export function PatientMemoryPage() {
   const { t, locale } = useT();

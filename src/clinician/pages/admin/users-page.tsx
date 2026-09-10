@@ -4,9 +4,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Badge, Button, Card, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
-import { listAdminUsers, setAdminUserBanned } from "@/lib/api/admin-api";
-import { useAuth } from "@/lib/auth/auth-context";
-import { useT } from "@/lib/i18n/context";
+import { listAdminUsers, setAdminUserBanned } from "@/clinician/lib/api/admin-api";
+import { useAuth } from "@/shared/auth/auth-context";
+import { useT } from "@/shared/i18n/context";
 
 function formatTimestamp(value: string) {
   return new Date(value).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" });

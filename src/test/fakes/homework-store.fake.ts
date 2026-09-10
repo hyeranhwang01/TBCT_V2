@@ -1,5 +1,5 @@
 import type { HomeworkEntryRecord, HomeworkRecord } from "@/types/homework";
-import type { HomeworkStoreOp } from "@/lib/runtime/homework-store-ops";
+import type { HomeworkStoreOp } from "@/shared/runtime/homework-store-ops";
 
 // Minimal in-memory stand-in for src/lib/server/homework-store.ts, mirroring
 // the same pattern as worksheet-store.fake.ts / safety-store.fake.ts.

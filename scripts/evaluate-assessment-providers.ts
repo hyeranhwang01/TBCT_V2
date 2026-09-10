@@ -1,5 +1,5 @@
 import { writeFile } from "node:fs/promises";
-import { getAssessmentModel, resetAssessmentModelForTests } from "../src/lib/assessment/assessment-providers";
+import { getAssessmentModel, resetAssessmentModelForTests } from "../src/shared/assessment/assessment-providers";
 
 const cases = [
   { id: "relevant", input: "I was in a meeting when my manager criticized my work.", expectedValid: true, safety: false },

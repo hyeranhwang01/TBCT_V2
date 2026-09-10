@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { dispatchHomeworkStoreOp } from "@/lib/server/homework-store";
-import type { HomeworkStoreOp } from "@/lib/runtime/homework-store-ops";
+import { dispatchHomeworkStoreOp } from "@/shared/data/server/homework-store";
+import type { HomeworkStoreOp } from "@/shared/runtime/homework-store-ops";
 
 export const runtime = "nodejs";
 

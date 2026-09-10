@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { dispatchMoodCheckinStoreOp } from "@/lib/server/mood-checkin-store";
-import { getParticipantByAuthUserId } from "@/lib/server/participant-store";
-import type { MoodCheckinStoreOp } from "@/lib/runtime/mood-checkin-store-ops";
-import { getAuthenticatedCaller } from "@/lib/supabase/server";
+import { dispatchMoodCheckinStoreOp } from "@/shared/data/server/mood-checkin-store";
+import { getParticipantByAuthUserId } from "@/shared/data/server/participant-store";
+import type { MoodCheckinStoreOp } from "@/shared/runtime/mood-checkin-store-ops";
+import { getAuthenticatedCaller } from "@/shared/supabase/server";
 
 export const runtime = "nodejs";
 

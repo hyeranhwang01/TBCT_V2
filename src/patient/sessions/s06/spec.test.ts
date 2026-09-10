@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CANONICAL_PROMPT_ITEMS, CANONICAL_SESSION_COMMON_RULES, CANONICAL_SOURCE_EDGES } from "@/lib/protocol/source-fidelity-catalog";
+import { CANONICAL_PROMPT_ITEMS, CANONICAL_SESSION_COMMON_RULES, CANONICAL_SOURCE_EDGES } from "@/shared/protocol/source-fidelity-catalog";
 
 describe("S06 (Color-Coded Symptoms Hierarchy) catalog content", () => {
   it("keeps source corruption visible rather than repairing it", () => {

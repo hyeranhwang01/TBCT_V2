@@ -18,8 +18,8 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import { Card, SectionHeader } from "@/shared/components/ui/primitives";
-import { useT } from "@/lib/i18n/context";
-import { cn } from "@/lib/utils";
+import { useT } from "@/shared/i18n/context";
+import { cn } from "@/shared/utils";
 import { nodeTone, summarizeCondition, type FlowNode } from "./types";
 
 function ProtocolNodeView({ data, selected }: NodeProps<FlowNode>) {

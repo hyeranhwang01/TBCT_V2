@@ -6,8 +6,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Button, Card, EmptyState, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
-import { acknowledgeClinicianHandoff, authorizeSessionResume, getPendingClinicianHandoffs, getSafetyEvents, getSafetyFollowUps, getSafetyNotifications } from "@/lib/api/safety-operations-api";
-import { useStudioStore } from "@/stores/studio-store";
+import { acknowledgeClinicianHandoff, authorizeSessionResume, getPendingClinicianHandoffs, getSafetyEvents, getSafetyFollowUps, getSafetyNotifications } from "@/shared/api/safety-operations-api";
+import { useStudioStore } from "@/shared/stores/studio-store";
 
 export function RuntimeSafetyMyQueuePage() {
   const queryClient = useQueryClient();

@@ -1,4 +1,4 @@
-import { CANONICAL_SESSION_DEFINITIONS, CANONICAL_STAGE_NODES } from "@/lib/protocol/source-fidelity-catalog";
+import { CANONICAL_SESSION_DEFINITIONS, CANONICAL_STAGE_NODES } from "@/shared/protocol/source-fidelity-catalog";
 import type { RuntimeSession, RuntimeSessionStatus } from "@/types/runtime-session";
 import type { SafetyEvent } from "@/types/safety-operations";
 

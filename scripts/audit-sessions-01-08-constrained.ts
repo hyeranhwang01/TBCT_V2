@@ -1,11 +1,11 @@
 import "fake-indexeddb/auto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { createCanonicalTestRuntimeSession, getRuntimeSession } from "../src/lib/api/runtime-session-api";
-import { startRuntimeSession, submitPatientInput } from "../src/lib/api/runtime-execution-api";
-import { getLocalDb } from "../src/lib/db/tbct-local-db";
-import { listRuntimeExecutionTraces } from "../src/lib/repositories/runtime-session-repository";
-import { syntheticPatientInput } from "../src/lib/runtime/testing/session-fidelity-fixtures";
+import { createCanonicalTestRuntimeSession, getRuntimeSession } from "../src/shared/api/runtime-session-api";
+import { startRuntimeSession, submitPatientInput } from "../src/shared/api/runtime-execution-api";
+import { getLocalDb } from "../src/shared/data/db/tbct-local-db";
+import { listRuntimeExecutionTraces } from "../src/shared/data/repositories/runtime-session-repository";
+import { syntheticPatientInput } from "../src/shared/runtime/testing/session-fidelity-fixtures";
 import { installFakeStoreFetch, resetAllFakeStores } from "../src/test/fakes/install-fake-store-fetch";
 import type { PatientInput, RuntimeMessage } from "../src/types/runtime-session";
 

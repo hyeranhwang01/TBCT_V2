@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LoaderCircle } from "lucide-react";
 import { Button, Card, Field, inputClass } from "@/shared/components/ui/primitives";
-import { useT } from "@/lib/i18n/context";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { useT } from "@/shared/i18n/context";
+import { getSupabaseBrowserClient } from "@/shared/supabase/client";
 
 /**
  * Lands here from three kinds of Supabase auth emails -- an admin invite

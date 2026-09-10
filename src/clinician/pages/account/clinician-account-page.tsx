@@ -3,8 +3,8 @@
 import { AppShell } from "@/clinician/components/app-shell";
 import { PageHeader } from "@/shared/components/ui/primitives";
 import { MfaSettings } from "@/shared/components/auth/mfa-settings";
-import { useAuth } from "@/lib/auth/auth-context";
-import { useT } from "@/lib/i18n/context";
+import { useAuth } from "@/shared/auth/auth-context";
+import { useT } from "@/shared/i18n/context";
 
 /** Clinician's own account security settings -- currently just 2FA
  * enrollment (see mfa-settings.tsx). This app had no per-clinician

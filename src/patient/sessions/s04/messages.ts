@@ -1,4 +1,4 @@
-import type { PromptItem } from "@/lib/protocol/source-fidelity-types";
+import type { PromptItem } from "@/shared/protocol/source-fidelity-types";
 
 const APPROVED_TEXT: Record<string, string> = {
   "tbct-s04-n12-p02-all-actions-first": "Before drawing a conclusion, let’s review the actions and reactions you identified together.",

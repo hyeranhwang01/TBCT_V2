@@ -1,8 +1,8 @@
 import { END } from "@langchain/langgraph";
-import type { ClinicalStageNode, PromptItem, SourceFidelityEdge } from "@/lib/protocol/source-fidelity-types";
+import type { ClinicalStageNode, PromptItem, SourceFidelityEdge } from "@/shared/protocol/source-fidelity-types";
 import type { RuntimeContext, RuntimeSessionState } from "@/types/runtime-session";
-import { evaluateRuntimeCondition } from "@/lib/runtime/runtime-step-resolver";
-import { selectNextRuntimeEdge } from "@/lib/runtime/runtime-condition-evaluator";
+import { evaluateRuntimeCondition } from "@/shared/runtime/runtime-step-resolver";
+import { selectNextRuntimeEdge } from "@/shared/runtime/runtime-condition-evaluator";
 import type { TrialStateType } from "./state";
 
 export const SAFETY_NODE = "safety_pause";

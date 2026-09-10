@@ -1,5 +1,5 @@
 import type { AuditEntry } from "@/types";
-import type { ProtocolStudioStoreOp } from "@/lib/runtime/protocol-studio-store-ops";
+import type { ProtocolStudioStoreOp } from "@/shared/runtime/protocol-studio-store-ops";
 
 // Minimal in-memory stand-in for src/lib/server/protocol-studio-store.ts,
 // following the same pattern as safety-store.fake.ts / participant-store.fake.ts.

@@ -1,7 +1,7 @@
 "use client";
 
 import { CycleArrow, FocusLine, SessionSignals, WorksheetCell, capturedStatus, directionalValue, listCount } from "@/patient/components/worksheet-renderers/shared";
-import { useReducedMotionPreference } from "@/lib/motion/use-reduced-motion-preference";
+import { useReducedMotionPreference } from "@/shared/motion/use-reduced-motion-preference";
 import type { WorksheetFieldView, WorksheetView } from "@/types/worksheet";
 
 // Recreates the TBCT Session 8 "Trial One" courtroom: the 5-role circular

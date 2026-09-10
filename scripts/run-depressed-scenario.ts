@@ -16,21 +16,21 @@
 import "fake-indexeddb/auto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { RUNTIME_STORE_ENDPOINT } from "../src/lib/runtime/runtime-store-ops";
-import { PARTICIPANT_STORE_ENDPOINT } from "../src/lib/runtime/participant-store-ops";
-import { SAFETY_STORE_ENDPOINT } from "../src/lib/runtime/safety-store-ops";
-import { PROTOCOL_STUDIO_STORE_ENDPOINT } from "../src/lib/runtime/protocol-studio-store-ops";
-import { WORKSHEET_STORE_ENDPOINT } from "../src/lib/runtime/worksheet-store-ops";
-import { HOMEWORK_STORE_ENDPOINT } from "../src/lib/runtime/homework-store-ops";
+import { RUNTIME_STORE_ENDPOINT } from "../src/shared/runtime/runtime-store-ops";
+import { PARTICIPANT_STORE_ENDPOINT } from "../src/shared/runtime/participant-store-ops";
+import { SAFETY_STORE_ENDPOINT } from "../src/shared/runtime/safety-store-ops";
+import { PROTOCOL_STUDIO_STORE_ENDPOINT } from "../src/shared/runtime/protocol-studio-store-ops";
+import { WORKSHEET_STORE_ENDPOINT } from "../src/shared/runtime/worksheet-store-ops";
+import { HOMEWORK_STORE_ENDPOINT } from "../src/shared/runtime/homework-store-ops";
 import { dispatchFakeRuntimeStoreOp } from "../src/test/fakes/runtime-session-store.fake";
 import { dispatchFakeParticipantStoreOp } from "../src/test/fakes/participant-store.fake";
 import { dispatchFakeSafetyStoreOp } from "../src/test/fakes/safety-store.fake";
 import { dispatchFakeProtocolStudioStoreOp } from "../src/test/fakes/protocol-studio-store.fake";
 import { dispatchFakeWorksheetStoreOp } from "../src/test/fakes/worksheet-store.fake";
 import { dispatchFakeHomeworkStoreOp } from "../src/test/fakes/homework-store.fake";
-import { createCanonicalTestRuntimeSession, getRuntimeSession } from "../src/lib/api/runtime-session-api";
-import { startRuntimeSession, submitPatientInput } from "../src/lib/api/runtime-execution-api";
-import type { PromptItem } from "@/lib/protocol/source-fidelity-types";
+import { createCanonicalTestRuntimeSession, getRuntimeSession } from "../src/shared/api/runtime-session-api";
+import { startRuntimeSession, submitPatientInput } from "../src/shared/api/runtime-execution-api";
+import type { PromptItem } from "@/shared/protocol/source-fidelity-types";
 import type { PatientInput } from "@/types/runtime-session";
 
 const FAKE_STORES: Array<{ endpoint: string; dispatch: (op: unknown) => Promise<unknown> }> = [

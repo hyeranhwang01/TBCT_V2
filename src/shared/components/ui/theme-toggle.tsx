@@ -1,8 +1,8 @@
 "use client";
 
 import { Monitor, Moon, Sun } from "lucide-react";
-import { useThemePreference, type ThemePreference } from "@/lib/theme/use-theme-preference";
-import { cn } from "@/lib/utils";
+import { useThemePreference, type ThemePreference } from "@/shared/theme/use-theme-preference";
+import { cn } from "@/shared/utils";
 
 const ORDER: ThemePreference[] = ["system", "light", "dark"];
 const ICONS: Record<ThemePreference, typeof Sun> = { system: Monitor, light: Sun, dark: Moon };

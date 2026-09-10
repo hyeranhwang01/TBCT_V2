@@ -1,7 +1,7 @@
 "use client";
 
-import { useT } from "@/lib/i18n/context";
-import { cn } from "@/lib/utils";
+import { useT } from "@/shared/i18n/context";
+import { cn } from "@/shared/utils";
 
 export type MobileProtocolTab = "steps" | "flow" | "prompt";
 

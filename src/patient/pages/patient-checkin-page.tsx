@@ -5,11 +5,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PatientShell } from "@/patient/components/patient-shell";
 import { Badge, Button, Card, EmptyState, PageSkeleton } from "@/shared/components/ui/primitives";
-import { getOrCreateParticipantForUiLocale } from "@/lib/api/participant-api";
-import { submitStandardizedAssessment, listStandardizedAssessments } from "@/lib/api/standardized-assessment-api";
-import { INSTRUMENTS, responseOptionLabel } from "@/lib/standardized-assessments/instruments";
-import { useT } from "@/lib/i18n/context";
-import { useAuth } from "@/lib/auth/auth-context";
+import { getOrCreateParticipantForUiLocale } from "@/shared/api/participant-api";
+import { submitStandardizedAssessment, listStandardizedAssessments } from "@/shared/api/standardized-assessment-api";
+import { INSTRUMENTS, responseOptionLabel } from "@/shared/standardized-assessments/instruments";
+import { useT } from "@/shared/i18n/context";
+import { useAuth } from "@/shared/auth/auth-context";
 import type { SeverityBand, StandardizedInstrumentId } from "@/types/standardized-assessment";
 
 const SEVERITY_TONE: Record<SeverityBand, "success" | "neutral" | "warning" | "critical"> = {

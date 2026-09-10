@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { ClipboardList } from "lucide-react";
 import { AppShell } from "@/clinician/components/app-shell";
 import { StreamingText } from "@/patient/components/streaming-text";
-import { useReducedMotionPreference } from "@/lib/motion/use-reduced-motion-preference";
+import { useReducedMotionPreference } from "@/shared/motion/use-reduced-motion-preference";
 import {
   Badge,
   Button,
@@ -24,18 +24,18 @@ import {
   inputClass,
   textareaClass,
 } from "@/shared/components/ui/primitives";
-import { useT } from "@/lib/i18n/context";
-import { assignClinicianToParticipant, getRuntimeParticipant, resolveClinicianEmail } from "@/lib/api/participant-api";
-import { useAuth } from "@/lib/auth/auth-context";
-import { getRuntimeSession, listCanonicalTestSessions, listRuntimeSessions } from "@/lib/api/runtime-session-api";
-import { pauseRuntimeSession, resumeRuntimeSession, terminateRuntimeSession } from "@/lib/api/runtime-execution-api";
-import { addClinicianNote, deleteClinicianNote, getClinicianNotes } from "@/lib/api/longitudinal-memory-api";
-import { getSafetyEvents } from "@/lib/api/safety-operations-api";
-import { listStandardizedAssessments } from "@/lib/api/standardized-assessment-api";
+import { useT } from "@/shared/i18n/context";
+import { assignClinicianToParticipant, getRuntimeParticipant, resolveClinicianEmail } from "@/shared/api/participant-api";
+import { useAuth } from "@/shared/auth/auth-context";
+import { getRuntimeSession, listCanonicalTestSessions, listRuntimeSessions } from "@/shared/api/runtime-session-api";
+import { pauseRuntimeSession, resumeRuntimeSession, terminateRuntimeSession } from "@/shared/api/runtime-execution-api";
+import { addClinicianNote, deleteClinicianNote, getClinicianNotes } from "@/shared/api/longitudinal-memory-api";
+import { getSafetyEvents } from "@/shared/api/safety-operations-api";
+import { listStandardizedAssessments } from "@/shared/api/standardized-assessment-api";
 import { ClinicianMessageThread } from "@/shared/components/clinician-message-thread";
 import { RuntimeInspectorView } from "@/clinician/pages/monitoring/inspector-view";
 import { AppointmentPanel } from "@/clinician/pages/monitoring/appointment-panel";
-import { useRealtimeInvalidate } from "@/lib/supabase/use-realtime-invalidate";
+import { useRealtimeInvalidate } from "@/shared/supabase/use-realtime-invalidate";
 import {
   deriveMonitoringStatus,
   findSessionTitle,
@@ -48,7 +48,7 @@ import { HomeworkPanel } from "@/clinician/pages/monitoring/homework-panel";
 import { ClinicianCheckinModal } from "@/clinician/pages/monitoring/clinician-checkin-modal";
 import { SessionProgressPanel, sessionSupportsProgressTab } from "@/clinician/pages/monitoring/session-progress-panel";
 import { WorksheetPane } from "@/patient/components/worksheet-pane";
-import { hasWorksheetBindings } from "@/lib/worksheet/worksheet-binding-registry";
+import { hasWorksheetBindings } from "@/shared/worksheet/worksheet-binding-registry";
 import type { RuntimeMessageRole, RuntimeSession } from "@/types/runtime-session";
 import type { SeverityBand } from "@/types/standardized-assessment";
 

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { dispatchParticipantStoreOp, getMemory, getParticipant, getParticipantByAuthUserId } from "@/lib/server/participant-store";
-import type { ParticipantStoreOp } from "@/lib/runtime/participant-store-ops";
-import { getAuthenticatedCaller } from "@/lib/supabase/server";
+import { dispatchParticipantStoreOp, getMemory, getParticipant, getParticipantByAuthUserId } from "@/shared/data/server/participant-store";
+import type { ParticipantStoreOp } from "@/shared/runtime/participant-store-ops";
+import { getAuthenticatedCaller } from "@/shared/supabase/server";
 
 export const runtime = "nodejs";
 

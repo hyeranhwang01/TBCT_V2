@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getParticipantByAuthUserId } from "@/lib/server/participant-store";
-import { listRuntimeSessionRecordsByParticipant } from "@/lib/server/runtime-session-store";
-import { dispatchClinicianMessageStoreOp } from "@/lib/server/clinician-message-store";
-import { dispatchMoodCheckinStoreOp } from "@/lib/server/mood-checkin-store";
-import { dispatchStandardizedAssessmentStoreOp } from "@/lib/server/standardized-assessment-store";
-import { getAuthenticatedCaller } from "@/lib/supabase/server";
+import { getParticipantByAuthUserId } from "@/shared/data/server/participant-store";
+import { listRuntimeSessionRecordsByParticipant } from "@/shared/data/server/runtime-session-store";
+import { dispatchClinicianMessageStoreOp } from "@/shared/data/server/clinician-message-store";
+import { dispatchMoodCheckinStoreOp } from "@/shared/data/server/mood-checkin-store";
+import { dispatchStandardizedAssessmentStoreOp } from "@/shared/data/server/standardized-assessment-store";
+import { getAuthenticatedCaller } from "@/shared/supabase/server";
 
 export const runtime = "nodejs";
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { patientRendererRequestSchema } from "@/lib/patient-renderer/patient-renderer-contract";
-import { renderPatientReflection } from "@/lib/patient-renderer/anthropic-patient-renderer";
+import { patientRendererRequestSchema } from "@/shared/patient-renderer/patient-renderer-contract";
+import { renderPatientReflection } from "@/shared/patient-renderer/anthropic-patient-renderer";
 import { z } from "zod";
 
 export const runtime = "nodejs";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { CANONICAL_PROMPT_ITEMS } from "@/lib/protocol/source-fidelity-catalog";
-import { acknowledgedOnDeliveryFields, promptRequiresPatientInput } from "@/lib/runtime/runtime-release-normalizer";
+import { CANONICAL_PROMPT_ITEMS } from "@/shared/protocol/source-fidelity-catalog";
+import { acknowledgedOnDeliveryFields, promptRequiresPatientInput } from "@/shared/runtime/runtime-release-normalizer";
 
 /**
  * The defect these guard against: a prompt declares outputFields but is

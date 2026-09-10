@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { clinicalProviderRequestSchema } from "@/lib/clinical-language/clinical-language-contract";
-import { respondClinicalLanguage } from "@/lib/clinical-language/clinical-language-server";
+import { clinicalProviderRequestSchema } from "@/shared/clinical-language/clinical-language-contract";
+import { respondClinicalLanguage } from "@/shared/clinical-language/clinical-language-server";
 
 type ClinicalProviderError = { type: "authentication" | "rate_limit" | "unknown" | "malformed_response" | "missing_configuration" | "timeout" | "network" | "unsupported_provider"; message: string; retryable: boolean; requestId?: string };
 

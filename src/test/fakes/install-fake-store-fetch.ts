@@ -1,9 +1,9 @@
-import { RUNTIME_STORE_ENDPOINT } from "@/lib/runtime/runtime-store-ops";
-import { PARTICIPANT_STORE_ENDPOINT } from "@/lib/runtime/participant-store-ops";
-import { SAFETY_STORE_ENDPOINT } from "@/lib/runtime/safety-store-ops";
-import { PROTOCOL_STUDIO_STORE_ENDPOINT } from "@/lib/runtime/protocol-studio-store-ops";
-import { WORKSHEET_STORE_ENDPOINT } from "@/lib/runtime/worksheet-store-ops";
-import { HOMEWORK_STORE_ENDPOINT } from "@/lib/runtime/homework-store-ops";
+import { RUNTIME_STORE_ENDPOINT } from "@/shared/runtime/runtime-store-ops";
+import { PARTICIPANT_STORE_ENDPOINT } from "@/shared/runtime/participant-store-ops";
+import { SAFETY_STORE_ENDPOINT } from "@/shared/runtime/safety-store-ops";
+import { PROTOCOL_STUDIO_STORE_ENDPOINT } from "@/shared/runtime/protocol-studio-store-ops";
+import { WORKSHEET_STORE_ENDPOINT } from "@/shared/runtime/worksheet-store-ops";
+import { HOMEWORK_STORE_ENDPOINT } from "@/shared/runtime/homework-store-ops";
 import { dispatchFakeRuntimeStoreOp, resetFakeRuntimeStore } from "@/test/fakes/runtime-session-store.fake";
 import { dispatchFakeParticipantStoreOp, resetFakeParticipantStore } from "@/test/fakes/participant-store.fake";
 import { dispatchFakeSafetyStoreOp, resetFakeSafetyStore } from "@/test/fakes/safety-store.fake";
@@ -11,7 +11,7 @@ import { dispatchFakeProtocolStudioStoreOp, resetFakeProtocolStudioStore } from 
 import { dispatchFakeWorksheetStoreOp, resetFakeWorksheetStore } from "@/test/fakes/worksheet-store.fake";
 import { dispatchFakeHomeworkStoreOp, resetFakeHomeworkStore } from "@/test/fakes/homework-store.fake";
 import { dispatchFakeDialogueAgent } from "@/test/fakes/dialogue-agent.fake";
-import { dialogueContractSchema } from "@/lib/dialogue-agent/dialogue-agent-contract";
+import { dialogueContractSchema } from "@/shared/dialogue-agent/dialogue-agent-contract";
 
 // The runtime conversation store now lives in Postgres in production
 // (src/app/api/runtime/session-store/route.ts), reached via fetch() from

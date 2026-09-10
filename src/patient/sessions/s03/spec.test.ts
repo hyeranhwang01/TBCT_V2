@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { createCanonicalTestRuntimeSession, getRuntimeSession } from "@/lib/api/runtime-session-api";
-import { startRuntimeSession, submitPatientInput } from "@/lib/api/runtime-execution-api";
-import { getLocalDb } from "@/lib/db/tbct-local-db";
+import { createCanonicalTestRuntimeSession, getRuntimeSession } from "@/shared/api/runtime-session-api";
+import { startRuntimeSession, submitPatientInput } from "@/shared/api/runtime-execution-api";
+import { getLocalDb } from "@/shared/data/db/tbct-local-db";
 
 // TBCT S01-S03 정상 발화 오인 수정 (2026-08-17 fidelity pass), S03 section.
 // Regression coverage for P0-3 (orientation no longer forces/rejects patient

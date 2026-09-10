@@ -17,7 +17,7 @@ import {
   overrideEligibilityDecision,
   overrideParticipantProtocolAssignment,
   overrideStudyArmAllocation,
-} from "@/lib/api/pilot-study-api";
+} from "@/clinician/lib/api/pilot-study-api";
 
 type DialogState =
   | { type: "eligibility_override" }

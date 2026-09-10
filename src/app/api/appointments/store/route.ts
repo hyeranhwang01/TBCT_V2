@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { dispatchAppointmentStoreOp } from "@/lib/server/appointment-store";
-import { getParticipantByAuthUserId } from "@/lib/server/participant-store";
-import type { AppointmentRequest } from "@/lib/runtime/appointment-store-ops";
-import { getAuthenticatedCaller } from "@/lib/supabase/server";
+import { dispatchAppointmentStoreOp } from "@/shared/data/server/appointment-store";
+import { getParticipantByAuthUserId } from "@/shared/data/server/participant-store";
+import type { AppointmentRequest } from "@/shared/runtime/appointment-store-ops";
+import { getAuthenticatedCaller } from "@/shared/supabase/server";
 
 export const runtime = "nodejs";
 

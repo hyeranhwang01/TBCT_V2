@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createCanonicalTestRuntimeSession, getRuntimeSession } from "@/lib/api/runtime-session-api";
-import { startRuntimeSession, submitPatientInput } from "@/lib/api/runtime-execution-api";
-import { getLocalDb } from "@/lib/db/tbct-local-db";
-import { parsePrivatePlaceholderLabelsInput } from "@/lib/runtime/runtime-deterministic-input";
+import { createCanonicalTestRuntimeSession, getRuntimeSession } from "@/shared/api/runtime-session-api";
+import { startRuntimeSession, submitPatientInput } from "@/shared/api/runtime-execution-api";
+import { getLocalDb } from "@/shared/data/db/tbct-local-db";
+import { parsePrivatePlaceholderLabelsInput } from "@/shared/runtime/runtime-deterministic-input";
 import { resolveStaticText } from "@/patient/sessions/s02/messages";
-import type { PromptItem } from "@/lib/protocol/source-fidelity-types";
-import { resolveDialogueAgentMessage } from "@/lib/dialogue-agent/dialogue-agent-orchestrator";
+import type { PromptItem } from "@/shared/protocol/source-fidelity-types";
+import { resolveDialogueAgentMessage } from "@/shared/dialogue-agent/dialogue-agent-orchestrator";
 
 // The suite's global fetch fake (src/test/setup.ts) always intercepts the
 // dialogue agent's HTTP call with a REALISTIC keyword-heuristic classifier
@@ -19,8 +19,8 @@ import { resolveDialogueAgentMessage } from "@/lib/dialogue-agent/dialogue-agent
 // "provider unavailable" outcome the real production transcript hit. This
 // wraps the real implementation by default, so every other test in this file
 // keeps going through the real fake-classifier path unchanged.
-vi.mock("@/lib/dialogue-agent/dialogue-agent-orchestrator", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/dialogue-agent/dialogue-agent-orchestrator")>();
+vi.mock("@/shared/dialogue-agent/dialogue-agent-orchestrator", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/shared/dialogue-agent/dialogue-agent-orchestrator")>();
   return { ...actual, resolveDialogueAgentMessage: vi.fn(actual.resolveDialogueAgentMessage) };
 });
 

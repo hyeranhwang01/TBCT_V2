@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Badge, Button, Card, EmptyState, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
-import { approveMemoryCandidateWithReview, getMemoryReviewQueue, rejectMemoryCandidateWithReview } from "@/lib/api/memory-review-api";
+import { approveMemoryCandidateWithReview, getMemoryReviewQueue, rejectMemoryCandidateWithReview } from "@/clinician/lib/api/memory-review-api";
 
 export function RuntimeMemoryReviewPage() {
   const queryClient = useQueryClient();

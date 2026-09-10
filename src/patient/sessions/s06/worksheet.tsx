@@ -2,8 +2,8 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { ScoreChip, SessionSignals, WorksheetCell, capturedStatus, listCount } from "@/patient/components/worksheet-renderers/shared";
-import { useReducedMotionPreference } from "@/lib/motion/use-reduced-motion-preference";
-import { getListScoreHistory } from "@/lib/worksheet/worksheet-projection";
+import { useReducedMotionPreference } from "@/shared/motion/use-reduced-motion-preference";
+import { getListScoreHistory } from "@/shared/worksheet/worksheet-projection";
 import type { WorksheetFieldView, WorksheetHistoryView, WorksheetView } from "@/types/worksheet";
 
 // Recreates the TBCT Session 6 Color-Coded Symptoms Hierarchy (CCSH): a

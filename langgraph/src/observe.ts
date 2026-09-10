@@ -1,4 +1,4 @@
-import type { PromptItem } from "@/lib/protocol/source-fidelity-types";
+import type { PromptItem } from "@/shared/protocol/source-fidelity-types";
 import type { RuntimeContext } from "@/types/runtime-session";
 import type { Observation } from "./state";
 

@@ -11,7 +11,7 @@ import type {
   SourceFidelityStatus,
   SourceTrace,
   ValidationRule,
-} from "@/lib/protocol/source-fidelity-types";
+} from "@/shared/protocol/source-fidelity-types";
 
 export type ProtocolNodeType =
   | "session_start"

@@ -1,8 +1,8 @@
 import "fake-indexeddb/auto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { getLocalDb } from "../src/lib/db/tbct-local-db";
-import { runSessions01To08Audit, type SessionFidelityAudit } from "../src/lib/runtime/testing/simulated-patient-runner";
+import { getLocalDb } from "../src/shared/data/db/tbct-local-db";
+import { runSessions01To08Audit, type SessionFidelityAudit } from "../src/shared/runtime/testing/simulated-patient-runner";
 import { installFakeStoreFetch, resetAllFakeStores } from "../src/test/fakes/install-fake-store-fetch";
 
 function markdown(report: SessionFidelityAudit) {

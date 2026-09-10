@@ -1,7 +1,7 @@
 "use client";
 
 import { SessionSignals, WorksheetCell, directionalValue, displayOrDash, listCount } from "@/patient/components/worksheet-renderers/shared";
-import { useReducedMotionPreference } from "@/lib/motion/use-reduced-motion-preference";
+import { useReducedMotionPreference } from "@/shared/motion/use-reduced-motion-preference";
 import type { WorksheetFieldView, WorksheetView } from "@/types/worksheet";
 
 // Recreates the TBCT Session 5 Participation Grid: contributors listed

@@ -6,9 +6,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Button, Card, EmptyState, Field, Modal, PageHeader, PageSkeleton, inputClass, textareaClass } from "@/shared/components/ui/primitives";
-import { assignSafetyFollowUp, cancelSafetyFollowUp, completeSafetyFollowUp, getSafetyFollowUps, reopenSafetyFollowUp, startSafetyFollowUp } from "@/lib/api/safety-operations-api";
-import { DEMO_ACTORS } from "@/lib/demo-actor";
-import { useStudioStore } from "@/stores/studio-store";
+import { assignSafetyFollowUp, cancelSafetyFollowUp, completeSafetyFollowUp, getSafetyFollowUps, reopenSafetyFollowUp, startSafetyFollowUp } from "@/shared/api/safety-operations-api";
+import { DEMO_ACTORS } from "@/shared/demo-actor";
+import { useStudioStore } from "@/shared/stores/studio-store";
 import type { SafetyFollowUpTask } from "@/types/safety-operations";
 
 export function RuntimeSafetyFollowUpsPage() {

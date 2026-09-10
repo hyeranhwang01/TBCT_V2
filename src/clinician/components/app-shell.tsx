@@ -27,17 +27,17 @@ import { Button, ConfirmActionDialog, Modal, Tooltip, inputClass } from "@/share
 import { Logo } from "@/shared/components/ui/logo";
 import { ThemeToggle } from "@/shared/components/ui/theme-toggle";
 import { OnboardingTour } from "@/shared/components/onboarding/onboarding-tour";
-import { getCurrentDemoActor } from "@/lib/demo-actor";
-import { useAuth } from "@/lib/auth/auth-context";
-import { useT } from "@/lib/i18n/context";
-import type { UiLocale } from "@/lib/i18n/locales";
-import { pageEnter } from "@/lib/motion/motion-variants";
-import { motionDuration } from "@/lib/motion/motion-tokens";
-import { useReducedMotionPreference } from "@/lib/motion/use-reduced-motion-preference";
-import { CLINICIAN_TOUR_STEPS } from "@/lib/onboarding/tour-steps";
-import { useOnboardingTour } from "@/lib/onboarding/use-onboarding-tour";
-import { cn } from "@/lib/utils";
-import { useStudioStore } from "@/stores/studio-store";
+import { getCurrentDemoActor } from "@/shared/demo-actor";
+import { useAuth } from "@/shared/auth/auth-context";
+import { useT } from "@/shared/i18n/context";
+import type { UiLocale } from "@/shared/i18n/locales";
+import { pageEnter } from "@/shared/motion/motion-variants";
+import { motionDuration } from "@/shared/motion/motion-tokens";
+import { useReducedMotionPreference } from "@/shared/motion/use-reduced-motion-preference";
+import { CLINICIAN_TOUR_STEPS } from "@/shared/onboarding/tour-steps";
+import { useOnboardingTour } from "@/shared/onboarding/use-onboarding-tour";
+import { cn } from "@/shared/utils";
+import { useStudioStore } from "@/shared/stores/studio-store";
 
 type Audience = "clinician" | "internal" | "admin";
 

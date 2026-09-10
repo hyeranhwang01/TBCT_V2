@@ -7,7 +7,7 @@ import type {
   WorksheetInstanceRecord,
   WorksheetTemplateVersionRecord,
 } from "@/types/worksheet";
-import type { WorksheetStoreOp } from "@/lib/runtime/worksheet-store-ops";
+import type { WorksheetStoreOp } from "@/shared/runtime/worksheet-store-ops";
 
 // Minimal in-memory stand-in for src/lib/server/worksheet-store.ts, mirroring
 // the same pattern as safety-store.fake.ts / participant-store.fake.ts /

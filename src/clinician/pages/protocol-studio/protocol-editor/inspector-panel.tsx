@@ -2,12 +2,12 @@
 
 import { motion } from "framer-motion";
 import { Badge, Button, Card, EmptyState, Field, SectionHeader, ValidationSeverityBadge, inputClass, textareaClass } from "@/shared/components/ui/primitives";
-import { statusTransition } from "@/lib/motion/motion-variants";
-import { useT } from "@/lib/i18n/context";
-import { cn } from "@/lib/utils";
+import { statusTransition } from "@/shared/motion/motion-variants";
+import { useT } from "@/shared/i18n/context";
+import { cn } from "@/shared/utils";
 import { summarizeCondition } from "./types";
 import type { ProtocolGraphNode, ProtocolValidationRun } from "@/types/protocol-runtime";
-import type { PromptItem, SessionCommonRules } from "@/lib/session-catalog";
+import type { PromptItem, SessionCommonRules } from "@/clinician/lib/session-catalog";
 import type { SourceEvidence } from "@/types/clinical-assets";
 
 export interface NextStepOption {

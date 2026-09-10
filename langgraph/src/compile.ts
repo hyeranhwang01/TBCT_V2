@@ -4,8 +4,8 @@ import {
   CANONICAL_STAGE_NODES,
   CANONICAL_PROMPT_ITEMS,
   CANONICAL_SOURCE_EDGES,
-} from "@/lib/protocol/source-fidelity-catalog";
-import type { ClinicalStageNode, PromptItem } from "@/lib/protocol/source-fidelity-types";
+} from "@/shared/protocol/source-fidelity-catalog";
+import type { ClinicalStageNode, PromptItem } from "@/shared/protocol/source-fidelity-types";
 import { TrialState } from "./state";
 import { makeDeliver, makeCollect, makeSafetyPause, promptRequiresInput } from "./nodes";
 import { makeRouter, deliverId, collectId, SAFETY_NODE, type Catalog } from "./routers";

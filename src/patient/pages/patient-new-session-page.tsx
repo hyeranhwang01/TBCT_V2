@@ -6,10 +6,10 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PatientShell } from "@/patient/components/patient-shell";
 import { Button, Card } from "@/shared/components/ui/primitives";
-import { createCanonicalTestRuntimeSession, listCanonicalTestSessions } from "@/lib/api/runtime-session-api";
-import { getOrCreateParticipantForUiLocale } from "@/lib/api/participant-api";
-import { useT } from "@/lib/i18n/context";
-import { useAuth } from "@/lib/auth/auth-context";
+import { createCanonicalTestRuntimeSession, listCanonicalTestSessions } from "@/shared/api/runtime-session-api";
+import { getOrCreateParticipantForUiLocale } from "@/shared/api/participant-api";
+import { useT } from "@/shared/i18n/context";
+import { useAuth } from "@/shared/auth/auth-context";
 
 // The product now runs a single TCBT flow (no protocol/manual picker before a
 // session can start). This page only lets the patient pick which of the

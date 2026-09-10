@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { dispatchWorksheetStoreOp } from "@/lib/server/worksheet-store";
-import type { WorksheetStoreOp } from "@/lib/runtime/worksheet-store-ops";
+import { dispatchWorksheetStoreOp } from "@/shared/data/server/worksheet-store";
+import type { WorksheetStoreOp } from "@/shared/runtime/worksheet-store-ops";
 
 export const runtime = "nodejs";
 

@@ -5,8 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Badge, Card, EmptyState, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
 import { RuntimeInspectorView } from "@/clinician/pages/monitoring/inspector-view";
-import { getRuntimeSession } from "@/lib/api/runtime-session-api";
-import { useT } from "@/lib/i18n/context";
+import { getRuntimeSession } from "@/shared/api/runtime-session-api";
+import { useT } from "@/shared/i18n/context";
 
 // Standalone `/runtime/sessions/:id` route -- the actual Inspector content
 // (protocol path, linked conversation/log, safety/provider/validation,

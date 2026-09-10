@@ -5,11 +5,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { MessageSquare, Paperclip, Send } from "lucide-react";
 import { Button, IllustratedEmptyState, textareaClass } from "@/shared/components/ui/primitives";
-import { sendMessage, listMessages } from "@/lib/api/clinician-message-api";
-import { useRealtimeInvalidate } from "@/lib/supabase/use-realtime-invalidate";
-import { useAuth } from "@/lib/auth/auth-context";
-import { useT } from "@/lib/i18n/context";
-import { cn } from "@/lib/utils";
+import { sendMessage, listMessages } from "@/shared/api/clinician-message-api";
+import { useRealtimeInvalidate } from "@/shared/supabase/use-realtime-invalidate";
+import { useAuth } from "@/shared/auth/auth-context";
+import { useT } from "@/shared/i18n/context";
+import { cn } from "@/shared/utils";
 
 function formatTimestamp(value: string) {
   return new Date(value).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });

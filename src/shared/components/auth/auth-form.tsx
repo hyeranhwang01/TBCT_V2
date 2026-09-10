@@ -6,10 +6,10 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, Eye, EyeOff, Heart, Lock, Mail, UserPlus } from "lucide-react";
 import { Button, Card, Field, inputClass } from "@/shared/components/ui/primitives";
 import { Logo } from "@/shared/components/ui/logo";
-import { useT } from "@/lib/i18n/context";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { cn } from "@/lib/utils";
-import type { AppRole } from "@/lib/auth/auth-context";
+import { useT } from "@/shared/i18n/context";
+import { getSupabaseBrowserClient } from "@/shared/supabase/client";
+import { cn } from "@/shared/utils";
+import type { AppRole } from "@/shared/auth/auth-context";
 
 /** Shared page chrome for every branch below (main form, MFA challenge,
  * confirm-email-sent, reset-sent, forgot-password) -- one soft gradient

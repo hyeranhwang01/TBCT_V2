@@ -7,7 +7,7 @@ const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(scriptDirectory, "..");
 const sourcePath = resolve(projectRoot, "artifacts", "tbct-source-text.txt");
 const manifestPath = resolve(projectRoot, "artifacts", "tbct-source-ingestion.json");
-const outputPath = resolve(projectRoot, "src", "lib", "protocol", "tbct-source-text.generated.ts");
+const outputPath = resolve(projectRoot, "src", "shared", "protocol", "tbct-source-text.generated.ts");
 
 const [sourceText, manifestText] = await Promise.all([
   readFile(sourcePath, "utf8"),

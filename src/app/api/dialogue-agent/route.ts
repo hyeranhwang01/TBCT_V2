@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { dialogueContractSchema } from "@/lib/dialogue-agent/dialogue-agent-contract";
-import { generateDialogueDecision } from "@/lib/dialogue-agent/anthropic-dialogue-agent";
+import { dialogueContractSchema } from "@/shared/dialogue-agent/dialogue-agent-contract";
+import { generateDialogueDecision } from "@/shared/dialogue-agent/anthropic-dialogue-agent";
 
 export const runtime = "nodejs";
 const bodySchema = z.object({ contract: dialogueContractSchema, context: z.object({ sessionId: z.string(), turnId: z.string() }) });

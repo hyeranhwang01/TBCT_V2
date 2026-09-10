@@ -18,8 +18,8 @@ import {
   getExtractionJobsApi,
   extractAssetNow,
   setCurrentAssetVersion,
-} from "@/lib/api/clinical-assets-api";
-import { useStudioStore } from "@/stores/studio-store";
+} from "@/clinician/lib/api/clinical-assets-api";
+import { useStudioStore } from "@/shared/stores/studio-store";
 import type { AssetRelationshipType, AssetType, LocalClinicalAsset } from "@/types/clinical-assets";
 
 export function AssetsPage() {

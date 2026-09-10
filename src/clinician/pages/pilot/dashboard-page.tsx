@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Badge, Card, MetricCard, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
-import { getPilotOverviewData } from "@/lib/api/pilot-study-api";
+import { getPilotOverviewData } from "@/clinician/lib/api/pilot-study-api";
 
 export function RuntimePilotDashboardPage() {
   const query = useQuery({ queryKey: ["pilot-overview"], queryFn: getPilotOverviewData });

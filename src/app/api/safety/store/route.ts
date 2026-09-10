@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { dispatchSafetyStoreOp } from "@/lib/server/safety-monitoring-store";
-import type { SafetyStoreOp } from "@/lib/runtime/safety-store-ops";
+import { dispatchSafetyStoreOp } from "@/shared/data/server/safety-monitoring-store";
+import type { SafetyStoreOp } from "@/shared/runtime/safety-store-ops";
 
 export const runtime = "nodejs";
 

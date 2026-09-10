@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Badge, Button, Card, Modal, textareaClass } from "@/shared/components/ui/primitives";
-import { createDataDeletionRequest, listDataDeletionRequestsByParticipant } from "@/lib/api/data-deletion-request-api";
-import { useT } from "@/lib/i18n/context";
+import { createDataDeletionRequest, listDataDeletionRequestsByParticipant } from "@/shared/api/data-deletion-request-api";
+import { useT } from "@/shared/i18n/context";
 
 function formatTimestamp(value: string) {
   return new Date(value).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });

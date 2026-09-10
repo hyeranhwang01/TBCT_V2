@@ -2,12 +2,12 @@ import "fake-indexeddb/auto";
 import { readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { RUNTIME_STORE_ENDPOINT } from "../src/lib/runtime/runtime-store-ops";
-import { createCanonicalTestRuntimeSession, getRuntimeSession } from "../src/lib/api/runtime-session-api";
-import { startRuntimeSession, submitPatientInput } from "../src/lib/api/runtime-execution-api";
-import { syntheticPatientInput } from "../src/lib/runtime/testing/session-fidelity-fixtures";
+import { RUNTIME_STORE_ENDPOINT } from "../src/shared/runtime/runtime-store-ops";
+import { createCanonicalTestRuntimeSession, getRuntimeSession } from "../src/shared/api/runtime-session-api";
+import { startRuntimeSession, submitPatientInput } from "../src/shared/api/runtime-execution-api";
+import { syntheticPatientInput } from "../src/shared/runtime/testing/session-fidelity-fixtures";
 import type { PatientInput } from "../src/types/runtime-session";
-import type { PromptItem } from "../src/lib/protocol/source-fidelity-types";
+import type { PromptItem } from "../src/shared/protocol/source-fidelity-types";
 
 // Populates real patient-visible runtime sessions (Postgres-backed, via the
 // running dev server's /api/runtime/session-store route) for tbct-s01..s08,

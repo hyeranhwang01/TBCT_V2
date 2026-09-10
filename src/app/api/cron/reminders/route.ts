@@ -7,11 +7,11 @@ import { NextResponse } from "next/server";
 // boundary is isAuthorizedCronRequest() below, so it reads straight from
 // Postgres instead, the same way src/lib/supabase/admin.ts bypasses
 // per-user auth with the service-role key.
-import { listParticipants } from "@/lib/server/participant-store";
-import { listRuntimeSessionRecords } from "@/lib/server/runtime-session-store";
-import { getUserEmail } from "@/lib/supabase/admin";
-import { sendSessionReminderEmail } from "@/lib/notifications/send-session-reminder";
-import { isAuthorizedCronRequest } from "@/lib/runtime/cron-auth";
+import { listParticipants } from "@/shared/data/server/participant-store";
+import { listRuntimeSessionRecords } from "@/shared/data/server/runtime-session-store";
+import { getUserEmail } from "@/shared/supabase/admin";
+import { sendSessionReminderEmail } from "@/shared/notifications/send-session-reminder";
+import { isAuthorizedCronRequest } from "@/shared/runtime/cron-auth";
 import type { RuntimeSession } from "@/types/runtime-session";
 
 export const runtime = "nodejs";

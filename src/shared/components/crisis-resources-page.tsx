@@ -1,7 +1,7 @@
 "use client";
 
 import { Card } from "@/shared/components/ui/primitives";
-import { useT } from "@/lib/i18n/context";
+import { useT } from "@/shared/i18n/context";
 
 interface HotlineEntry {
   key: string;

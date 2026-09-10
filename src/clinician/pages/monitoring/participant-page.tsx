@@ -4,7 +4,7 @@ import { useParams, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Badge, Card, EmptyState, PageHeader, PageSkeleton, SectionHeader } from "@/shared/components/ui/primitives";
-import { getParticipantLongitudinalDashboard } from "@/lib/api/longitudinal-memory-api";
+import { getParticipantLongitudinalDashboard } from "@/shared/api/longitudinal-memory-api";
 
 export function RuntimeParticipantPage() {
   const params = useParams<{ participantId: string }>();

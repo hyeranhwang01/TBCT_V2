@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { LoaderCircle } from "lucide-react";
 import type { ComponentType } from "react";
-import { useAuth } from "@/lib/auth/auth-context";
+import { useAuth } from "@/shared/auth/auth-context";
 
 const AssetsPage = dynamic(() => import("@/clinician/pages/protocol-studio/assets-page").then((mod) => mod.AssetsPage), { ssr: false });
 const ClinicalAssetRegistrationPage = dynamic(() => import("@/clinician/pages/protocol-studio/clinical-asset-registration-page").then((mod) => mod.ClinicalAssetRegistrationPage), { ssr: false });
