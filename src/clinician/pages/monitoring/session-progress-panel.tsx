@@ -1,8 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Card, EmptyState, SectionHeader } from "@/components/ui/primitives";
-import { ScoreChip } from "@/components/runtime/worksheet-renderers/shared";
+import { Card, EmptyState, SectionHeader } from "@/shared/components/ui/primitives";
+import { ScoreChip } from "@/patient/components/worksheet-renderers/shared";
 import { getListScoreHistory } from "@/lib/worksheet/worksheet-projection";
 
 // Clinician-only "Progress" tab content (Patient Monitoring's session

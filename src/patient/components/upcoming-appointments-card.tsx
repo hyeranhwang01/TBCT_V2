@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Badge, Card } from "@/components/ui/primitives";
+import { Badge, Card } from "@/shared/components/ui/primitives";
 import { listAppointmentsByParticipant } from "@/lib/api/appointment-api";
 import { useRealtimeInvalidate } from "@/lib/supabase/use-realtime-invalidate";
 import { useT } from "@/lib/i18n/context";

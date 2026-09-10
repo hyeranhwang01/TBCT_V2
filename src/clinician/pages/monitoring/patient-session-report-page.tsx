@@ -2,8 +2,8 @@
 
 import { useParams, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { AppShell } from "@/components/layout/app-shell";
-import { Badge, Button, Card, EmptyState, PageHeader, PageSkeleton } from "@/components/ui/primitives";
+import { AppShell } from "@/clinician/components/app-shell";
+import { Badge, Button, Card, EmptyState, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
 import { getRuntimeParticipant } from "@/lib/api/participant-api";
 import { getRuntimeSession } from "@/lib/api/runtime-session-api";
 import { getWorksheetView } from "@/lib/worksheet/worksheet-projection";

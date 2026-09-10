@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, EmptyState } from "@/components/ui/primitives";
+import { Badge, EmptyState } from "@/shared/components/ui/primitives";
 import { useT } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 import { getClinicianStepLabels, type FlowNode } from "../types";

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { AppShell } from "@/components/layout/app-shell";
-import { Badge, Button, Card, Field, PageHeader, SectionHeader, inputClass, textareaClass } from "@/components/ui/primitives";
+import { AppShell } from "@/clinician/components/app-shell";
+import { Badge, Button, Card, Field, PageHeader, SectionHeader, inputClass, textareaClass } from "@/shared/components/ui/primitives";
 
 export function SettingsPage() {
   const [workspaceName, setWorkspaceName] = useState("TBCT Protocol Studio");

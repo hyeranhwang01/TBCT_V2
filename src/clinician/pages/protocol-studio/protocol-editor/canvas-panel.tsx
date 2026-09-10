@@ -17,7 +17,7 @@ import {
   type NodeChange,
   type NodeProps,
 } from "@xyflow/react";
-import { Card, SectionHeader } from "@/components/ui/primitives";
+import { Card, SectionHeader } from "@/shared/components/ui/primitives";
 import { useT } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 import { nodeTone, summarizeCondition, type FlowNode } from "./types";

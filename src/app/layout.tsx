@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "@xyflow/react/dist/style.css";
 import "./globals.css";
-import { Providers } from "@/components/providers";
+import { Providers } from "@/app/providers";
 
 export const metadata: Metadata = {
   title: "TBCT Protocol Studio",

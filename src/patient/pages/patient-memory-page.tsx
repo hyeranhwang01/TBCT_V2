@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PatientShell } from "@/components/runtime/patient-shell";
-import { Badge, Button, Card, EmptyState, Field, PageSkeleton, inputClass } from "@/components/ui/primitives";
+import { PatientShell } from "@/patient/components/patient-shell";
+import { Badge, Button, Card, EmptyState, Field, PageSkeleton, inputClass } from "@/shared/components/ui/primitives";
 import { getOrCreateParticipantForUiLocale, getParticipantConsentHistory, updateParticipantConsent } from "@/lib/api/participant-api";
 import { getParticipantMemories } from "@/lib/api/longitudinal-memory-api";
 import { useT } from "@/lib/i18n/context";

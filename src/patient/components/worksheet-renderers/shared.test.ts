@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
-import { capturedStatus, directionalValue, displayOrDash, listCount, useJustFilled } from "@/components/runtime/worksheet-renderers/shared";
+import { capturedStatus, directionalValue, displayOrDash, listCount, useJustFilled } from "@/patient/components/worksheet-renderers/shared";
 import type { WorksheetFieldView } from "@/types/worksheet";
 
 function fieldWithValue(value: unknown, displayValue?: string): WorksheetFieldView {

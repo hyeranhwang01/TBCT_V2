@@ -1,6 +1,6 @@
 "use client";
 
-import { SessionSignals, WorksheetCell, directionalValue, displayOrDash, listCount } from "@/components/runtime/worksheet-renderers/shared";
+import { SessionSignals, WorksheetCell, directionalValue, displayOrDash, listCount } from "@/patient/components/worksheet-renderers/shared";
 import { useReducedMotionPreference } from "@/lib/motion/use-reduced-motion-preference";
 import type { WorksheetFieldView, WorksheetView } from "@/types/worksheet";
 

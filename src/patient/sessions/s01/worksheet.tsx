@@ -1,7 +1,7 @@
 "use client";
 
 import { useReducedMotionPreference } from "@/lib/motion/use-reduced-motion-preference";
-import { CycleArrow, FocusLine, SessionSignals, WorksheetCell, capturedStatus, listCount } from "@/components/runtime/worksheet-renderers/shared";
+import { CycleArrow, FocusLine, SessionSignals, WorksheetCell, capturedStatus, listCount } from "@/patient/components/worksheet-renderers/shared";
 import type { WorksheetFieldView, WorksheetView } from "@/types/worksheet";
 
 // Recreates the TBCT Session 1 "Conceptualization Diagram" (three-person

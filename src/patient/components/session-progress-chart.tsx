@@ -1,7 +1,7 @@
 "use client";
 
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Card } from "@/components/ui/primitives";
+import { Card } from "@/shared/components/ui/primitives";
 import { useT } from "@/lib/i18n/context";
 import type { SessionProgressCard } from "@/types/worksheet";
 

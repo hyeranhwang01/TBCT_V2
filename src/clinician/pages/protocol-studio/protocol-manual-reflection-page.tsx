@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeftRight, Check } from "lucide-react";
-import { AppShell } from "@/components/layout/app-shell";
-import { Badge, Button, Card, EmptyState, Field, Modal, PageHeader, inputClass, textareaClass } from "@/components/ui/primitives";
+import { AppShell } from "@/clinician/components/app-shell";
+import { Badge, Button, Card, EmptyState, Field, Modal, PageHeader, inputClass, textareaClass } from "@/shared/components/ui/primitives";
 import { useT } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 import {

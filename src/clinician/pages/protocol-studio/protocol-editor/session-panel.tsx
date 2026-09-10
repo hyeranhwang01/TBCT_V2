@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Badge, Card, SectionHeader } from "@/components/ui/primitives";
+import { Badge, Card, SectionHeader } from "@/shared/components/ui/primitives";
 import { fadeUp } from "@/lib/motion/motion-variants";
 import { motionDuration, motionEase } from "@/lib/motion/motion-tokens";
 import { useT } from "@/lib/i18n/context";

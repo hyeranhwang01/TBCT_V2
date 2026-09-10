@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { PatientShell } from "@/components/runtime/patient-shell";
-import { Button, Card, Field, textareaClass } from "@/components/ui/primitives";
+import { PatientShell } from "@/patient/components/patient-shell";
+import { Button, Card, Field, textareaClass } from "@/shared/components/ui/primitives";
 import { appendHomeworkEntry, listHomeworkEntries, updateHomeworkRecord } from "@/lib/api/homework-api";
 import { useT } from "@/lib/i18n/context";
 import type { HomeworkRecord } from "@/types/homework";

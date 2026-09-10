@@ -4,8 +4,8 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AppShell } from "@/components/layout/app-shell";
-import { Button, Card, EmptyState, PageHeader, PageSkeleton } from "@/components/ui/primitives";
+import { AppShell } from "@/clinician/components/app-shell";
+import { Button, Card, EmptyState, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
 import { acknowledgeClinicianHandoff, authorizeSessionResume, getPendingClinicianHandoffs, getSafetyEvents, getSafetyFollowUps, getSafetyNotifications } from "@/lib/api/safety-operations-api";
 import { useStudioStore } from "@/stores/studio-store";
 

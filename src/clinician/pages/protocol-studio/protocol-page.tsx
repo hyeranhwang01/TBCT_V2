@@ -21,8 +21,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { applyNodeChanges, type Connection, type NodeChange } from "@xyflow/react";
 import { toast } from "sonner";
-import { AppShell } from "@/components/layout/app-shell";
-import { Badge, Button, EmptyState, Modal, PageHeader, PageSkeleton, SaveStatus, inputClass } from "@/components/ui/primitives";
+import { AppShell } from "@/clinician/components/app-shell";
+import { Badge, Button, EmptyState, Modal, PageHeader, PageSkeleton, SaveStatus, inputClass } from "@/shared/components/ui/primitives";
 import { useReducedMotionPreference } from "@/lib/motion/use-reduced-motion-preference";
 import { useT } from "@/lib/i18n/context";
 import {

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LoaderCircle } from "lucide-react";
-import { Button, Card, Field, inputClass } from "@/components/ui/primitives";
+import { Button, Card, Field, inputClass } from "@/shared/components/ui/primitives";
 import { useT } from "@/lib/i18n/context";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 

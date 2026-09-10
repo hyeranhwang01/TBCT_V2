@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AppShell } from "@/components/layout/app-shell";
-import { Badge, Button, Card, EmptyState, PageHeader, PageSkeleton } from "@/components/ui/primitives";
+import { AppShell } from "@/clinician/components/app-shell";
+import { Badge, Button, Card, EmptyState, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
 import { listAllDataDeletionRequests, resolveDataDeletionRequest } from "@/lib/api/data-deletion-request-api";
 import { useT } from "@/lib/i18n/context";
 

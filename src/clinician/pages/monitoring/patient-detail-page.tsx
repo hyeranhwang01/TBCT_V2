@@ -6,8 +6,8 @@ import { usePathname, useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ClipboardList } from "lucide-react";
-import { AppShell } from "@/components/layout/app-shell";
-import { StreamingText } from "@/components/runtime/streaming-text";
+import { AppShell } from "@/clinician/components/app-shell";
+import { StreamingText } from "@/patient/components/streaming-text";
 import { useReducedMotionPreference } from "@/lib/motion/use-reduced-motion-preference";
 import {
   Badge,
@@ -23,7 +23,7 @@ import {
   SectionHeader,
   inputClass,
   textareaClass,
-} from "@/components/ui/primitives";
+} from "@/shared/components/ui/primitives";
 import { useT } from "@/lib/i18n/context";
 import { assignClinicianToParticipant, getRuntimeParticipant, resolveClinicianEmail } from "@/lib/api/participant-api";
 import { useAuth } from "@/lib/auth/auth-context";
@@ -47,7 +47,7 @@ import {
 import { HomeworkPanel } from "@/clinician/pages/monitoring/homework-panel";
 import { ClinicianCheckinModal } from "@/clinician/pages/monitoring/clinician-checkin-modal";
 import { SessionProgressPanel, sessionSupportsProgressTab } from "@/clinician/pages/monitoring/session-progress-panel";
-import { WorksheetPane } from "@/components/runtime/worksheet-pane";
+import { WorksheetPane } from "@/patient/components/worksheet-pane";
 import { hasWorksheetBindings } from "@/lib/worksheet/worksheet-binding-registry";
 import type { RuntimeMessageRole, RuntimeSession } from "@/types/runtime-session";
 import type { SeverityBand } from "@/types/standardized-assessment";

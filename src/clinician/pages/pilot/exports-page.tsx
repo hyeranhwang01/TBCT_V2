@@ -2,8 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AppShell } from "@/components/layout/app-shell";
-import { Badge, Button, Card, EmptyState, PageHeader, PageSkeleton, StatusBadge } from "@/components/ui/primitives";
+import { AppShell } from "@/clinician/components/app-shell";
+import { Badge, Button, Card, EmptyState, PageHeader, PageSkeleton, StatusBadge } from "@/shared/components/ui/primitives";
 import { createResearchExport, createResearchSnapshot, downloadResearchExport, getPilotExportsOverview, lockResearchSnapshot, validateResearchSnapshot } from "@/lib/api/pilot-study-api";
 
 export function RuntimePilotExportsPage() {

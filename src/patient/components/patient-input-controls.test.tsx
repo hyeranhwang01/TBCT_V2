@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { PatientInputControls } from "@/components/runtime/patient-input-controls";
+import { PatientInputControls } from "@/patient/components/patient-input-controls";
 
 // Regression test: S07's Consensus-chair re-weighing prompt
 // (consensusAdvantageWeight + consensusDisadvantageWeight, validation.kind

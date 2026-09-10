@@ -3,8 +3,8 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { AppShell } from "@/components/layout/app-shell";
-import { Badge, Card, PageHeader, PageSkeleton } from "@/components/ui/primitives";
+import { AppShell } from "@/clinician/components/app-shell";
+import { Badge, Card, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
 import { useT } from "@/lib/i18n/context";
 import { listRuntimeParticipants } from "@/lib/api/participant-api";
 import { listRuntimeSessions } from "@/lib/api/runtime-session-api";

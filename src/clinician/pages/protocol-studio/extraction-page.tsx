@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, ChevronLeft, ChevronRight, Copy, Expand, Save, SplitSquareHorizontal, XCircle } from "lucide-react";
-import { AppShell } from "@/components/layout/app-shell";
-import { Badge, Button, Card, EmptyState, Field, Modal, PageHeader, PageSkeleton, SaveStatus, SectionHeader, SourceReferenceChip, StatusBadge, ValidationSeverityBadge, inputClass, textareaClass } from "@/components/ui/primitives";
+import { AppShell } from "@/clinician/components/app-shell";
+import { Badge, Button, Card, EmptyState, Field, Modal, PageHeader, PageSkeleton, SaveStatus, SectionHeader, SourceReferenceChip, StatusBadge, ValidationSeverityBadge, inputClass, textareaClass } from "@/shared/components/ui/primitives";
 import {
   approveStructuredItem,
   createProtocolDraftCandidate,

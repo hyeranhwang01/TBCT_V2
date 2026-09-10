@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AppShell } from "@/components/layout/app-shell";
-import { Button, Card, PageHeader, PageSkeleton } from "@/components/ui/primitives";
+import { AppShell } from "@/clinician/components/app-shell";
+import { Button, Card, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
 import { generatePilotReport, getPilotReports } from "@/lib/api/pilot-study-api";
 
 export function RuntimePilotReportsPage() {

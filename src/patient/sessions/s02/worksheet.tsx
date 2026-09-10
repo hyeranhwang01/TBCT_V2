@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/primitives";
-import { ScoreChip, SessionSignals, displayOrDash, listCount } from "@/components/runtime/worksheet-renderers/shared";
+import { Button } from "@/shared/components/ui/primitives";
+import { ScoreChip, SessionSignals, displayOrDash, listCount } from "@/patient/components/worksheet-renderers/shared";
 import type { WorksheetFieldView, WorksheetView } from "@/types/worksheet";
 
 // Recreates the TBCT Session 2 Color-Coded Problem Hierarchy (CCPH) and

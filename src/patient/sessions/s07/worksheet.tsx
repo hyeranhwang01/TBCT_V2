@@ -1,6 +1,6 @@
 "use client";
 
-import { ChoicePills, SessionSignals, WorksheetCell, capturedStatus } from "@/components/runtime/worksheet-renderers/shared";
+import { ChoicePills, SessionSignals, WorksheetCell, capturedStatus } from "@/patient/components/worksheet-renderers/shared";
 import { useReducedMotionPreference } from "@/lib/motion/use-reduced-motion-preference";
 import type { WorksheetFieldView, WorksheetView } from "@/types/worksheet";
 

@@ -2,8 +2,8 @@
 
 import { useParams, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { PatientShell } from "@/components/runtime/patient-shell";
-import { Card, EmptyState, PageSkeleton } from "@/components/ui/primitives";
+import { PatientShell } from "@/patient/components/patient-shell";
+import { Card, EmptyState, PageSkeleton } from "@/shared/components/ui/primitives";
 import { getRuntimeSession } from "@/lib/api/runtime-session-api";
 import { ensureHomeworkForSession } from "@/lib/api/homework-api";
 import { useRealtimeInvalidate } from "@/lib/supabase/use-realtime-invalidate";

@@ -4,8 +4,8 @@ import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, ArrowLeftRight, CheckCircle2, Clock3, FilePlus2, FileText, GitBranchPlus, Grid2X2, List, Play, Search, UploadCloud } from "lucide-react";
-import { AppShell } from "@/components/layout/app-shell";
-import { Badge, Button, Card, DetailDrawer, EmptyState, ErrorState, Field, FilterBar, Modal, PageHeader, PageSkeleton, SectionHeader, SourceReferenceChip, StatusBadge, inputClass, textareaClass } from "@/components/ui/primitives";
+import { AppShell } from "@/clinician/components/app-shell";
+import { Badge, Button, Card, DetailDrawer, EmptyState, ErrorState, Field, FilterBar, Modal, PageHeader, PageSkeleton, SectionHeader, SourceReferenceChip, StatusBadge, inputClass, textareaClass } from "@/shared/components/ui/primitives";
 import {
   archiveClinicalAssetApi,
   compareAssetVersions,

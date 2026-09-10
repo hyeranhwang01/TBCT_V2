@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Card, EmptyState, SectionHeader } from "@/components/ui/primitives";
+import { Badge, Card, EmptyState, SectionHeader } from "@/shared/components/ui/primitives";
 import { useT } from "@/lib/i18n/context";
 import type { RuntimeMessage, RuntimeSessionView, SessionExecutionLog } from "@/types/runtime-session";
 

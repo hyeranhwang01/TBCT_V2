@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Badge, Button, Card, EmptyState, Field, SectionHeader, ValidationSeverityBadge, inputClass, textareaClass } from "@/components/ui/primitives";
+import { Badge, Button, Card, EmptyState, Field, SectionHeader, ValidationSeverityBadge, inputClass, textareaClass } from "@/shared/components/ui/primitives";
 import { statusTransition } from "@/lib/motion/motion-variants";
 import { useT } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";

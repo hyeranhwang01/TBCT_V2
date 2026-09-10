@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Badge, Card } from "@/components/ui/primitives";
+import { Badge, Card } from "@/shared/components/ui/primitives";
 import { submitMoodCheckin, listMoodCheckins } from "@/lib/api/mood-checkin-api";
 import { computeStreak, todayInSeoul } from "@/lib/mood-checkins/streak";
 import { useT } from "@/lib/i18n/context";

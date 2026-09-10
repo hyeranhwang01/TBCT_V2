@@ -23,10 +23,10 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Button, ConfirmActionDialog, Modal, Tooltip, inputClass } from "@/components/ui/primitives";
-import { Logo } from "@/components/ui/logo";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { OnboardingTour } from "@/components/onboarding/onboarding-tour";
+import { Button, ConfirmActionDialog, Modal, Tooltip, inputClass } from "@/shared/components/ui/primitives";
+import { Logo } from "@/shared/components/ui/logo";
+import { ThemeToggle } from "@/shared/components/ui/theme-toggle";
+import { OnboardingTour } from "@/shared/components/onboarding/onboarding-tour";
 import { getCurrentDemoActor } from "@/lib/demo-actor";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useT } from "@/lib/i18n/context";

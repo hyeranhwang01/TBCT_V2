@@ -6,8 +6,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AppShell } from "@/components/layout/app-shell";
-import { Badge, Button, Card, EmptyState, Field, Modal, PageHeader, PageSkeleton, inputClass, textareaClass } from "@/components/ui/primitives";
+import { AppShell } from "@/clinician/components/app-shell";
+import { Badge, Button, Card, EmptyState, Field, Modal, PageHeader, PageSkeleton, inputClass, textareaClass } from "@/shared/components/ui/primitives";
 import { DEMO_ACTORS } from "@/lib/demo-actor";
 import {
   acknowledgeClinicianHandoff,

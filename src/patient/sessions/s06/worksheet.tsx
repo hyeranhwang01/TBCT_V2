@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ScoreChip, SessionSignals, WorksheetCell, capturedStatus, listCount } from "@/components/runtime/worksheet-renderers/shared";
+import { ScoreChip, SessionSignals, WorksheetCell, capturedStatus, listCount } from "@/patient/components/worksheet-renderers/shared";
 import { useReducedMotionPreference } from "@/lib/motion/use-reduced-motion-preference";
 import { getListScoreHistory } from "@/lib/worksheet/worksheet-projection";
 import type { WorksheetFieldView, WorksheetHistoryView, WorksheetView } from "@/types/worksheet";

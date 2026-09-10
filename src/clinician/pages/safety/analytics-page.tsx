@@ -1,8 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { AppShell } from "@/components/layout/app-shell";
-import { Card, PageHeader, PageSkeleton } from "@/components/ui/primitives";
+import { AppShell } from "@/clinician/components/app-shell";
+import { Card, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
 import { getSafetyDashboardData } from "@/lib/api/safety-operations-api";
 
 export function RuntimeSafetyAnalyticsPage() {

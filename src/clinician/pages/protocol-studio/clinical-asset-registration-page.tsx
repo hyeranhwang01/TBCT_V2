@@ -5,7 +5,7 @@ import { useMutation } from "@tanstack/react-query";
 import { AlertTriangle, ArrowLeft, CheckCircle2, FileUp, RotateCcw, ShieldAlert } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { AppShell } from "@/components/layout/app-shell";
+import { AppShell } from "@/clinician/components/app-shell";
 import {
   Badge,
   Button,
@@ -15,7 +15,7 @@ import {
   SectionHeader,
   inputClass,
   textareaClass,
-} from "@/components/ui/primitives";
+} from "@/shared/components/ui/primitives";
 import { createClinicalAssetFromFile } from "@/lib/api/clinical-assets-api";
 import { resetLocalDb } from "@/lib/db/tbct-local-db";
 import type { AssetType, CreateClinicalAssetInput, LocalClinicalAsset } from "@/types/clinical-assets";

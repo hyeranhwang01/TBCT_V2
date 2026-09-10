@@ -1,7 +1,7 @@
 "use client";
 
-import { AppShell } from "@/components/layout/app-shell";
-import { PageHeader } from "@/components/ui/primitives";
+import { AppShell } from "@/clinician/components/app-shell";
+import { PageHeader } from "@/shared/components/ui/primitives";
 import { MfaSettings } from "@/shared/components/auth/mfa-settings";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useT } from "@/lib/i18n/context";

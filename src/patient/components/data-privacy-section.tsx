@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, Modal, textareaClass } from "@/components/ui/primitives";
+import { Badge, Button, Card, Modal, textareaClass } from "@/shared/components/ui/primitives";
 import { createDataDeletionRequest, listDataDeletionRequestsByParticipant } from "@/lib/api/data-deletion-request-api";
 import { useT } from "@/lib/i18n/context";
 

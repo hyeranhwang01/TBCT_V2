@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
-import { Logo } from "@/components/ui/logo";
+import { Logo } from "@/shared/components/ui/logo";
 
 export function AppSplash() {
   const [visible, setVisible] = useState(true);

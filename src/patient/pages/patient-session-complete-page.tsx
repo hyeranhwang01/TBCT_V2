@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { PatientShell } from "@/components/runtime/patient-shell";
-import { Button, Card, EmptyState, PageSkeleton } from "@/components/ui/primitives";
+import { PatientShell } from "@/patient/components/patient-shell";
+import { Button, Card, EmptyState, PageSkeleton } from "@/shared/components/ui/primitives";
 import { getRuntimeSession } from "@/lib/api/runtime-session-api";
 import { getRuntimeSessionSummary } from "@/lib/api/session-summary-api";
 import { ensureHomeworkForSession } from "@/lib/api/homework-api";

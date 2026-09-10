@@ -1,4 +1,4 @@
-import { StudioApp } from "@/components/studio-app";
+import { StudioApp } from "@/app/studio-app";
 
 export default function Page() {
   return <StudioApp />;

@@ -1,8 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { AppShell } from "@/components/layout/app-shell";
-import { Badge, Card, PageHeader, PageSkeleton } from "@/components/ui/primitives";
+import { AppShell } from "@/clinician/components/app-shell";
+import { Badge, Card, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
 import { getPilotStudyConfiguration } from "@/lib/api/pilot-study-api";
 
 export function RuntimePilotConfigurationPage() {

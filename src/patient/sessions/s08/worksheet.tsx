@@ -1,6 +1,6 @@
 "use client";
 
-import { CycleArrow, FocusLine, SessionSignals, WorksheetCell, capturedStatus, directionalValue, listCount } from "@/components/runtime/worksheet-renderers/shared";
+import { CycleArrow, FocusLine, SessionSignals, WorksheetCell, capturedStatus, directionalValue, listCount } from "@/patient/components/worksheet-renderers/shared";
 import { useReducedMotionPreference } from "@/lib/motion/use-reduced-motion-preference";
 import type { WorksheetFieldView, WorksheetView } from "@/types/worksheet";
 

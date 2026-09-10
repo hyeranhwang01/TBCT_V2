@@ -14,7 +14,7 @@
 import { useState } from "react";
 import { S02Worksheet } from "@/patient/sessions/s02/worksheet";
 import { S03Worksheet } from "@/patient/sessions/s03/worksheet";
-import { ScoreChip } from "@/components/runtime/worksheet-renderers/shared";
+import { ScoreChip } from "@/patient/components/worksheet-renderers/shared";
 import { TBCT_S02_BINDINGS } from "@/patient/sessions/s02/worksheet-binding";
 import { TBCT_S03_BINDINGS } from "@/patient/sessions/s03/worksheet-binding";
 import type { WorksheetBinding, WorksheetFieldStatus, WorksheetFieldView, WorksheetView } from "@/types/worksheet";

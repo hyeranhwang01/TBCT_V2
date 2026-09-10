@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { MessageSquare, Paperclip, Send } from "lucide-react";
-import { Button, IllustratedEmptyState, textareaClass } from "@/components/ui/primitives";
+import { Button, IllustratedEmptyState, textareaClass } from "@/shared/components/ui/primitives";
 import { sendMessage, listMessages } from "@/lib/api/clinician-message-api";
 import { useRealtimeInvalidate } from "@/lib/supabase/use-realtime-invalidate";
 import { useAuth } from "@/lib/auth/auth-context";

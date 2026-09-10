@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { CheckCircle2 } from "lucide-react";
-import { Badge, Button } from "@/components/ui/primitives";
+import { Badge, Button } from "@/shared/components/ui/primitives";
 import { fadeScale, fadeUp, highlightPulse, questComplete } from "@/lib/motion/motion-variants";
 import type { WorksheetFieldView } from "@/types/worksheet";
 import type { RuntimeMessage, RuntimeMessageRole } from "@/types/runtime-session";

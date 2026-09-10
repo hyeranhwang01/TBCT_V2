@@ -2,8 +2,8 @@
 
 import { useParams, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { AppShell } from "@/components/layout/app-shell";
-import { Badge, Card, EmptyState, PageHeader, PageSkeleton, SectionHeader } from "@/components/ui/primitives";
+import { AppShell } from "@/clinician/components/app-shell";
+import { Badge, Card, EmptyState, PageHeader, PageSkeleton, SectionHeader } from "@/shared/components/ui/primitives";
 import { getParticipantLongitudinalDashboard } from "@/lib/api/longitudinal-memory-api";
 
 export function RuntimeParticipantPage() {

@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { AppShell } from "@/components/layout/app-shell";
-import { Button, Card, EmptyState, PageHeader, PageSkeleton } from "@/components/ui/primitives";
+import { AppShell } from "@/clinician/components/app-shell";
+import { Button, Card, EmptyState, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
 import { getSafetyReport } from "@/lib/repositories/safety-event-repository";
 import { exportSafetyReportJson } from "@/lib/api/safety-operations-api";
 

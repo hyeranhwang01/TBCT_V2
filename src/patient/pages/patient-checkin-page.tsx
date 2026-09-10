@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PatientShell } from "@/components/runtime/patient-shell";
-import { Badge, Button, Card, EmptyState, PageSkeleton } from "@/components/ui/primitives";
+import { PatientShell } from "@/patient/components/patient-shell";
+import { Badge, Button, Card, EmptyState, PageSkeleton } from "@/shared/components/ui/primitives";
 import { getOrCreateParticipantForUiLocale } from "@/lib/api/participant-api";
 import { submitStandardizedAssessment, listStandardizedAssessments } from "@/lib/api/standardized-assessment-api";
 import { INSTRUMENTS, responseOptionLabel } from "@/lib/standardized-assessments/instruments";

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
-import { Button } from "@/components/ui/primitives";
+import { Button } from "@/shared/components/ui/primitives";
 import { fadeIn, fadeScale } from "@/lib/motion/motion-variants";
 import { useReducedMotionPreference } from "@/lib/motion/use-reduced-motion-preference";
 import { useT } from "@/lib/i18n/context";

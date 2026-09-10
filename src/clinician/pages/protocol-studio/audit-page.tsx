@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AppShell } from "@/components/layout/app-shell";
+import { AppShell } from "@/clinician/components/app-shell";
 import {
   Badge,
   Card,
@@ -11,7 +11,7 @@ import {
   PageHeader,
   PageSkeleton,
   SectionHeader,
-} from "@/components/ui/primitives";
+} from "@/shared/components/ui/primitives";
 import { getAuditEntries } from "@/lib/api/mock-api";
 import type { AuditEntry } from "@/types";
 

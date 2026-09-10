@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button, Modal } from "@/components/ui/primitives";
+import { Button, Modal } from "@/shared/components/ui/primitives";
 import { submitStandardizedAssessment } from "@/lib/api/standardized-assessment-api";
 import { INSTRUMENTS, responseOptionLabel } from "@/lib/standardized-assessments/instruments";
 import { useT } from "@/lib/i18n/context";

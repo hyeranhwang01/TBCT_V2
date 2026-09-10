@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Button, Card, Field, inputClass } from "@/components/ui/primitives";
+import { Button, Card, Field, inputClass } from "@/shared/components/ui/primitives";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useT } from "@/lib/i18n/context";
 

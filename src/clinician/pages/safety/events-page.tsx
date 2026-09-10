@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { AppShell } from "@/components/layout/app-shell";
-import { Badge, Card, EmptyState, PageHeader, PageSkeleton } from "@/components/ui/primitives";
+import { AppShell } from "@/clinician/components/app-shell";
+import { Badge, Card, EmptyState, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
 import { getSafetyEvents } from "@/lib/api/safety-operations-api";
 
 export function RuntimeSafetyEventsPage() {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Button, inputClass } from "@/components/ui/primitives";
+import { Button, inputClass } from "@/shared/components/ui/primitives";
 import type { PromptItem } from "@/lib/protocol/source-fidelity-types";
 import type { PatientInput } from "@/types/runtime-session";
 import { useSpeechRecognition } from "@/lib/speech/use-speech-recognition";
