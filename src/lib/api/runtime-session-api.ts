@@ -30,6 +30,8 @@ import {
   updateRuntimeSessionRecord,
 } from "@/lib/repositories/runtime-session-repository";
 import { attachSessionToParticipant, getOrCreateDemoParticipant, getRuntimeParticipant } from "@/lib/api/participant-api";
+import { listHomeworkRecordsByParticipant } from "@/lib/repositories/homework-repository";
+import { EMPTY_CONTINUITY_SEED, computeSessionContinuitySeed } from "@/lib/runtime/session-continuity";
 import { listMemoryRetrievalRuns, listMemoryUsageLogs } from "@/lib/repositories/longitudinal-memory-repository";
 import { getPilotParticipantByRuntimeParticipantId, getPilotStudyArm, listProtocolAssignments } from "@/lib/repositories/pilot-repository";
 import { assertRuntimeTransition } from "@/lib/runtime/runtime-state-machine";
@@ -47,6 +49,27 @@ function makeId(prefix: string) {
 
 function emptyContext(): RuntimeContext {
   return { fields: {}, riskSignals: [], iterationCounts: {}, activityCompletion: "not_started", homeworkStatus: "not_assigned", riskLevel: "low" };
+}
+
+/** What the participant's previous session leaves for this one -- see
+ * session-continuity.ts for why the fields it seeds were previously read but
+ * never written.
+ *
+ * Never lets a continuity lookup stop a session from starting. The two reads
+ * are ordinary store fetches, and a participant who cannot open today's session
+ * because last week's homework record could not be loaded is strictly worse off
+ * than one who gets the first-session opening a second time. On failure this
+ * degrades to exactly the previous behaviour. */
+async function loadContinuitySeed(participantId: string) {
+  try {
+    const [priorSessions, homeworkRecords] = await Promise.all([
+      listRuntimeSessionRecordsByParticipant(participantId),
+      listHomeworkRecordsByParticipant(participantId),
+    ]);
+    return computeSessionContinuitySeed({ priorSessions, homeworkRecords });
+  } catch {
+    return EMPTY_CONTINUITY_SEED;
+  }
 }
 
 function createCanonicalDemoRelease(): ProtocolReleaseVersion {
@@ -101,6 +124,7 @@ export async function createRuntimeSession(input: {
   // otherwise the clinician monitoring screens (which join sessions to
   // participants by participantId) can never find it.
   const resolvedParticipantId = input.participantId ?? (await getOrCreateDemoParticipant()).id;
+  const continuity = await loadContinuitySeed(resolvedParticipantId);
   const activeProtocolId = isCanonicalProtocolId(input.protocolId) ? CANONICAL_PROTOCOL_ID : input.protocolId;
   const storedRelease = await getProtocolRelease(input.releaseId);
   const release = storedRelease ?? (input.releaseId === "demo-release" && activeProtocolId === CANONICAL_PROTOCOL_ID ? createCanonicalDemoRelease() : null);
@@ -141,7 +165,7 @@ export async function createRuntimeSession(input: {
     patientAlias: input.patientAlias,
     locale: input.locale,
     version: 0,
-    runtimeContext: emptyContext(),
+    runtimeContext: { ...emptyContext(), fields: continuity.fields, homeworkStatus: continuity.homeworkStatus },
     messageIds: [],
     executionLogIds: [],
     escalationIds: [],
