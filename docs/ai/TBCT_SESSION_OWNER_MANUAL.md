@@ -1,3 +1,5 @@
+> 경로 표기는 2026-09-10 트리 재편(`src/patient` · `src/clinician` · `src/shared`) 기준으로 기계 치환되었습니다. 본문 내용 자체는 작성 당시 기준입니다.
+
 TBCT STUDIO — Session Owner Manual (Claude Reference)
 
 Internal reference converted to Markdown for Claude Code. This file preserves the operational rules and file mappings of the supplied TBCT STUDIO | 세션 담당자 매뉴얼 (S01~S08).
@@ -11,9 +13,9 @@ Each session owner normally needs only the files associated with that session nu
 
 Most changes should be solvable within the session's own:
 
-src/lib/protocol/sessions/s0N.ts
+src/patient/sessions/s0N/spec.ts
 
-src/lib/runtime/static-messages/s0N.ts
+src/patient/sessions/s0N/messages.ts
 
 Changes to shared types, shared patient input UI, shared runtime actions, or shared safety logic can affect multiple sessions and require coordination / explicit scope expansion.
 
@@ -111,7 +113,7 @@ Shared file; coordination required
 
 Add a completely new safety/risk-detection rule
 
-src/mocks/data.ts, runtime-context.ts
+src/shared/mocks/data.ts, runtime-context.ts
 
 Shared file; coordination required
 
@@ -121,19 +123,19 @@ Fields such as source, marker, and verbatimText in session definitions are large
 
 Priority 1 — exact fixed wording
 
-src/lib/runtime/static-messages/s0N.ts -> resolveStaticText()
+src/patient/sessions/s0N/messages.ts -> resolveStaticText()
 
 When a matching static message is defined, it wins over the other wording instructions and is emitted as defined.
 
 Priority 2 — LLM wording material
 
-src/lib/protocol/sessions/s0N.ts -> PromptSpec.patientText
+src/patient/sessions/s0N/spec.ts -> PromptSpec.patientText
 
 If no priority-1 static phrase applies, this is material supplied for the AI to phrase naturally. If the Claude/model call cannot be made, this text can be presented directly to the patient.
 
 Priority 3 — supporting explanation
 
-src/lib/protocol/sessions/s0N.ts -> NodeSpec.participantRationale
+src/patient/sessions/s0N/spec.ts -> NodeSpec.participantRationale
 
 Used as supporting context when the AI needs to explain why the step is being performed; not necessarily used on every turn.
 
@@ -146,7 +148,7 @@ Do not assume metadata fields such as roleRange, languageRange, or safetyRange a
 Never hand-edit generated source text
 
 Do not manually edit:
-src/lib/protocol/tbct-source-text.generated.ts
+src/shared/protocol/tbct-source-text.generated.ts
 
 The manual states this file is generated from the source manual and hash-locked. Manual edits can break source-line references and hash verification across all eight sessions.
 
@@ -186,7 +188,7 @@ New risk-detection wording / safety rule
 
 Risk detection is shared across sessions
 
-src/mocks/data.ts, runtime-context.ts
+src/shared/mocks/data.ts, runtime-context.ts
 
 Node-level entry condition / repeat-limit capability not already implemented
 
@@ -200,15 +202,15 @@ Shared files should not be edited by default. Demonstrate the need, explain cros
 
 S01 — TBCT model introduction
 
-Content / flow: src/lib/protocol/sessions/s01.ts
+Content / flow: src/patient/sessions/s01/spec.ts
 
-AI wording: src/lib/runtime/static-messages/s01.ts
+AI wording: src/patient/sessions/s01/messages.ts
 
-Worksheet: src/components/runtime/worksheet-renderers/s01-worksheet.tsx
+Worksheet: src/patient/sessions/s01/worksheet.tsx
 
-Field binding: src/lib/worksheet/worksheet-bindings/tbct-s01.ts
+Field binding: src/patient/sessions/s01/worksheet-binding.ts
 
-Homework: src/components/pages/homework/s01-weekly-examples.tsx
+Homework: src/patient/sessions/s01/homework.tsx
 
 Protected field names: none identified by the manual.
 
@@ -216,15 +218,15 @@ Primary edit rule: dialogue/flow in s01.ts, exact fixed wording in static-messag
 
 S02 — Problems and goals
 
-Content / flow: src/lib/protocol/sessions/s02.ts
+Content / flow: src/patient/sessions/s02/spec.ts
 
-AI wording: src/lib/runtime/static-messages/s02.ts
+AI wording: src/patient/sessions/s02/messages.ts
 
-Worksheet: src/components/runtime/worksheet-renderers/s02-worksheet.tsx
+Worksheet: src/patient/sessions/s02/worksheet.tsx
 
-Field binding: src/lib/worksheet/worksheet-bindings/tbct-s02.ts
+Field binding: src/patient/sessions/s02/worksheet-binding.ts
 
-Homework: src/components/pages/homework/s02-checkin.tsx
+Homework: src/patient/sessions/s02/homework.tsx
 
 DO NOT RENAME: problems, problemRatings, goals, goalRatings.
 
@@ -232,15 +234,15 @@ Reason: the clinician progress view, homework UI, and score-total logic referenc
 
 S03 — Intra-TR
 
-Content / flow: src/lib/protocol/sessions/s03.ts
+Content / flow: src/patient/sessions/s03/spec.ts
 
-AI wording: src/lib/runtime/static-messages/s03.ts
+AI wording: src/patient/sessions/s03/messages.ts
 
-Worksheet: src/components/runtime/worksheet-renderers/s03-worksheet.tsx
+Worksheet: src/patient/sessions/s03/worksheet.tsx
 
-Field binding: src/lib/worksheet/worksheet-bindings/tbct-s03.ts
+Field binding: src/patient/sessions/s03/worksheet-binding.ts
 
-Homework: src/components/pages/homework/s03-review-intra-tr.tsx
+Homework: src/patient/sessions/s03/homework.tsx
 
 DO NOT RENAME: automaticThought, evidenceFor, evidenceAgainst.
 
@@ -248,31 +250,31 @@ Reason: shared runtime logic gives these field names special handling.
 
 S04 — Inter-TR
 
-Content / flow: src/lib/protocol/sessions/s04.ts
+Content / flow: src/patient/sessions/s04/spec.ts
 
-AI wording: src/lib/runtime/static-messages/s04.ts
+AI wording: src/patient/sessions/s04/messages.ts
 
-Worksheet: src/components/runtime/worksheet-renderers/s04-worksheet.tsx
+Worksheet: src/patient/sessions/s04/worksheet.tsx
 
-Field binding: src/lib/worksheet/worksheet-bindings/tbct-s04.ts
+Field binding: src/patient/sessions/s04/worksheet-binding.ts
 
-Homework: src/components/pages/homework/s04-action-plan.tsx
+Homework: src/patient/sessions/s04/homework.tsx
 
 Caution: automaticThought-family fields overlap with S03 and receive special shared handling. Prefer adding a field instead of renaming an ambiguous existing one.
 
 S05 — Participation Grid
 
-Content / flow: src/lib/protocol/sessions/s05.ts
+Content / flow: src/patient/sessions/s05/spec.ts
 
-AI wording: src/lib/runtime/static-messages/s05.ts
+AI wording: src/patient/sessions/s05/messages.ts
 
-Worksheet: src/components/runtime/worksheet-renderers/s05-worksheet.tsx
+Worksheet: src/patient/sessions/s05/worksheet.tsx
 
-Field binding: src/lib/worksheet/worksheet-bindings/tbct-s05.ts
+Field binding: src/patient/sessions/s05/worksheet-binding.ts
 
-Homework: src/components/pages/homework/s05-review-grid.tsx
+Homework: src/patient/sessions/s05/homework.tsx
 
-Test: src/lib/protocol/sessions/s05.test.ts
+Test: src/patient/sessions/s05/spec.test.ts
 
 DO NOT RENAME: contributors, participationRatingsRound1.
 
@@ -280,17 +282,17 @@ Reason: runtime-context.ts uses the names to advance rounds.
 
 S06 — Color-Coded Symptom Hierarchy (CCSH)
 
-Content / flow: src/lib/protocol/sessions/s06.ts
+Content / flow: src/patient/sessions/s06/spec.ts
 
-AI wording: src/lib/runtime/static-messages/s06.ts
+AI wording: src/patient/sessions/s06/messages.ts
 
-Worksheet: src/components/runtime/worksheet-renderers/s06-worksheet.tsx
+Worksheet: src/patient/sessions/s06/worksheet.tsx
 
-Field binding: src/lib/worksheet/worksheet-bindings/tbct-s06.ts
+Field binding: src/patient/sessions/s06/worksheet-binding.ts
 
-Homework: src/components/pages/homework/s06-practice.tsx
+Homework: src/patient/sessions/s06/homework.tsx
 
-Test: src/lib/protocol/sessions/s06.test.ts
+Test: src/patient/sessions/s06/spec.test.ts
 
 DO NOT RENAME: symptomItems, symptomItemScores.
 
@@ -298,17 +300,17 @@ Reason: clinician progress and homework screens use these names directly.
 
 S07 — Consensual Role-Play (CRP)
 
-Content / flow: src/lib/protocol/sessions/s07.ts
+Content / flow: src/patient/sessions/s07/spec.ts
 
-AI wording: src/lib/runtime/static-messages/s07.ts
+AI wording: src/patient/sessions/s07/messages.ts
 
-Worksheet: src/components/runtime/worksheet-renderers/s07-worksheet.tsx
+Worksheet: src/patient/sessions/s07/worksheet.tsx
 
-Field binding: src/lib/worksheet/worksheet-bindings/tbct-s07.ts
+Field binding: src/patient/sessions/s07/worksheet-binding.ts
 
-Homework: src/components/pages/homework/s07-decision-plan.tsx
+Homework: src/patient/sessions/s07/homework.tsx
 
-Test: src/lib/protocol/sessions/s07.test.ts
+Test: src/patient/sessions/s07/spec.test.ts
 
 DO NOT delete or rename the crp-consent prompt slug.
 
@@ -318,17 +320,17 @@ patientText for this prompt may be modified.
 
 S08 — Trial One
 
-Content / flow: src/lib/protocol/sessions/s08.ts
+Content / flow: src/patient/sessions/s08/spec.ts
 
-AI wording: src/lib/runtime/static-messages/s08.ts
+AI wording: src/patient/sessions/s08/messages.ts
 
-Worksheet: src/components/runtime/worksheet-renderers/s08-worksheet.tsx
+Worksheet: src/patient/sessions/s08/worksheet.tsx
 
-Field binding: src/lib/worksheet/worksheet-bindings/tbct-s08.ts
+Field binding: src/patient/sessions/s08/worksheet-binding.ts
 
-Homework: src/components/pages/homework/s08-appeal-record.tsx
+Homework: src/patient/sessions/s08/homework.tsx
 
-Test: src/lib/protocol/sessions/s08.test.ts
+Test: src/patient/sessions/s08/spec.test.ts
 
 No generally protected fields identified, but coreBelief is reused to generate the “charge statement” wording in static-messages/s08.ts. Preserve its name by default; if it must change, inspect the message-generation logic together.
 

@@ -16,7 +16,7 @@ For any TBCT session task, follow .claude/rules/tbct-session-manual.md and consu
 
 .claude/rules/tbct-session-manual.md is mandatory, not optional; read it before editing any s01~s08 session implementation.
 
-Never hand-edit src/lib/protocol/tbct-source-text.generated.ts.
+Never hand-edit src/shared/protocol/tbct-source-text.generated.ts.
 
 For S02/S03, preserve the protected identifiers defined in the manual rule.
 

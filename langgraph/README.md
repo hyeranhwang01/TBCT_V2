@@ -8,7 +8,7 @@
 
 ## 원칙
 
-1. **재구현 금지** — 파싱·승인문구·조건평가·엣지선택·출력검증은 기존 `src/lib/runtime/*` 함수를 호출한다.
+1. **재구현 금지** — 파싱·승인문구·조건평가·엣지선택·출력검증은 기존 `src/shared/runtime/*` 함수를 호출한다.
 2. **프로덕션 무변경** — 이 폴더 + devDependency + vitest include + `export` 한 단어가 전부.
 3. **리듀서는 throw 하지 않는다** — LangGraph는 대기 쓰기를 먼저 영속화하므로,
    throw 하면 해당 `thread_id`가 재개 불가가 된다.

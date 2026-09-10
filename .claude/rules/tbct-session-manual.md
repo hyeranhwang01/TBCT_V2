@@ -18,15 +18,15 @@ For current enhancement work, S01~S03 are the default allowed functional scope. 
 
 For target session S0N, use these locations first:
 
-Conversation content / flow: src/lib/protocol/sessions/s0N.ts
+Conversation content / flow: src/patient/sessions/s0N/spec.ts
 
-Fully fixed AI utterances: src/lib/runtime/static-messages/s0N.ts
+Fully fixed AI utterances: src/patient/sessions/s0N/messages.ts
 
-Worksheet UI: src/components/runtime/worksheet-renderers/s0N-worksheet.tsx
+Worksheet UI: src/patient/sessions/s0N/worksheet.tsx
 
-Worksheet binding: src/lib/worksheet/worksheet-bindings/tbct-s0N.ts
+Worksheet binding: src/patient/sessions/s0N/worksheet-binding.ts
 
-Homework UI: session-specific src/components/pages/homework/s0N-*.tsx
+Homework UI: session-specific src/patient/sessions/s0N/homework.tsx
 
 Do not touch a shared file merely because it is easier.
 
@@ -35,15 +35,15 @@ Do not touch a shared file merely because it is easier.
 When the user asks to change what the AI says, determine which layer actually controls the utterance before editing.
 
 Fixed text / strongest precedence
-src/lib/runtime/static-messages/s0N.ts -> resolveStaticText()
+src/patient/sessions/s0N/messages.ts -> resolveStaticText()
 If a matching fixed message exists here, it overrides the lower-priority wording sources and is emitted as defined.
 
 LLM wording material
-src/lib/protocol/sessions/s0N.ts -> PromptSpec.patientText
+src/patient/sessions/s0N/spec.ts -> PromptSpec.patientText
 If no fixed message overrides it, this is the wording material the model uses to naturally phrase the question. When the Claude/model call is unavailable, this text may be used directly.
 
 Supporting rationale
-src/lib/protocol/sessions/s0N.ts -> NodeSpec.participantRationale
+src/patient/sessions/s0N/spec.ts -> NodeSpec.participantRationale
 This supports explanations of why a step is being performed and is not necessarily used every turn.
 
 Do not edit roleRange, languageRange, safetyRange, or similar metadata expecting them to change the actual patient-facing utterance unless current runtime code proves that behavior.
@@ -52,7 +52,7 @@ Do not edit roleRange, languageRange, safetyRange, or similar metadata expecting
 
 Never hand-edit:
 
-src/lib/protocol/tbct-source-text.generated.ts
+src/shared/protocol/tbct-source-text.generated.ts
 
 It is generated from the source manual and tied to source-line/hash verification. Manual edits can invalidate references and verification across all eight sessions.
 
@@ -198,7 +198,7 @@ New safety rule with new risk-detection wording
 
 Risk detection is shared across sessions
 
-src/mocks/data.ts, runtime-context.ts
+src/shared/mocks/data.ts, runtime-context.ts
 
 Node-level entry condition/repeat-limit capability not already supported
 
@@ -224,41 +224,41 @@ Run narrow tests plus regression tests for impacted shared behavior.
 
 S01 — TBCT model introduction
 
-Flow/content: src/lib/protocol/sessions/s01.ts
+Flow/content: src/patient/sessions/s01/spec.ts
 
-Fixed AI text: src/lib/runtime/static-messages/s01.ts
+Fixed AI text: src/patient/sessions/s01/messages.ts
 
-Worksheet: src/components/runtime/worksheet-renderers/s01-worksheet.tsx
+Worksheet: src/patient/sessions/s01/worksheet.tsx
 
-Binding: src/lib/worksheet/worksheet-bindings/tbct-s01.ts
+Binding: src/patient/sessions/s01/worksheet-binding.ts
 
-Homework: src/components/pages/homework/s01-weekly-examples.tsx
+Homework: src/patient/sessions/s01/homework.tsx
 
 S02 — Problems and goals
 
-Flow/content: src/lib/protocol/sessions/s02.ts
+Flow/content: src/patient/sessions/s02/spec.ts
 
-Fixed AI text: src/lib/runtime/static-messages/s02.ts
+Fixed AI text: src/patient/sessions/s02/messages.ts
 
-Worksheet: src/components/runtime/worksheet-renderers/s02-worksheet.tsx
+Worksheet: src/patient/sessions/s02/worksheet.tsx
 
-Binding: src/lib/worksheet/worksheet-bindings/tbct-s02.ts
+Binding: src/patient/sessions/s02/worksheet-binding.ts
 
-Homework: src/components/pages/homework/s02-checkin.tsx
+Homework: src/patient/sessions/s02/homework.tsx
 
 Protected: problems, problemRatings, goals, goalRatings
 
 S03 — Intra-personal Thought Record (Intra-TR)
 
-Flow/content: src/lib/protocol/sessions/s03.ts
+Flow/content: src/patient/sessions/s03/spec.ts
 
-Fixed AI text: src/lib/runtime/static-messages/s03.ts
+Fixed AI text: src/patient/sessions/s03/messages.ts
 
-Worksheet: src/components/runtime/worksheet-renderers/s03-worksheet.tsx
+Worksheet: src/patient/sessions/s03/worksheet.tsx
 
-Binding: src/lib/worksheet/worksheet-bindings/tbct-s03.ts
+Binding: src/patient/sessions/s03/worksheet-binding.ts
 
-Homework: src/components/pages/homework/s03-review-intra-tr.tsx
+Homework: src/patient/sessions/s03/homework.tsx
 
 Protected: automaticThought, evidenceFor, evidenceAgainst
 
