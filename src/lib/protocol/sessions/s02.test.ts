@@ -1,8 +1,38 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createCanonicalTestRuntimeSession, getRuntimeSession } from "@/lib/api/runtime-session-api";
 import { startRuntimeSession, submitPatientInput } from "@/lib/api/runtime-execution-api";
 import { getLocalDb } from "@/lib/db/tbct-local-db";
 import { parsePrivatePlaceholderLabelsInput } from "@/lib/runtime/runtime-deterministic-input";
+import { resolveStaticText } from "@/lib/runtime/static-messages/s02";
+import type { PromptItem } from "@/lib/protocol/source-fidelity-types";
+import { resolveDialogueAgentMessage } from "@/lib/dialogue-agent/dialogue-agent-orchestrator";
+
+// The suite's global fetch fake (src/test/setup.ts) always intercepts the
+// dialogue agent's HTTP call with a REALISTIC keyword-heuristic classifier
+// (src/test/fakes/dialogue-agent.fake.ts), so it "succeeds" for almost any
+// input, including an unrecognized reply like "I understood." -- AI_PROVIDER
+// is never consulted (that check lives inside anthropic-dialogue-agent.ts,
+// which this jsdom test environment's browser-path fetch() never reaches).
+// The only reliable way to exercise deliverClarificationTurn's OWN
+// deterministic content -- the actual code the boolean-clarification bug fix
+// touches -- is to force exactly one dialogue-agent call to report the same
+// "provider unavailable" outcome the real production transcript hit. This
+// wraps the real implementation by default, so every other test in this file
+// keeps going through the real fake-classifier path unchanged.
+vi.mock("@/lib/dialogue-agent/dialogue-agent-orchestrator", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/dialogue-agent/dialogue-agent-orchestrator")>();
+  return { ...actual, resolveDialogueAgentMessage: vi.fn(actual.resolveDialogueAgentMessage) };
+});
+
+async function forceDialogueProviderUnavailableOnce() {
+  vi.mocked(resolveDialogueAgentMessage).mockImplementationOnce(async (callInput) => ({
+    patientMessage: callInput.deterministicFallbackText,
+    decision: null,
+    usedFallback: false,
+    fallbackReason: "dialogue_provider_not_configured",
+    provider: "none",
+  }));
+}
 
 // TBCT S01-S03 정상 발화 오인 수정 (2026-08-17 fidelity pass), S02 section.
 // Regression coverage for P0-1 (refusal false positive), P0-2 (noMore false
@@ -146,6 +176,57 @@ describe("S02 Problems and Goals -- 정상 발화 오인 수정", () => {
     view = await current(session.id);
     expect(view.session.runtimeContext.fields.problemRatings).toEqual([4, 3]);
     expect(view.session.runtimeContext.fields.currentProblemScoreUncertain).toBe(false);
+  }, 15_000);
+
+  // Bug report: a real en-US session got stuck and paused. Root cause: the
+  // deterministic clarification fallback for a validation.kind:"boolean"
+  // prompt (discomfort-distress-distinction) was chosen by promptItem.type
+  // (isPassiveNode, runtime-execution-api.ts) instead of by validation.kind,
+  // so an unrecognized reply ("I understood.") got a completely off-protocol
+  // "would you like a summary?" re-ask -- itself unanswerable as a yes/no,
+  // guaranteeing the loop and the eventual MAX_CLARIFICATION_ATTEMPTS pause.
+  it("bug fix: an unrecognized reply to the discomfort/distress boolean check gets a boolean-aware re-ask, not the passive 'want a summary' text, and 'yes' then advances", async () => {
+    const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s02", locale: "en-US" });
+    await startRuntimeSession(session.id);
+    await reachRatingCardCheck(session.id);
+    await submitPatientInput(session.id, { kind: "text", value: "no" }); // rating-card-check
+
+    const view = await current(session.id);
+    expect(view.currentPromptItem?.id).toBe("tbct-s02-n04-p03-discomfort-distress-distinction");
+
+    await forceDialogueProviderUnavailableOnce();
+    const clarification = await submitPatientInput(session.id, { kind: "text", value: "I understood." });
+    expect(clarification.turnOutcome).toBe("clarification");
+    expect(clarification.generatedMessage?.content).not.toMatch(/summariz/i);
+    expect(clarification.generatedMessage?.content).toMatch(/yes or no/i);
+    const afterClarification = await current(session.id);
+    expect(afterClarification.session.status).not.toBe("paused");
+
+    const answered = await submitPatientInput(session.id, { kind: "text", value: "yes" });
+    expect(answered.turnOutcome).toBe("normal");
+    const after = await current(session.id);
+    expect(after.session.runtimeContext.fields.problemScaleDistinctionAcknowledged).toBe(true);
+    expect(after.session.status).not.toBe("paused");
+  }, 15_000);
+
+  it("bug fix: repeated unrecognized replies to a boolean check still pause after 3 attempts (safety net intact), but every clarification stays boolean-aware, never 'would you like a summary'", async () => {
+    const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s02", locale: "en-US" });
+    await startRuntimeSession(session.id);
+    await reachRatingCardCheck(session.id);
+    await submitPatientInput(session.id, { kind: "text", value: "no" }); // rating-card-check
+
+    await forceDialogueProviderUnavailableOnce();
+    const first = await submitPatientInput(session.id, { kind: "text", value: "I understood." });
+    expect(first.generatedMessage?.content).not.toMatch(/summariz/i);
+    await forceDialogueProviderUnavailableOnce();
+    const second = await submitPatientInput(session.id, { kind: "text", value: "Please continue." });
+    expect(second.generatedMessage?.content).not.toMatch(/summariz/i);
+    expect((await current(session.id)).session.status).not.toBe("paused");
+
+    await forceDialogueProviderUnavailableOnce();
+    const third = await submitPatientInput(session.id, { kind: "text", value: "Sure thing." });
+    expect(third.generatedMessage?.content).not.toMatch(/summariz/i);
+    expect((await current(session.id)).session.status).toBe("paused");
   }, 15_000);
 });
 
@@ -1367,5 +1448,194 @@ describe("S02 -- Phase 3: rating item correction lifecycle", () => {
     const after = await current(session.id);
     // Item mutation must not have been committed ahead of the safety route.
     expect(after.session.runtimeContext.fields.goals).toEqual(["목표A", "목표B"]);
+  }, 15_000);
+});
+
+// S02 improvement plan (P0): the participant pre-reading manual's Annex
+// ("Your Two Rating Cards") states "This is exactly the wording your guide
+// will use" for the CCPH/CCGH six anchors. The English text used to be a
+// free paraphrase (kept only to survive the 600-char safety cap -- see
+// static-messages/s02.ts's comment on both branches). These tests exercise
+// resolveStaticText directly, the same way the six anchors are actually
+// resolved at runtime, rather than driving a full English-locale session
+// through every prior S02 step.
+describe("S02 CCPH/CCGH scale anchors -- manual wording fidelity (improvement plan P0)", () => {
+  const problemScalePrompt = { id: "tbct-s02-n04-p02-six-anchor-problem-scale" } as unknown as PromptItem;
+  const goalScalePrompt = { id: "tbct-s02-n08-p02-six-anchor-goal-scale" } as unknown as PromptItem;
+
+  it("English CCPH anchors match the manual's exact wording and stay under the 600-char safety cap", () => {
+    const text = resolveStaticText(problemScalePrompt, {}, "en-US");
+    expect(text).toBeDefined();
+    expect(text!.length).toBeLessThanOrEqual(600);
+    expect(text).toContain("Problem is small and its solution is easy (or it is not a problem anymore).");
+    expect(text).toContain("Problem elicits discomfort, but its solution is relatively easy.");
+    expect(text).toContain("Problem elicits clear discomfort, and/or its solution is difficult.");
+    expect(text).toContain("Problem elicits much discomfort, and/or its solution is very difficult.");
+    expect(text).toContain("Problem elicits distress, and its solution is very difficult.");
+    expect(text).toContain("Problem elicits so much distress that I can't see a solution.");
+  });
+
+  it("English CCPH anchors still fit under the 600-char cap in the longer 'no card' variant", () => {
+    const text = resolveStaticText(problemScalePrompt, { problemScaleCardAvailable: false }, "en-US");
+    expect(text).toBeDefined();
+    expect(text!.length).toBeLessThanOrEqual(600);
+  });
+
+  it("English CCGH anchors match the manual's exact wording, keep the 'same colors, different meaning' framing, and stay under the cap", () => {
+    const text = resolveStaticText(goalScalePrompt, {}, "en-US");
+    expect(text).toBeDefined();
+    expect(text!.length).toBeLessThanOrEqual(600);
+    expect(text).toMatch(/same colors,? different meaning/i);
+    expect(text).toContain("This goal is easy and comfortable to achieve (or I have already achieved it).");
+    expect(text).toContain("This goal is not so easy or comfortable to achieve.");
+    expect(text).toContain("This goal is difficult or uncomfortable to achieve.");
+    expect(text).toContain("This goal is very difficult or uncomfortable to achieve.");
+    expect(text).toContain("Achieving this goal is distressing and/or really hard to achieve.");
+    expect(text).toContain("Achieving this goal is so distressing that I cannot imagine myself trying.");
+  });
+
+  it("English CCGH anchors still fit under the 600-char cap in the longer 'no card' variant", () => {
+    const text = resolveStaticText(goalScalePrompt, { goalScaleCardAvailable: false }, "en-US");
+    expect(text).toBeDefined();
+    expect(text!.length).toBeLessThanOrEqual(600);
+  });
+});
+
+// S02 improvement plan (P1): the manual's own worked example (p.2-3, "A
+// small but important tip") is a third party's illness -- the guide "may
+// gently suggest" reframing it as something the participant can influence.
+// problemOutsideParticipantControl previously had no writer anywhere in the
+// codebase, so problem-reframe could never fire.
+describe("S02 -- 'frame it as something you can influence' reframe (improvement plan P1)", () => {
+  beforeEach(async () => {
+    const db = getLocalDb();
+    await db.transaction("rw", db.tables, async () => {
+      await Promise.all(db.tables.map((table) => table.clear()));
+    });
+  });
+
+  it("a third-party-illness-shaped problem sets problemOutsideParticipantControl and the reframe prompt eventually fires", async () => {
+    const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s02", locale: "ko-KR" });
+    await startRuntimeSession(session.id);
+
+    await submitPatientInput(session.id, { kind: "text", value: "엄마가 많이 아프셔서 너무 힘들어요" });
+    let view = await current(session.id);
+    expect(view.session.runtimeContext.fields.problems).toContain("엄마가 많이 아프셔서 너무 힘들어요");
+    expect(view.session.runtimeContext.fields.problemOutsideParticipantControl).toBe(true);
+
+    // Walk through the remaining elicit-problems follow-ups/confirmation
+    // with generic filler answers (same style as reachRatingCardCheck above)
+    // until the reframe suggestion fires -- it is gated only on
+    // problemOutsideParticipantControl, independent of problemsNoMore, so it
+    // is reached regardless of how the intervening follow-ups are answered.
+    for (let i = 0; i < 6 && view.currentPromptItem?.id !== "tbct-s02-n02-p07-problem-reframe"; i += 1) {
+      await submitPatientInput(session.id, { kind: "text", value: `필러 문제 ${i}` });
+      view = await current(session.id);
+    }
+    expect(view.currentPromptItem?.id).toBe("tbct-s02-n02-p07-problem-reframe");
+  }, 15_000);
+
+  it("an ordinary problem (no third party involved) never sets problemOutsideParticipantControl", async () => {
+    const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s02", locale: "ko-KR" });
+    await startRuntimeSession(session.id);
+
+    await submitPatientInput(session.id, { kind: "text", value: "일이 너무 많아서 스트레스를 받아요" });
+    const view = await current(session.id);
+    expect(view.session.runtimeContext.fields.problems).toContain("일이 너무 많아서 스트레스를 받아요");
+    expect(view.session.runtimeContext.fields.problemOutsideParticipantControl).not.toBe(true);
+  }, 15_000);
+});
+
+// Bug report: answering a passive reflection turn ("That sounds really
+// hard...", "This number is very personal...") with a plain "네" sometimes
+// produced an unrelated generic reply instead of continuing the session.
+// Same root cause as the S03 cycle-note fix: these are "reflection"-typed
+// prompts, a type promptRequiresPatientInput (runtime-release-normalizer.ts)
+// always treats as requiring a substantive answer unless explicitly listed
+// as a passive acknowledgment.
+describe("S02 -- '네' continues the session instead of a generic reply (bug fix)", () => {
+  beforeEach(async () => {
+    const db = getLocalDb();
+    await db.transaction("rw", db.tables, async () => {
+      await Promise.all(db.tables.map((table) => table.clear()));
+    });
+  });
+
+  /** Walks forward answering each current prompt appropriately until
+   * targetId is reached, collecting every generatedMessage along the way --
+   * robust to a now-passive prompt (like the reflections fixed above)
+   * completing on delivery and being skipped without its own patient turn,
+   * unlike a fixed hand-written turn sequence. */
+  async function walkS02(sessionId: string, answerFor: (promptId: string | undefined) => string, targetId: string, maxTurns = 25) {
+    const messages: string[] = [];
+    let view = await current(sessionId);
+    for (let guard = 0; guard < maxTurns; guard += 1) {
+      if (view.currentPromptItem?.id === targetId) return { view, messages };
+      const value = answerFor(view.currentPromptItem?.id);
+      const result = await submitPatientInput(sessionId, { kind: "text", value });
+      if (result.generatedMessage?.content) messages.push(result.generatedMessage.content);
+      view = await current(sessionId);
+    }
+    throw new Error(`Did not reach ${targetId} within ${maxTurns} turns; stopped at ${view.currentPromptItem?.id}`);
+  }
+
+  it("acknowledge-manageable + problem-total-personal: a low rating's '네' reaches goal-framing, never the generic fallback", async () => {
+    const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s02", locale: "ko-KR" });
+    await startRuntimeSession(session.id);
+    const answerFor = (promptId: string | undefined) => {
+      switch (promptId) {
+        case "tbct-s02-n02-p01-problem-framing": return "잠을 잘 못 자요";
+        case "tbct-s02-n02-p02-problem-home-work-relationships": return "더 생각나는 건 없어요";
+        case "tbct-s02-n03-p01-offer-private-placeholders": return "아니요";
+        case "tbct-s02-n04-p01-rating-card-check": return "아니요";
+        case "tbct-s02-n04-p03-discomfort-distress-distinction": return "네";
+        case "tbct-s02-n05-p01-reflect-problem-score": return "1"; // 0-1 range triggers acknowledge-manageable
+        default: return "네";
+      }
+    };
+
+    const { messages } = await walkS02(session.id, answerFor, "tbct-s02-n07-p01-goal-framing");
+    expect(messages.some((content) => content.includes("짧고 구체적인 예를"))).toBe(false);
+  }, 15_000);
+
+  it("acknowledge-achieved-goal + goal-total-personal: a score-0 goal's '네' reaches closing, never the generic fallback", async () => {
+    const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s02", locale: "ko-KR" });
+    await startRuntimeSession(session.id);
+    const answerFor = (promptId: string | undefined) => {
+      switch (promptId) {
+        case "tbct-s02-n02-p01-problem-framing": return "일이 너무 많아요";
+        case "tbct-s02-n02-p02-problem-home-work-relationships": return "더 생각나는 건 없어요";
+        case "tbct-s02-n03-p01-offer-private-placeholders": return "아니요";
+        case "tbct-s02-n04-p01-rating-card-check": return "아니요";
+        case "tbct-s02-n04-p03-discomfort-distress-distinction": return "네";
+        case "tbct-s02-n05-p01-reflect-problem-score": return "2"; // avoid the problem-side reflections
+        case "tbct-s02-n07-p01-goal-framing": return "이미 매일 산책하고 있어요";
+        case "tbct-s02-n07-p02-goal-life-change": return "더 생각나는 건 없어요";
+        case "tbct-s02-n08-p01-goal-rating-card-check": return "아니요";
+        case "tbct-s02-n09-p01-reflect-goal-score": return "0"; // triggers acknowledge-achieved-goal
+        default: return "네";
+      }
+    };
+
+    const { view: view0, messages: preMessages } = await walkS02(session.id, answerFor, "tbct-s02-n09-p01-reflect-goal-score");
+    expect(preMessages.some((content) => content.includes("짧고 구체적인 예를"))).toBe(false);
+    expect(view0.currentPromptItem?.id).toBe("tbct-s02-n09-p01-reflect-goal-score");
+
+    const rated = await submitPatientInput(session.id, { kind: "text", value: "0" });
+    expect(rated.turnOutcome).toBe("normal");
+    expect(rated.generatedMessage?.content).not.toContain("짧고 구체적인 예를");
+
+    // acknowledge-achieved-goal, goal-total (computed) and
+    // goal-total-personal (also fixed here) are all passive now, so the
+    // rating turn's own reply may already carry the session past all three
+    // in one pass -- walk the rest of the way to completion with "네"
+    // rather than asserting one exact next id.
+    let view = await current(session.id);
+    for (let guard = 0; guard < 4 && view.session.status !== "completed"; guard += 1) {
+      const step = await submitPatientInput(session.id, { kind: "text", value: "네" });
+      expect(step.generatedMessage?.content).not.toContain("짧고 구체적인 예를");
+      view = await current(session.id);
+    }
+    expect(view.session.status).toBe("completed");
   }, 15_000);
 });

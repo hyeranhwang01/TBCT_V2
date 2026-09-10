@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractRuntimeState, isExplicitPatientRefusal, isNonCurrentRiskMention, looksLikeMeaningClarificationRequest, looksLikeMetaQuestionAboutTheProcess, looksLikeS02ExplanationRequest, normalizeText } from "@/lib/runtime/runtime-context";
+import { extractRuntimeState, isExplicitPatientRefusal, isNonCurrentRiskMention, looksLikeMeaningClarificationRequest, looksLikeMetaQuestionAboutTheProcess, looksLikeS02ExplanationRequest, looksLikeS02NoMoreIdiom, normalizeText } from "@/lib/runtime/runtime-context";
 import type { ClinicalStageNode, PromptItem } from "@/lib/protocol/source-fidelity-types";
 
 function makeNode(field: string, kind: string = "text"): ClinicalStageNode {
@@ -501,6 +501,23 @@ describe("runtime context extraction", () => {
       ["네, 카드 있어요", false],
     ])("%s -> looksLikeS02ExplanationRequest=%s", (text, expected) => {
       expect(looksLikeS02ExplanationRequest(text)).toBe(expected);
+    });
+
+    // EN/KO parity check: this idiom table used to be Korean-only ("이미
+    // 이루어서 없어요" / "딱히 없어요") with no English mirror -- an
+    // English-speaking participant using the equivalent idiom risked having
+    // it stored as a literal problem/goal instead of ending the list.
+    it.each([
+      ["이미 이루어서 없어요", true],
+      ["딱히 없어요", true],
+      ["I already achieved that", true],
+      ["I already accomplished my goal", true],
+      ["Not really", true],
+      ["Nothing in particular", true],
+      ["일이 너무 많아요", false],
+      ["I'm stressed about work", false],
+    ])("%s -> looksLikeS02NoMoreIdiom=%s", (text, expected) => {
+      expect(looksLikeS02NoMoreIdiom(text)).toBe(expected);
     });
   });
 

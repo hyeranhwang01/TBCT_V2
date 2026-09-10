@@ -411,6 +411,16 @@ const IMMEDIATE_COMPLETION_EFFECTS = new Set(["pause_session", "complete_session
 // filler turns after the final problem/goal rating and both total summaries.
 // Keep the exception exact-ID scoped so genuine reflective questions in
 // other sessions still wait for the participant.
+// The S03 entry comes from the original "answering 네 sends a random reply"
+// bug report, filed live against tbct-s03-n08-p04-cycle-note ("...the
+// behavior reinforces the thought."): type "reflection" sits in the same
+// unconditional requiresPatientInput=true list as "confirmation" above, so
+// the defect is one class, not one prompt. Every "reflection"- and
+// "confirmation"-typed prompt in s01.ts/s02.ts/s03.ts was audited in one
+// pass (S01 has neither type at all) rather than fixing only the reported
+// example. tbct-s03-n11-p03-full-conclusion-readback is NOT listed here: it
+// is a real yes/no question that was missing validation.kind: "boolean",
+// fixed at its own declaration in s03.ts instead.
 const PASSIVE_ACKNOWLEDGMENT_PROMPT_IDS = new Set([
   "tbct-s02-n11-p02-recorded-summary",
   "tbct-s02-n02-p06-problem-confirmation",
@@ -422,6 +432,7 @@ const PASSIVE_ACKNOWLEDGMENT_PROMPT_IDS = new Set([
   "tbct-s02-n09-p02-acknowledge-difficult-goal",
   "tbct-s02-n09-p03-acknowledge-achieved-goal",
   "tbct-s02-n10-p02-goal-total-personal",
+  "tbct-s03-n08-p04-cycle-note",
 ]);
 
 export function promptRequiresPatientInput(promptItem: PromptItem) {

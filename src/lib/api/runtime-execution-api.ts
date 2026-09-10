@@ -253,7 +253,22 @@ async function deliverClarificationTurn(input: {
   // instruction added to anthropic-dialogue-agent.ts's systemPrompt for the
   // Claude-generated side of the same complaint.
   const isRetry = clarificationAttemptCount >= 2;
-  const adaptiveClarification = isPassiveNode
+  // "boolean" 검증 프롬프트는 type(explanation/instruction/...)이나 필드명
+  // 정규식(/Situation|Thought|Emotion|.../ 등, 아래 체인 참고)과 무관하게
+  // 항상 예/아니오 재질문을 받아야 한다. isPassiveNode보다 먼저 평가해야
+  // 하는 이유: PASSIVE_TYPE_REAL_ANSWER_VALIDATION_KINDS
+  // (runtime-release-normalizer.ts)가 이미 "boolean"을 "passive 타입이어도
+  // 진짜 답이 필요한 예외"로 규정하고 있음 -- isPassiveNode 분기의
+  // "요약해드릴까요?" 문구(discomfort-distress-distinction 등에서 실제로
+  // 발생한 버그)나 아래 필드명 정규식 체인의 우연한 오매치(예:
+  // confirm-working-thought의 factualThoughtConfirmed가 /Thought/에 매치)는
+  // boolean 필드에는 절대 맞지 않는다. enumValues와 동시에 존재하는 boolean
+  // 프롬프트는 카탈로그(s01~s08) 전체에 없음을 확인했다.
+  const adaptiveClarification = validation?.kind === "boolean"
+    ? isRetry
+      ? tr("A simple yes or no is enough.", "네 또는 아니요, 둘 중 하나면 충분해요.")
+      : tr("Could you answer with a simple yes or no?", "네 또는 아니요로 간단히 답해 주시겠어요?")
+    : isPassiveNode
     ? isRetry
       ? tr("Just let me know either way -- would you like a quick summary of what we've covered, or shall we keep going?", "\ud3b8\ud558\uac8c \ub2f5\ud574 \uc8fc\uc2dc\uba74 \ub3fc\uc694 -- \uc9c0\uae08\uae4c\uc9c0 \uc774\uc57c\uae30\ud55c \ub0b4\uc6a9\uc744 \uac04\ub2e8\ud788 \uc694\uc57d\ud574 \ub4dc\ub9b4\uae4c\uc694, \uc544\ub2c8\uba74 \uacc4\uc18d \uc9c4\ud589\ud560\uae4c\uc694?")
       : tr(

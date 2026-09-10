@@ -89,6 +89,19 @@ export const spec: SessionSpec = {
           outputFields: ["redirectionContractAcknowledged"],
           validation: { kind: "boolean" },
         },
+        // Manual fidelity fix (S03 improvement plan, P0): the participant
+        // pre-reading manual (p.3, "What to have ready before you start")
+        // states "The guide will check you have it before you begin" for
+        // the Intra-TR worksheet -- no prompt asked this. Appended last in
+        // this node (no ID shift for the three prompts above).
+        {
+          slug: "worksheet-readiness-check",
+          type: "confirmation",
+          source: [483, 494],
+          patientText: "Before we begin, do you have your Intra-TR worksheet open or nearby? It has the fourteen questions printed out, in case it's useful to follow along.",
+          outputFields: ["worksheetReady"],
+          validation: { kind: "boolean" },
+        },
       ],
     },
     {
@@ -198,7 +211,11 @@ export const spec: SessionSpec = {
           outputFields: ["participantSummary"],
           validation: { kind: "participant_summary_required" },
         },
-        { slug: "cycle-note", type: "reflection", source: [551, 572], marker: "You can see how this pattern", patientText: "You can see how this pattern tends to maintain itself — the thought feeds the emotion, the emotion drives the behavior, and the behavior reinforces the thought. Now let's examine it more closely.", outputFields: ["cycleSummaryAcknowledged"] },
+        // Manual fidelity fix (S03 improvement plan, P2): the manual (p.2-3)
+        // says the guide "leads mostly by asking, not lecturing," but this
+        // reflection was a flat interpretive statement with no question.
+        // Added one question in the middle -- everything else unchanged.
+        { slug: "cycle-note", type: "reflection", source: [551, 572], marker: "You can see how this pattern", patientText: "You can see how this pattern tends to maintain itself — the thought feeds the emotion, the emotion drives the behavior, and the behavior reinforces the thought. Does that match what you're noticing, or does something feel different? Now let's examine it more closely.", outputFields: ["cycleSummaryAcknowledged"] },
       ],
     },
     {
@@ -304,7 +321,14 @@ export const spec: SessionSpec = {
       prompts: [
         { slug: "balanced-conclusion", type: "question", source: [617, 634], marker: "Taking all of this evidence together", patientText: "Taking all of this evidence together — both the evidence for and against the thought — what do you conclude? What does the full picture suggest?", outputFields: ["balancedConclusion"] },
         { slug: "therefore-extension", type: "follow_up", source: [617, 634], marker: "Can you take that further", patientText: "Can you take that further? What does that mean for you going forward? Starting with 'Therefore…'", outputFields: ["conclusionTherefore"] },
-        { slug: "full-conclusion-readback", type: "confirmation", source: [617, 634], marker: "So your conclusion is", outputFields: ["conclusionReadBackComplete"] },
+        // "네" bug fix: this is a real yes/no readback confirmation ("Does
+        // that capture your conclusion accurately?") like confirm-working-thought
+        // above, but was missing validation.kind: "boolean" -- without it, a
+        // plain "네" fell through to the generic meaningful-text check and
+        // was rejected as filler ("give a short concrete example") instead
+        // of setting conclusionReadBackComplete=true and advancing to
+        // conclusion-belief (whose validation.requiresField gates on it).
+        { slug: "full-conclusion-readback", type: "confirmation", source: [617, 634], marker: "So your conclusion is", outputFields: ["conclusionReadBackComplete"], validation: { kind: "boolean" } },
         { slug: "conclusion-belief", type: "rating", source: [617, 634], marker: "How much do you believe that entire conclusion", outputFields: ["conclusionBeliefPercent"], validation: { kind: "rating", min: 0, max: 100, requiresField: "conclusionReadBackComplete" } },
       ],
     },
@@ -356,7 +380,18 @@ export const spec: SessionSpec = {
         // participant who went through the factual-AT branch (§6.5) is
         // re-rating the thought they actually worked with all session.
         { slug: "repeat-exact-at", type: "rating", source: [659, 686], marker: "How much do you now believe the original automatic thought", outputFields: ["revisedAutomaticThoughtBeliefPercent"], validation: { kind: "rating", min: 0, max: 100, repeatExactField: "automaticThought" } },
-        { slug: "global-evaluation", type: "question", source: [659, 686], marker: "And overall, how are you now", patientText: "And overall, how are you now — compared to how you felt at the beginning of this exercise? Would you say you feel: the same, a little better, or much better?", outputFields: ["globalEvaluation"], validation: { kind: "enum", values: ["same", "a little better", "much better"] } },
+        // Same defect class as S04's final-emotional-check (S04's comment
+        // there cites S07's readiness enum as the original precedent):
+        // matchEnumChoice (runtime-deterministic-input.ts) only accepts an
+        // exact match against `values` or a listed alias -- a natural
+        // answer missing the leading article ("little better" instead of
+        // "a little better") matched neither, so a real en-US transcript
+        // got stuck re-asking this exact final question until it paused.
+        { slug: "global-evaluation", type: "question", source: [659, 686], marker: "And overall, how are you now", patientText: "And overall, how are you now — compared to how you felt at the beginning of this exercise? Would you say you feel: the same, a little better, or much better?", outputFields: ["globalEvaluation"], validation: { kind: "enum", values: ["same", "a little better", "much better"], aliases: {
+          "same": ["the same", "same as before", "no change", "not different", "그대로", "그대로예요", "똑같아요", "같아요", "비슷해요", "변화 없어요", "변함없어요", "그대로인 것 같아요"],
+          "a little better": ["little better", "a bit better", "a little bit better", "somewhat better", "slightly better", "조금 나아졌어요", "조금 나아짐", "약간 나아졌어요", "조금 괜찮아졌어요", "조금 나아진 것 같아요", "약간 좋아졌어요"],
+          "much better": ["a lot better", "way better", "significantly better", "so much better", "많이 나아졌어요", "많이 나아짐", "훨씬 나아졌어요", "훨씬 좋아졌어요", "많이 괜찮아졌어요", "많이 좋아졌어요"],
+        } } },
       ],
     },
     {

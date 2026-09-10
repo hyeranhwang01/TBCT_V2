@@ -133,7 +133,7 @@ export const koreanText: Record<string, string> = {
   "tbct-s03-n07-p03-emotion-intensity": "그 감정은 얼마나 강한가요, 0에서 100% 중으로요?",
   "tbct-s03-n08-p01-behavior": "그 생각이 들고 그 감정을 느낄 때, 어떻게 행동하시나요? 어떤 충동이 드나요 — 실제로 무엇을 하시거나, 하고 싶어지시나요?",
   "tbct-s03-n08-p02-body-sensations": "그 순간 몸에서는 무엇이 느껴지시나요?",
-  "tbct-s03-n08-p04-cycle-note": "이 패턴이 스스로를 어떻게 유지시키는지 보이시죠 — 생각이 감정을 키우고, 감정이 행동을 이끌고, 행동이 다시 그 생각을 강화해요. 이제 좀 더 자세히 살펴볼게요.",
+  "tbct-s03-n08-p04-cycle-note": "이 패턴이 스스로를 어떻게 유지시키는지 보이시죠 — 생각이 감정을 키우고, 감정이 행동을 이끌고, 행동이 다시 그 생각을 강화해요. 지금 느끼시는 것과 비슷한가요, 아니면 다르게 느껴지는 부분이 있으신가요? 이제 좀 더 자세히 살펴볼게요.",
   "tbct-s03-n09-p04-cognitive-distortion": "자동적 사고를 살펴볼 때 — 가지고 계신 인지 왜곡 목록을 참고해서 — 이 생각이 어떤 왜곡에 해당하는 것 같나요?",
   "tbct-s03-n10-p01-evidence-for": "이 자동적 사고를 뒷받침하는 증거가 있을까요 — 그게 사실이라고 확인해 주는 것들이요? 가능하면 두세 가지 예를 떠올려 보세요.",
   "tbct-s03-n10-p02-evidence-for-more": "한두 가지만 더 떠올려 보시겠어요 — 구체적으로 떠오르는 예가 있을까요?",
@@ -151,6 +151,7 @@ export const koreanText: Record<string, string> = {
   // §7.1 locale parity: Korean counterparts for the inline patientText
   // added to protocol/sessions/s03.ts (§6.3, §6.4, §6.6, §6.7, §6.9).
   "tbct-s03-n02-p03-redirection-contract": "진행 중에 제가 가끔 방향을 돌릴 수 있어요 — 말씀하시는 내용이 중요하지 않아서가 아니라, 열네 개 질문을 함께 끝까지 마치기 위해서예요. 괜찮으실까요?",
+  "tbct-s03-n02-p04-worksheet-readiness-check": "시작하기 전에, Intra-TR 워크시트를 옆에 펼쳐 두셨거나 가지고 계신가요? 열네 개 질문이 인쇄되어 있어서, 따라오실 때 도움이 될 수 있어요.",
   "tbct-s03-n03-p01-describe-situation": "최근에 힘들었던 상황을 하나 말씀해 주실 수 있을까요? 지금 그 일이 일어나고 있는 것처럼 구체적으로 이야기해 주세요 — 무슨 일이 있었나요?",
   "tbct-s03-n08-p03-participant-summary": "계속하기 전에, 지금까지 다룬 내용을 본인의 말로 정리해 주실 수 있을까요? 상황, 그때의 생각, 감정, 그리고 몸에서 일어나는 반응까지요.",
   "tbct-s03-n09-p01-behavior-pros": "그렇게 행동하는 것에 — 비록 일시적이더라도 — 어떤 이점이나 도움이 되는 부분이 있을까요? 아주 작은 안도감이라도 괜찮아요.",

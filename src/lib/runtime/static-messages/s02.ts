@@ -119,18 +119,19 @@ export function resolveStaticText(promptItem: PromptItem, fields: Record<string,
   if (promptItem.id === "tbct-s02-n04-p02-six-anchor-problem-scale") {
     const noCard = fields.problemScaleCardAvailable === false;
     const noCardPrefixKo = noCard ? "카드가 없어도 괜찮아요. 제가 지금 기준을 하나씩 설명해 드릴게요.\n\n" : "";
-    // English quality parity: this branch used to be verbose enough (~730-800
-    // chars) to fail runtime-release-normalizer.ts's isPatientSafeFallbackText
-    // 600-char cap -- the crucial six-anchor scale explanation was silently
-    // replaced by the content-free generic locale line (defaultFallbackPatientText)
-    // on EVERY English CCPH turn, while Korean's denser Hangul phrasing (446
-    // chars) always passed. Found via a real (non-Claude, deterministic-fallback)
-    // English session run that showed the generic line instead of the scale.
-    // Trimmed to keep the same 6 anchors/meaning within budget with margin.
-    const noCardPrefixEn = noCard ? "That's fine -- I'll walk you through it.\n\n" : "";
+    // Manual fidelity fix (S02 improvement plan, P0): the participant
+    // pre-reading manual's Annex ("Your Two Rating Cards") states "This is
+    // exactly the wording your guide will use" for these six anchors -- the
+    // previous text here was a free paraphrase (kept only to survive
+    // runtime-release-normalizer.ts's isPatientSafeFallbackText 600-char cap;
+    // see git history for that fix). Restored to the manual's own anchor
+    // sentences verbatim, with only the surrounding framing sentence trimmed
+    // to stay under the cap (measured with the "no card" prefix included,
+    // the tightest case: 589/600 chars for EN, well under for KO).
+    const noCardPrefixEn = noCard ? "That's fine — I'll read them out.\n\n" : "";
     return isKorean
       ? `${noCardPrefixKo}이제 말씀해 주신 문제들을 하나씩 0점에서 5점까지 평가해 볼게요. 이 점수는 잘하고 못하고를 평가하는 점수가 아니라, 지금 그 문제가 얼마나 불편하고 해결하기 어렵게 느껴지는지를 보여주는 표시예요. 각 숫자에는 알아보기 쉽게 색상이 함께 붙어 있어요. 숫자로 말씀하셔도 되고, 색상으로 말씀하셔도 괜찮아요.\n\n0점, 연한 파란색: 문제가 아주 작거나, 이미 해결되어 더 이상 문제가 아닌 상태예요.\n1점, 진한 파란색: 불편하기는 하지만 비교적 해결하기 쉬운 상태예요.\n2점, 연한 초록색: 분명한 불편감이 있고 해결하기도 쉽지 않은 상태예요.\n3점, 진한 초록색: 불편감이 크고 해결하기도 매우 어렵게 느껴지는 상태예요.\n4점, 노란색: 단순한 불편함을 넘어 상당히 괴롭고, 해결하기도 매우 어렵게 느껴지는 상태예요.\n5점, 빨간색: 너무 괴로워서 지금은 해결 방법이 잘 보이지 않는 상태예요.`
-      : `${noCardPrefixEn}Let's rate each problem, one at a time, from 0 to 5. This is not a test -- it shows how hard the problem feels to deal with right now. Each number has a color, so answer with either.\n\n0, light blue: very small, or not a problem anymore.\n1, dark blue: uncomfortable, but fairly easy to solve.\n2, light green: clearly uncomfortable, not easy to solve.\n3, dark green: a lot of discomfort, very hard to solve.\n4, yellow: quite distressing and very hard to solve.\n5, red: so distressing you cannot see a way to solve it now.`;
+      : `${noCardPrefixEn}Let's rate each problem, 0 to 5 -- use the number or the color.\n\n0 (light blue): Problem is small and its solution is easy (or it is not a problem anymore).\n1 (dark blue): Problem elicits discomfort, but its solution is relatively easy.\n2 (light green): Problem elicits clear discomfort, and/or its solution is difficult.\n3 (dark green): Problem elicits much discomfort, and/or its solution is very difficult.\n4 (yellow): Problem elicits distress, and its solution is very difficult.\n5 (red): Problem elicits so much distress that I can't see a solution.`;
   }
   if (promptItem.id === "tbct-s02-n04-p03-discomfort-distress-distinction") {
     return isKorean
@@ -140,13 +141,16 @@ export function resolveStaticText(promptItem: PromptItem, fields: Record<string,
   if (promptItem.id === "tbct-s02-n08-p02-six-anchor-goal-scale") {
     const noCard = fields.goalScaleCardAvailable === false;
     const noCardPrefixKo = noCard ? "카드가 없어도 괜찮아요. 제가 지금 기준을 하나씩 설명해 드릴게요.\n\n" : "";
-    // English quality parity: same 600-char safety-cap overflow bug as the
-    // problem-scale branch above (was ~660-730 chars) -- see that branch's
-    // comment for the full explanation.
-    const noCardPrefixEn = noCard ? "That's fine -- I'll walk you through it.\n\n" : "";
+    // Manual fidelity fix (S02 improvement plan, P0): same "exactly the
+    // wording your guide will use" Annex promise as the problem-scale branch
+    // above -- restored to the manual's own CCGH anchor sentences verbatim,
+    // framing trimmed to stay under the 600-char cap (588/600 for EN with
+    // the "no card" prefix, the tightest case). The "same colors, different
+    // meaning" framing (§5.2 fix) is preserved.
+    const noCardPrefixEn = noCard ? "That's fine — I'll read them out.\n\n" : "";
     return isKorean
       ? `${noCardPrefixKo}이제 목표들도 같은 0~5 색상 체계로 평가해 볼게요. 색상은 앞에서와 같지만 이번에는 의미가 조금 달라요. 문제가 얼마나 힘든지를 평가하는 게 아니라, 이 목표를 이루는 것이 지금 얼마나 어렵거나 부담스럽게 느껴지는지를 평가합니다.\n\n0점, 연한 파란색: 쉽고 편안하게 이룰 수 있거나 이미 이룬 목표예요.\n1점, 진한 파란색: 아주 쉽지는 않지만 비교적 접근할 수 있는 목표예요.\n2점, 연한 초록색: 이루기가 어렵거나 불편하게 느껴지는 목표예요.\n3점, 진한 초록색: 이루기가 매우 어렵거나 불편하게 느껴지는 목표예요.\n4점, 노란색: 이루는 과정이 괴롭고 정말 어렵게 느껴지는 목표예요.\n5점, 빨간색: 너무 괴롭게 느껴져 지금은 시도하는 것조차 상상하기 어려운 목표예요.`
-      : `${noCardPrefixEn}Let's rate your goals on the same 0-to-5 color scale. Same colors, different meaning -- not how uncomfortable a problem feels, but how hard the goal feels to reach right now.\n\n0, light blue: easy and comfortable, or already achieved.\n1, dark blue: not especially easy, but manageable.\n2, light green: difficult or uncomfortable to achieve.\n3, dark green: very difficult or uncomfortable to achieve.\n4, yellow: pursuing it feels distressing and hard.\n5, red: so distressing it is hard to even imagine trying.`;
+      : `${noCardPrefixEn}Let's rate your goals on the same 0-to-5 color scale -- same colors, different meaning.\n\n0 (light blue): This goal is easy and comfortable to achieve (or I have already achieved it).\n1 (dark blue): This goal is not so easy or comfortable to achieve.\n2 (light green): This goal is difficult or uncomfortable to achieve.\n3 (dark green): This goal is very difficult or uncomfortable to achieve.\n4 (yellow): Achieving this goal is distressing and/or really hard to achieve.\n5 (red): Achieving this goal is so distressing that I cannot imagine myself trying.`;
   }
 
   // §5.4 [구현 구체화]: totals used to be computed unconditionally, so

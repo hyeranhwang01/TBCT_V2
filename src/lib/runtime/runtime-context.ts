@@ -228,14 +228,44 @@ export function looksLikeS02ExplanationRequest(text: string): boolean {
 // set. Deliberately narrow (not "anything ending in 없어요") -- "돈이
 // 없어요"/"친구가 없어요" are real clinical content (P0-2, earlier pass), not
 // list closers, and must keep being stored as items.
+// EN/KO parity check: this table was Korean-only -- an English-speaking
+// participant saying the equivalent idiom ("I already achieved that" /
+// "nothing in particular") had no matching signal and risked the literal
+// phrase being stored as a fake problem/goal instead of ending the list.
+// Mirrors the two Korean idioms one-for-one, same deliberately narrow scope.
 const S02_NO_MORE_IDIOM_PATTERNS: RegExp[] = [
   /이미\s*이루(?:어서|웠어서|웠기\s*때문에)\s*없/, // "이미 이루어서 없어요"
   /딱히\s*없/, // "딱히 없어요"
+  /\balready\s+(?:achieved|accomplished|reached|done)\s+(?:that|it|this|my\s+goal)\b/i, // "I already achieved that"
+  /\bnot\s+(?:really|particularly)\b|\bnothing\s+in\s+particular\b/i, // "not really" / "nothing in particular"
 ];
 
-function looksLikeS02NoMoreIdiom(text: string): boolean {
+// Exported for direct unit coverage (EN/KO parity check), same rationale as
+// looksLikeS02ExplanationRequest above.
+export function looksLikeS02NoMoreIdiom(text: string): boolean {
   const normalized = normalizeText(text);
   return S02_NO_MORE_IDIOM_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
+// S02 improvement plan (P1) / manual p.2-3 "A small but important tip": the
+// manual's own worked example is a third party's illness ("my mother is
+// ill" -> reframe as "how I'm coping with my mother's illness"). Deliberately
+// narrow, best-effort pattern match on that exact shape (a third-party
+// relation term as the subject of an illness/crisis predicate) -- not a
+// general "is this outside your control" classifier -- matching this file's
+// existing "best-effort deterministic approximation" precedent for S02 (see
+// classifyS02ListResponse above). A false negative just leaves
+// problem-reframe silent, which was already every case's behavior before
+// this fix (the field had no writer at all). This only ever WRITES
+// problemOutsideParticipantControl, a field with a single reader in the
+// whole codebase -- s02.ts's own problem-reframe activationCondition
+// (grep-verified) -- so it cannot affect any other session or field.
+const THIRD_PARTY_CONTROL_PATTERN_KO = /(?:엄마|어머니|아빠|아버지|부모님|남편|아내|배우자|아들|딸|자녀|형|언니|오빠|누나|동생|친구|상사|사장님|가족)(?:가|이|는|은|께서)?\s*(?:너무\s*|많이\s*)?(?:아프|편찮|암에|병에|다치|돌아가시|입원|위독|해고)/;
+const THIRD_PARTY_CONTROL_PATTERN_EN = /\b(?:my|our)\s+(?:mother|father|mom|dad|husband|wife|spouse|son|daughter|parent|brother|sister|friend|boss|family)\b[^.!?\n]{0,40}\b(?:is|was|has been|got)\b[^.!?\n]{0,20}\b(?:sick|ill|dying|hospitalized|diagnosed|fired|laid off)\b/i;
+
+function looksLikeThirdPartyControlProblem(text: string): boolean {
+  const normalized = normalizeText(text);
+  return THIRD_PARTY_CONTROL_PATTERN_KO.test(normalized) || THIRD_PARTY_CONTROL_PATTERN_EN.test(normalized);
 }
 
 /** Classifies a free-text answer to an S02 problems/goals elicitation prompt
@@ -943,6 +973,9 @@ export async function extractRuntimeState(input: {
       // -- a real distant dream is only ever identified here, at goal-dream,
       // when the answer is genuinely accepted as an item.
       if (input.currentPromptItem.id === "tbct-s02-n07-p05-goal-dream") acceptedFields.goalDistantDreamIdentified = true;
+      // S02 improvement plan (P1): same narrow, additive pattern as above --
+      // see looksLikeThirdPartyControlProblem's comment.
+      if (field === "problems" && looksLikeThirdPartyControlProblem(rawText)) acceptedFields.problemOutsideParticipantControl = true;
     }
     for (const [key, value] of Object.entries(acceptedFields)) { if (Array.isArray(value)) acceptedFields[`${key}Count`] = value.length; }
     refreshListRatingPointers(acceptedFields);
@@ -1181,6 +1214,9 @@ export async function extractRuntimeState(input: {
       // REAL one was named here (not "없어요"/a meta remark, both already
       // routed away before reaching this branch).
       if (input.currentPromptItem?.id === "tbct-s02-n07-p05-goal-dream") nextFields.goalDistantDreamIdentified = true;
+      // S02 improvement plan (P1): same narrow, additive pattern as above --
+      // see looksLikeThirdPartyControlProblem's comment.
+      if (field === "problems" && looksLikeThirdPartyControlProblem(rawText)) nextFields.problemOutsideParticipantControl = true;
     }
   } else if (kind === "language_lock_from_first_substantive_message") {
     // The protocol locks the session language from the patient's own first
@@ -1275,6 +1311,9 @@ export async function extractRuntimeState(input: {
       nextFields[`${field}NoMore`] = false;
       nextFields[`${field}Duplicate`] = false;
       if (input.currentPromptItem?.id === "tbct-s02-n07-p05-goal-dream") nextFields.goalDistantDreamIdentified = true;
+      // S02 improvement plan (P1): same narrow, additive pattern as above --
+      // see looksLikeThirdPartyControlProblem's comment.
+      if (field === "problems" && looksLikeThirdPartyControlProblem(rawText)) nextFields.problemOutsideParticipantControl = true;
       // S07's empty chair stores both sides' turns in one flat list, so the
       // worksheet had to guess who was speaking from array-index parity --
       // labels that silently shift if an entry is added, edited or removed.
