@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { PatientShell } from "@/components/runtime/patient-shell";
 import { Card, EmptyState, PageSkeleton } from "@/components/ui/primitives";
 import { getOrCreateParticipantForUiLocale } from "@/lib/api/participant-api";
-import { ClinicianMessageThread } from "@/components/pages/clinician-message-thread";
+import { ClinicianMessageThread } from "@/shared/components/clinician-message-thread";
 import { useT } from "@/lib/i18n/context";
 import { useAuth } from "@/lib/auth/auth-context";
 

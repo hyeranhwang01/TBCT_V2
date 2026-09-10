@@ -8,7 +8,7 @@ import { getRuntimeParticipant } from "@/lib/api/participant-api";
 import { getRuntimeSession } from "@/lib/api/runtime-session-api";
 import { getWorksheetView } from "@/lib/worksheet/worksheet-projection";
 import { getSafetyEvents } from "@/lib/api/safety-operations-api";
-import { findSessionTitle } from "@/components/pages/patient-monitoring/patient-monitoring-utils";
+import { findSessionTitle } from "@/clinician/pages/monitoring/patient-monitoring-utils";
 
 function formatTimestamp(value?: string) {
   if (!value) return "—";

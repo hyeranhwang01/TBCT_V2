@@ -32,9 +32,9 @@ import { pauseRuntimeSession, resumeRuntimeSession, terminateRuntimeSession } fr
 import { addClinicianNote, deleteClinicianNote, getClinicianNotes } from "@/lib/api/longitudinal-memory-api";
 import { getSafetyEvents } from "@/lib/api/safety-operations-api";
 import { listStandardizedAssessments } from "@/lib/api/standardized-assessment-api";
-import { ClinicianMessageThread } from "@/components/pages/clinician-message-thread";
-import { RuntimeInspectorView } from "@/components/pages/runtime-inspector-view";
-import { AppointmentPanel } from "@/components/pages/patient-monitoring/appointment-panel";
+import { ClinicianMessageThread } from "@/shared/components/clinician-message-thread";
+import { RuntimeInspectorView } from "@/clinician/pages/monitoring/inspector-view";
+import { AppointmentPanel } from "@/clinician/pages/monitoring/appointment-panel";
 import { useRealtimeInvalidate } from "@/lib/supabase/use-realtime-invalidate";
 import {
   deriveMonitoringStatus,
@@ -43,10 +43,10 @@ import {
   isOpenSafetyEvent,
   summarizeParticipant,
   type MonitoringStatus,
-} from "@/components/pages/patient-monitoring/patient-monitoring-utils";
-import { HomeworkPanel } from "@/components/pages/patient-monitoring/homework-panel";
-import { ClinicianCheckinModal } from "@/components/pages/patient-monitoring/clinician-checkin-modal";
-import { SessionProgressPanel, sessionSupportsProgressTab } from "@/components/pages/patient-monitoring/session-progress-panel";
+} from "@/clinician/pages/monitoring/patient-monitoring-utils";
+import { HomeworkPanel } from "@/clinician/pages/monitoring/homework-panel";
+import { ClinicianCheckinModal } from "@/clinician/pages/monitoring/clinician-checkin-modal";
+import { SessionProgressPanel, sessionSupportsProgressTab } from "@/clinician/pages/monitoring/session-progress-panel";
 import { WorksheetPane } from "@/components/runtime/worksheet-pane";
 import { hasWorksheetBindings } from "@/lib/worksheet/worksheet-binding-registry";
 import type { RuntimeMessageRole, RuntimeSession } from "@/types/runtime-session";

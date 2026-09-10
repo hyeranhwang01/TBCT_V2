@@ -24,7 +24,7 @@ import {
   summarizeParticipant,
   type MonitoringStatus,
   type ParticipantMonitoringSummary,
-} from "@/components/pages/patient-monitoring/patient-monitoring-utils";
+} from "@/clinician/pages/monitoring/patient-monitoring-utils";
 import type { RuntimeParticipant } from "@/types/longitudinal-memory";
 
 const STATUS_TONE: Record<MonitoringStatus, "primary" | "warning" | "critical" | "success" | "neutral"> = {

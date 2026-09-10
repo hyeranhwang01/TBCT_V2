@@ -4,7 +4,7 @@ import { useParams, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge, Card, EmptyState, PageHeader, PageSkeleton } from "@/components/ui/primitives";
-import { RuntimeInspectorView } from "@/components/pages/runtime-inspector-view";
+import { RuntimeInspectorView } from "@/clinician/pages/monitoring/inspector-view";
 import { getRuntimeSession } from "@/lib/api/runtime-session-api";
 import { useT } from "@/lib/i18n/context";
 
