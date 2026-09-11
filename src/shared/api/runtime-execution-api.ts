@@ -17,6 +17,7 @@ import { projectRuntimeFieldsToWorksheet } from "@/shared/worksheet/worksheet-pr
 import { isDialogueAgentEnabled, resolveDialogueAgentMessage } from "@/shared/dialogue-agent/dialogue-agent-orchestrator";
 import { resolveBracketPlaceholders, resolveStaticPatientMessage } from "@/shared/runtime/runtime-static-message";
 import { MAX_SUMMARIES_PER_CHECK, REFLECTION_ASK_WHAT_DIFFERS, REFLECTION_MOVE_ON, classifyReflectionCheckReply, findPendingReflectionCheck, reflectionText, type PendingReflectionCheck, type ReflectionCheckResolution } from "@/shared/runtime/reflection-check";
+import { applyS01TurnRules } from "@/patient/sessions/s01/turn-rules";
 import { composeCrpPlanSummary } from "@/patient/sessions/s07/messages";
 import { composeTrialClosingSummary } from "@/patient/sessions/s08/messages";
 import type { ClinicalStageNode, PromptItem } from "@/shared/protocol/source-fidelity-types";
@@ -1596,7 +1597,17 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
     deliveredAt: new Date().toISOString(),
     metadata: { inputKind: patientInput.kind, promptItemId: currentPromptItem.id, clientTurnId },
   };
-  const extracted = await extractRuntimeState({ patientInput, currentNode, currentPromptItem, currentContext: initialSession.runtimeContext, locale: turnLocale, pendingReflectionCheck: Boolean(pendingReflectionCheck) });
+  const baseExtracted = await extractRuntimeState({ patientInput, currentNode, currentPromptItem, currentContext: initialSession.runtimeContext, locale: turnLocale, pendingReflectionCheck: Boolean(pendingReflectionCheck) });
+  // S01 redesign (.claude/TASK_SCOPE.json note2026_09_12_s01_redesign): the
+  // only S01-specific hook in the shared turn pipeline -- answer-routing
+  // flags, the three-person scene and its hints, written into the extracted
+  // fields so this same turn's conditions, worksheet projection and commit
+  // all see them. Skipped for a reply to a pending summary check (not an
+  // answer to the prompt) and, inside, for any turn carrying risk signals.
+  const s01Rules = initialSession.sessionDefinitionId === "tbct-s01" && !pendingReflectionCheck
+    ? await applyS01TurnRules({ extracted: baseExtracted, promptItem: currentPromptItem, rawText: patientMessage.content, locale: turnLocale, sessionId, turnId: clientTurnId })
+    : null;
+  const extracted = s01Rules ? s01Rules.extracted : baseExtracted;
   // Worksheet projection is a best-effort read-side mirror of the canonical
   // extracted fields (src/shared/worksheet/worksheet-projection.ts) -- never
   // allowed to FAIL a real turn (errors are swallowed below), but it IS
@@ -1650,6 +1661,7 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
   void saveRuntimeLog(makeLog(sessionId, "input", "completed", "Patient input received", { nodeId: currentNode.id, input: { kind: patientInput.kind } })).catch(() => {});
   void saveRuntimeLog(makeLog(sessionId, "state_extraction", "completed", "State extracted", { nodeId: currentNode.id, output: extracted as unknown as Record<string, unknown> })).catch(() => {});
   void saveRuntimeLog(makeLog(sessionId, "safety_check", "completed", safetyResult.triggered ? `Safety triggered: ${safetyResult.action}` : "Safety check passed", { nodeId: currentNode.id, output: safetyResult as unknown as Record<string, unknown> })).catch(() => {});
+  for (const log of s01Rules?.logs ?? []) void saveRuntimeLog(makeLog(sessionId, "language_generation", "completed", log.summary, { nodeId: currentNode.id, output: log.output })).catch(() => {});
   if (extracted.riskSignals.includes("ambiguous_safety_language") && !safetyResult.triggered) {
     const clarification = await deliverClarificationTurn({ session, node: currentNode, promptItem: currentPromptItem, runtimePromptItem: activeStep.promptItem, release: view.release, runtimeState, patientMessage, reason: "safety_clarification", missingFields: extracted.missingFields, recentAssistantMessages: view.messages.filter((message) => message.role === "assistant").map((message) => message.content) });
     void saveRuntimeLog(makeLog(sessionId, "safety_check", "completed", "Ambiguous safety language requires neutral clarification", { nodeId: currentNode.id, output: { signals: extracted.riskSignals } })).catch(() => {});

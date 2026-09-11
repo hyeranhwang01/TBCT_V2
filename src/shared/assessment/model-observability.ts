@@ -1,4 +1,4 @@
-export type ModelPurpose = "input_assessment" | "field_extraction" | "safety_classification" | "patient_reflection" | "dialogue_agent" | "repair" | "approved_static" | "deterministic_parse" | "distortion_candidates";
+export type ModelPurpose = "input_assessment" | "field_extraction" | "safety_classification" | "patient_reflection" | "dialogue_agent" | "repair" | "approved_static" | "deterministic_parse" | "distortion_candidates" | "s01_scene";
 export type ModelUsageEvent = { sessionId: string; turnId: string; provider: string; model?: string; purpose: ModelPurpose; llmCalled: boolean; inputTokens: number | null; outputTokens: number | null; totalTokens: number | null; latencyMs: number; retryCount: number; cacheStatus: "hit" | "miss" | "none"; estimatedCost: number | null; success: boolean; failureReason?: string };
 const events: ModelUsageEvent[] = [];
 export function recordModelUsage(event: ModelUsageEvent) { events.push(structuredClone(event)); }
