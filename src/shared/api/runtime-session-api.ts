@@ -30,8 +30,9 @@ import {
   updateRuntimeSessionRecord,
 } from "@/shared/data/repositories/runtime-session-repository";
 import { attachSessionToParticipant, getOrCreateDemoParticipant, getRuntimeParticipant } from "@/shared/api/participant-api";
-import { listHomeworkRecordsByParticipant } from "@/shared/data/repositories/homework-repository";
-import { EMPTY_CONTINUITY_SEED, computeSessionContinuitySeed } from "@/shared/runtime/session-continuity";
+import { listHomeworkEntries, listHomeworkRecordsByParticipant } from "@/shared/data/repositories/homework-repository";
+import { EMPTY_CONTINUITY_SEED, S01_HOMEWORK_EXAMPLE_ENTRY_TYPE, computeSessionContinuitySeed, latestCompletedSession } from "@/shared/runtime/session-continuity";
+import type { HomeworkRecord } from "@/types/homework";
 import { findPendingReflectionCheck } from "@/shared/runtime/reflection-check";
 import { listMemoryRetrievalRuns, listMemoryUsageLogs } from "@/shared/data/repositories/longitudinal-memory-repository";
 import { getPilotParticipantByRuntimeParticipantId, getPilotStudyArm, listProtocolAssignments } from "@/shared/data/repositories/pilot-repository";
@@ -67,9 +68,25 @@ async function loadContinuitySeed(participantId: string) {
       listRuntimeSessionRecordsByParticipant(participantId),
       listHomeworkRecordsByParticipant(participantId),
     ]);
-    return computeSessionContinuitySeed({ priorSessions, homeworkRecords });
+    const s01HomeworkExampleCount = await countS01HomeworkExamples(priorSessions, homeworkRecords);
+    return computeSessionContinuitySeed({ priorSessions, homeworkRecords, s01HomeworkExampleCount });
   } catch {
     return EMPTY_CONTINUITY_SEED;
+  }
+}
+
+/** How many "내 예시" entries the participant wrote for their latest
+ * completed S01 -- S02's homework bridge names it (S01 redesign,
+ * .claude/TASK_SCOPE.json note2026_09_12_s01_redesign). A failed read only
+ * drops the count, never the rest of the seed. */
+async function countS01HomeworkExamples(priorSessions: RuntimeSession[], homeworkRecords: HomeworkRecord[]) {
+  const s01 = latestCompletedSession(priorSessions, "tbct-s01");
+  const record = s01 ? homeworkRecords.find((item) => item.runtimeSessionId === s01.id) : undefined;
+  if (!record) return undefined;
+  try {
+    return (await listHomeworkEntries(record.id, S01_HOMEWORK_EXAMPLE_ENTRY_TYPE)).length;
+  } catch {
+    return undefined;
   }
 }
 

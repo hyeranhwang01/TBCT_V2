@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { computeSessionContinuitySeed } from "@/shared/runtime/session-continuity";
+import { S01_HOMEWORK_EXAMPLE_ENTRY_TYPE, computeSessionContinuitySeed, latestCompletedSession } from "@/shared/runtime/session-continuity";
 import type { PriorHomeworkSummary, PriorSessionSummary } from "@/shared/runtime/session-continuity";
+import { DISTORTION_EXAMPLE_ENTRY_TYPE } from "@/patient/sessions/s01/distortion-table";
 
 const session = (over: Partial<PriorSessionSummary> = {}): PriorSessionSummary => ({
   id: "RTS-1",
@@ -102,5 +103,57 @@ describe("computeSessionContinuitySeed", () => {
       excludeSessionId: "RTS-NEW",
     });
     expect(seed.fields.returningParticipant).toBeUndefined();
+  });
+});
+
+// S01 redesign (note2026_09_12_s01_redesign): S02 recalls the participant's
+// own S01 words through previousS01* fields; S02's own fields stay empty.
+describe("previous S01 recap fields", () => {
+  const s01Fields = {
+    s01Problems: ["불안이 심해요", "  ", "계획대로 안 되면 힘들어요"],
+    s01RepresentativeProblem: " 불안이 심해요 ",
+    s01Goal: "불안해도 할 일을 해내는 것",
+    problems: ["must not be carried"],
+  };
+
+  it("carries the difficulties, goal and homework count under new names only", () => {
+    const seed = computeSessionContinuitySeed({ priorSessions: [{ ...session(), runtimeContext: { fields: s01Fields } }], homeworkRecords: [], s01HomeworkExampleCount: 2 });
+    expect(seed.fields).toMatchObject({
+      previousSessionDefinitionId: "tbct-s01",
+      previousS01Problems: ["불안이 심해요", "계획대로 안 되면 힘들어요"],
+      previousS01RepresentativeProblem: "불안이 심해요",
+      previousS01Goal: "불안해도 할 일을 해내는 것",
+      previousS01HomeworkExampleCount: 2,
+    });
+    for (const key of ["problems", "problemRatings", "goals", "goalRatings", "s01Problems", "s01Goal"]) expect(seed.fields).not.toHaveProperty(key);
+  });
+
+  it("reads the latest completed S01 even when another session came after it", () => {
+    const seed = computeSessionContinuitySeed({
+      priorSessions: [
+        { ...session({ id: "RTS-1", updatedAt: "2026-09-01T00:00:00.000Z" }), runtimeContext: { fields: s01Fields } },
+        session({ id: "RTS-2", sessionDefinitionId: "tbct-s03", updatedAt: "2026-09-08T00:00:00.000Z" }),
+      ],
+      homeworkRecords: [],
+    });
+    expect(seed.fields.previousSessionDefinitionId).toBe("tbct-s03");
+    expect(seed.fields.previousS01Goal).toBe("불안해도 할 일을 해내는 것");
+    expect(seed.fields).not.toHaveProperty("previousS01HomeworkExampleCount");
+  });
+
+  it("adds nothing for a first-time participant or one who never finished S01", () => {
+    expect(computeSessionContinuitySeed({ priorSessions: [], homeworkRecords: [], s01HomeworkExampleCount: 3 }).fields).toEqual({});
+    const noS01 = computeSessionContinuitySeed({ priorSessions: [session({ sessionDefinitionId: "tbct-s05" }), { ...session({ id: "RTS-9", status: "paused" }), runtimeContext: { fields: s01Fields } }], homeworkRecords: [] });
+    expect(Object.keys(noS01.fields).filter((key) => key.startsWith("previousS01"))).toEqual([]);
+  });
+
+  it("finds the latest completed run of a session definition", () => {
+    const runs = [session({ id: "A", updatedAt: "2026-09-01T00:00:00.000Z" }), session({ id: "B", updatedAt: "2026-09-05T00:00:00.000Z" }), session({ id: "C", status: "paused", updatedAt: "2026-09-09T00:00:00.000Z" })];
+    expect(latestCompletedSession(runs, "tbct-s01")?.id).toBe("B");
+    expect(latestCompletedSession(runs, "tbct-s02")).toBeUndefined();
+  });
+
+  it("counts the same homework entry type the S01 homework screen writes", () => {
+    expect(S01_HOMEWORK_EXAMPLE_ENTRY_TYPE).toBe(DISTORTION_EXAMPLE_ENTRY_TYPE);
   });
 });

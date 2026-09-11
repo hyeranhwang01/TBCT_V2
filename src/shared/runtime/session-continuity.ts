@@ -27,7 +27,7 @@ import type { RuntimeContext, RuntimeSession } from "@/types/runtime-session";
 
 /** Only the fields the seed actually reads, so tests can pass plain literals
  * instead of constructing whole RuntimeSession/HomeworkRecord objects. */
-export type PriorSessionSummary = Pick<RuntimeSession, "id" | "sessionDefinitionId" | "status" | "updatedAt">;
+export type PriorSessionSummary = Pick<RuntimeSession, "id" | "sessionDefinitionId" | "status" | "updatedAt"> & { runtimeContext?: { fields?: Record<string, unknown> } };
 export type PriorHomeworkSummary = Pick<HomeworkRecord, "runtimeSessionId" | "sessionDefinitionId" | "status" | "updatedAt">;
 
 export interface SessionContinuitySeed {
@@ -45,10 +45,41 @@ export const EMPTY_CONTINUITY_SEED: SessionContinuitySeed = { fields: {}, homewo
  * something -- an abandoned or safety-paused first attempt leaves nothing to
  * ask about, and greeting that participant with "Welcome back" would be worse
  * than greeting them as new. */
-function completedPriorSessions(priorSessions: PriorSessionSummary[], excludeSessionId?: string) {
+function completedPriorSessions<T extends PriorSessionSummary>(priorSessions: T[], excludeSessionId?: string): T[] {
   return priorSessions
     .filter((item) => item.id !== excludeSessionId && item.status === "completed")
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
+/** The most recently completed run of one session definition. */
+export function latestCompletedSession<T extends PriorSessionSummary>(priorSessions: T[], sessionDefinitionId: string, excludeSessionId?: string): T | undefined {
+  return completedPriorSessions(priorSessions, excludeSessionId).find((item) => item.sessionDefinitionId === sessionDefinitionId);
+}
+
+/** S01's homework entry type ("내 예시" in the 15-distortion table). Same
+ * value as DISTORTION_EXAMPLE_ENTRY_TYPE in s01/distortion-table.tsx, kept
+ * here so session creation does not import a client component; a test pins
+ * the two together. */
+export const S01_HOMEWORK_EXAMPLE_ENTRY_TYPE = "distortion_example";
+
+/** S01 redesign (.claude/TASK_SCOPE.json note2026_09_12_s01_redesign): what
+ * the participant named in their first session, in their own words, for
+ * S02's wording only (s02/messages.ts). New previousS01* names -- S02's own
+ * problems/goals fields are never seeded; the participant still names this
+ * session's problems and goals themselves. */
+function previousS01Fields(s01: PriorSessionSummary | undefined, exampleCount?: number): Record<string, unknown> {
+  if (!s01) return {};
+  const source = s01.runtimeContext?.fields ?? {};
+  const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : undefined);
+  const fields: Record<string, unknown> = {};
+  const problems = Array.isArray(source.s01Problems) ? source.s01Problems.map(text).filter((item): item is string => Boolean(item)) : [];
+  if (problems.length) fields.previousS01Problems = problems;
+  const representative = text(source.s01RepresentativeProblem);
+  if (representative) fields.previousS01RepresentativeProblem = representative;
+  const goal = text(source.s01Goal);
+  if (goal) fields.previousS01Goal = goal;
+  if (typeof exampleCount === "number") fields.previousS01HomeworkExampleCount = exampleCount;
+  return fields;
 }
 
 /** HomeworkRecord.status is the follow-up activity's own lifecycle (five
@@ -66,6 +97,8 @@ export function computeSessionContinuitySeed(input: {
   homeworkRecords: PriorHomeworkSummary[];
   /** The session being created, when it is already in the participant's list. */
   excludeSessionId?: string;
+  /** Entries in the latest completed S01's homework, when it has a record. */
+  s01HomeworkExampleCount?: number;
 }): SessionContinuitySeed {
   const completed = completedPriorSessions(input.priorSessions, input.excludeSessionId);
   const previous = completed[0];
@@ -88,6 +121,7 @@ export function computeSessionContinuitySeed(input: {
 
   const label = HOMEWORK_LABEL_BY_SESSION[previous.sessionDefinitionId];
   if (label) fields.previousHomeworkLabel = label;
+  Object.assign(fields, previousS01Fields(latestCompletedSession(completed, "tbct-s01"), input.s01HomeworkExampleCount));
 
   return { fields, homeworkStatus };
 }

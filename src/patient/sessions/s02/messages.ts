@@ -87,8 +87,63 @@ function continueAfterRatingCorrection(input: {
     : `Understood — I removed that item from the rating list. ${input.askVerb} ${next}?`;
 }
 
+// S01 redesign (.claude/TASK_SCOPE.json note2026_09_12_s01_redesign): when
+// the participant's previous session was S01, the returning opening, the
+// homework bridge and the problem question recall what they said there, in
+// their own words (previousS01* fields, seeded by session-continuity.ts).
+// Only the wording changes -- nothing is written to problems/goals -- and
+// without those fields every prompt keeps its existing text exactly.
+const S02_RETURNING_OPENING_ID = "tbct-s02-n01-p02-returning-opening";
+const S02_BETWEEN_SESSION_BRIDGE_ID = "tbct-s02-n01-p03-between-session-bridge";
+const S02_PROBLEM_FRAMING_ID = "tbct-s02-n02-p01-problem-framing";
+
+function recapValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function afterFirstSentence(base: string, insert: string) {
+  const match = /^(.+?[.!?])\s+/.exec(base);
+  return match ? `${match[1]} ${insert} ${base.slice(match[0].length)}` : `${insert} ${base}`;
+}
+
+function s01RecapText(promptItem: PromptItem, fields: Record<string, unknown>, isKorean: boolean): string | undefined {
+  if (fields.previousSessionDefinitionId !== "tbct-s01") return undefined;
+  const base = isKorean ? koreanText[promptItem.id] : promptItem.fallbackPatientText;
+  if (!base) return undefined;
+  const quote = (text: string) => (isKorean ? `‘${text}’` : `"${text}"`);
+
+  if (promptItem.id === S02_RETURNING_OPENING_ID) {
+    const representative = recapValue(fields.previousS01RepresentativeProblem);
+    const goal = recapValue(fields.previousS01Goal);
+    if (!representative && !goal) return undefined;
+    const recap = isKorean
+      ? `지난 시간에는 ${[representative && `가장 큰 어려움으로 ${quote(representative)}`, goal && `상담이 끝났을 때 바라는 모습으로 ${quote(goal)}`].filter(Boolean).join(", ")} 이야기를 해 주셨어요.`
+      : `Last time you named ${[representative && `${quote(representative)} as the difficulty underneath the others`, goal && `${quote(goal)} as where you'd like to be when counseling ends`].filter(Boolean).join(", and ")}.`;
+    return afterFirstSentence(base, recap);
+  }
+  if (promptItem.id === S02_BETWEEN_SESSION_BRIDGE_ID) {
+    const count = fields.previousS01HomeworkExampleCount;
+    if (typeof count !== "number") return undefined;
+    const recap = isKorean
+      ? `지난 시간에 인지 왜곡 목록을 곁에 두고, 그런 생각이 들 때 ‘내 예시’ 칸에 적어 보기로 했었죠.${count > 0 ? ` 지금까지 ${count}개 적어 주셨네요.` : ""}`
+      : `Last time, the plan was to keep the list of cognitive distortions nearby and write an example in the 'My examples' column whenever a thought like that came up.${count > 0 ? ` You've written ${count} so far.` : ""}`;
+    return `${recap} ${base}`;
+  }
+  if (promptItem.id === S02_PROBLEM_FRAMING_ID) {
+    const problems = (Array.isArray(fields.previousS01Problems) ? fields.previousS01Problems : []).map(recapValue).filter((item): item is string => Boolean(item)).slice(0, 3);
+    if (!problems.length) return undefined;
+    const recap = isKorean
+      ? `지난 시간에 말씀하신 어려움(${problems.map(quote).join(", ")})도 함께 떠올려 보셔도 좋아요.`
+      : `You can keep in mind what you mentioned last time, too: ${problems.map(quote).join(", ")}.`;
+    return `${recap} ${base}`;
+  }
+  return undefined;
+}
+
 export function resolveStaticText(promptItem: PromptItem, fields: Record<string, unknown>, locale?: string): string | undefined {
   const isKorean = (locale ?? "").toLowerCase().startsWith("ko");
+  const s01Recap = s01RecapText(promptItem, fields, isKorean);
+  if (s01Recap) return s01Recap;
 
   if (promptItem.id === "tbct-s02-n02-p06-problem-confirmation") {
     if (fields.problemsDuplicate === true) {
