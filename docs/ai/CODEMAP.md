@@ -38,8 +38,10 @@ src/
 
 **Dependency direction.** `patient → shared`, `clinician → shared`, `clinician → patient` (clinicians view patient screens) are allowed. `patient → clinician` and `shared → patient|clinician` are not — with one exception: `shared/` may import **`patient/sessions/*`** because session content is leaf data (the same relationship as a route table importing pages). Files outside `patient/` that import session folders directly today (aggregators + pre-existing engine coupling, left untouched):
   - `src/app/api/distortion-candidates/route.ts`
+  - `src/app/api/s01-generation/route.ts` (S01 scene, 2026-09-12)
   - `src/app/preview/worksheets/page.tsx`
-  - `src/shared/api/runtime-execution-api.ts`
+  - `src/shared/api/runtime-execution-api.ts` (incl. the S01 turn-rules hook, 2026-09-12)
+  - `src/shared/dialogue-agent/dialogue-contract-compiler.ts` (S01 dialogue guidance, 2026-09-12)
   - `src/shared/protocol/source-fidelity-catalog.ts`
   - `src/shared/runtime/runtime-orchestrator.ts`
   - `src/shared/runtime/runtime-release-normalizer.ts`
@@ -89,6 +91,7 @@ Called from [src/patient/pages/patient-session-page.tsx:77](../../src/patient/pa
 ## 3. Protocol content model (what a "session" is made of)
 
 - Static, per-session protocol scripts (source-of-truth clinical content, hand-transcribed from the TBCT source manual with line-range citations): [src/patient/sessions/s01/spec.ts](../../src/patient/sessions/s01/spec.ts) … `s08.ts`. Each exports a `SessionSpec` (metadata + `nodes[]` + `prompts[]`).
+- S01 extras (2026-09-12 redesign, see [TBCT_SESSIONS_1_3.md](TBCT_SESSIONS_1_3.md) §Session 1): `s01/turn-rules.ts` (called once from `submitPatientInput` in runtime-execution-api.ts, right after `extractRuntimeState`), `s01/generation.ts` + `src/app/api/s01-generation/route.ts` (three-person scene), `s01/dialogue-guidance.ts` (wired in dialogue-contract-compiler.ts), `s01/worksheet-diagram.tsx` / `worksheet-labels.ts` / `distortion-table.tsx` (participant-visible worksheet and homework table).
 - Compiled/merged into the canonical catalog: [src/shared/protocol/source-fidelity-catalog.ts](../../src/shared/protocol/source-fidelity-catalog.ts) (`CANONICAL_SESSION_DEFINITIONS`, `CANONICAL_STAGE_NODES`, `CANONICAL_PROMPT_ITEMS`, `CANONICAL_SESSION_PLAN`). Types: [source-fidelity-types.ts](../../src/shared/protocol/source-fidelity-types.ts).
 - Runtime-facing wrapper/cache over the catalog (adds localStorage-persisted clinician edits, migration-conflict tracking): [src/clinician/lib/session-catalog.ts](../../src/clinician/lib/session-catalog.ts).
 - Catalog -> immutable **release** (what the runtime engine actually executes against, so live edits never change a session mid-flight): `runtime-release-compiler.ts` / `runtime-release-normalizer.ts` / `runtime-release-loader.ts` in [src/shared/runtime/](../../src/shared/runtime/).
