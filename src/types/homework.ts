@@ -33,7 +33,7 @@ export interface HomeworkEntryRecord {
 // S4/S7 are one-or-more follow-ups after an Action Plan is executed; S3/S5
 // are review/share only, with no new patient-authored entries.
 export const HOMEWORK_LABEL_BY_SESSION: Record<string, string> = {
-  "tbct-s01": "Weekly Examples",
+  "tbct-s01": "Distortion Examples", // 15-distortion table with a "내 예시" column (note2026_09_12_s01_redesign)
   "tbct-s02": "Check-in",
   "tbct-s03": "Review Intra-TR",
   "tbct-s04": "Action Plan",

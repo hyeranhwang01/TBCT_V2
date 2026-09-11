@@ -15,6 +15,7 @@
 
 import { useEffect, useState } from "react";
 import { S01Worksheet } from "@/patient/sessions/s01/worksheet";
+import { DistortionHomeworkTable, type DistortionExample } from "@/patient/sessions/s01/distortion-table";
 import { S02Worksheet } from "@/patient/sessions/s02/worksheet";
 import { S03Worksheet } from "@/patient/sessions/s03/worksheet";
 import { ScoreChip } from "@/patient/components/worksheet-renderers/shared";
@@ -233,6 +234,9 @@ export default function WorksheetPreviewPage() {
   const [s01Stage, setS01Stage] = useState<S01Stage>("mid");
   const [s01Mode, setS01Mode] = useState<"patient" | "clinician">("patient");
   const [s01Edits, setS01Edits] = useState<WorksheetView | null>(null);
+  const [homeworkEntries, setHomeworkEntries] = useState<DistortionExample[]>([
+    { id: "preview-1", distortionId: "emotional-reasoning", date: "2026-09-13", text: "불안하니까 발표가 잘못될 게 분명해" },
+  ]);
   const [s02View, setS02View] = useState(initialS02View);
   const [s03View, setS03View] = useState(initialS03View);
   const busy = false;
@@ -291,6 +295,12 @@ export default function WorksheetPreviewPage() {
             readOnly={s01Mode === "patient"}
           />
         </div>
+      </section>
+
+      <section className="space-y-3" data-testid="preview-s01-homework">
+        <h2 className="text-sm font-semibold uppercase tracking-[0.06em] text-text-secondary">Session 1 · Homework (15 distortions, 내 예시)</h2>
+        <p className="text-sm text-text-muted">Uses the app language (top-right toggle), like the real homework page. Saving adds to local state only.</p>
+        <DistortionHomeworkTable entries={homeworkEntries} onAdd={(input) => setHomeworkEntries((list) => [...list, { id: `preview-${list.length + 1}`, ...input }])} />
       </section>
 
       <section className="space-y-3">
