@@ -486,39 +486,40 @@ describe("canonical source-fidelity runtime", () => {
       const session = await createCanonicalTestRuntimeSession();
       await startRuntimeSession(session.id);
 
+      // S01 redesign (note2026_09_12): the first S01 answer is now the first
+      // difficulty, bound to the "My difficulties" worksheet list.
       await submitPatientInput(session.id, { kind: "text", value: "This is a current situation, not only an interpretation." });
       const view = await getWorksheetView(session.id, "tbct-s01");
-      const situationField = view?.fields.find((field) => field.definition.worksheetFieldKey === "situationThoughtDistinction");
+      const problemsField = view?.fields.find((field) => field.definition.worksheetFieldKey === "s01Problems");
 
-      expect(situationField?.value?.value).toBeTruthy();
+      expect(problemsField?.value?.value).toBeTruthy();
     } finally {
       if (previousProvider === undefined) delete process.env.AI_PROVIDER;
       else process.env.AI_PROVIDER = previousProvider;
     }
   }, 15_000);
 
-  it("does not let the situation-or-thought clarification overwrite the participant's actual situation answer", async () => {
-    // Regression test: tbct-s01's "situation-or-thought" clarification (the
-    // very next patient-input turn after the one above) used to declare
-    // outputFields: ["situationThoughtDistinction"] with no
-    // activationCondition -- it fired for every participant and, whatever
-    // they said in reply to "is that a situation or a thought?", overwrote
-    // the worksheet's "My situation" box with that reply instead of leaving
-    // their actual situation answer in place. See the fix comment on this
-    // prompt in source-fidelity-catalog.ts.
+  it("does not let the next S01 answer overwrite the participant's earlier answer", async () => {
+    // Replaces the old situation-or-thought overwrite regression test: that
+    // unconditional re-ask no longer exists in the S01 redesign
+    // (note2026_09_12_s01_redesign). The same guarantee -- a later answer
+    // never overwrites an earlier one -- is checked on the first two S01
+    // answers here; src/patient/sessions/s01/spec.test.ts checks that the raw
+    // situation answer survives the participant's own one-line version.
     const previousProvider = process.env.AI_PROVIDER;
     process.env.AI_PROVIDER = "mock";
     try {
       const session = await createCanonicalTestRuntimeSession();
       await startRuntimeSession(session.id);
 
-      await submitPatientInput(session.id, { kind: "text", value: "I am currently speaking with the therapist during my appointment." });
-      await submitPatientInput(session.id, { kind: "text", value: "I think that is the situation, not a thought." });
+      await submitPatientInput(session.id, { kind: "text", value: "I worry about everything at work." });
+      await submitPatientInput(session.id, { kind: "text", value: "Yesterday I kept re-reading one email for an hour." });
 
       const view = await getWorksheetView(session.id, "tbct-s01");
-      const situationField = view?.fields.find((field) => field.definition.worksheetFieldKey === "situationThoughtDistinction");
+      const problemsField = view?.fields.find((field) => field.definition.worksheetFieldKey === "s01Problems");
 
-      expect(situationField?.value?.value).toContain("speaking with the therapist");
+      expect(JSON.stringify(problemsField?.value?.value)).toContain("I worry about everything at work.");
+      expect(JSON.stringify(problemsField?.value?.value)).not.toContain("re-reading one email");
     } finally {
       if (previousProvider === undefined) delete process.env.AI_PROVIDER;
       else process.env.AI_PROVIDER = previousProvider;

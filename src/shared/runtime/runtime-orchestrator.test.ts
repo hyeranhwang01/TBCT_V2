@@ -24,7 +24,7 @@ describe("resolveRepeatedFallbackOverride: S01-only phase-aware exception", () =
       recentAssistantMessages: threeRepeats(APPROVED),
       lastPatientMessage: "I'm not sure.",
       locale: "en-US",
-      activePromptItemId: "tbct-s01-n05-p01-candidate-two-emotion",
+      activePromptItemId: "tbct-s01-n12-p01-candidate-two-thought",
     });
     expect(result).toBeDefined();
     expect(result).not.toContain("specific moment");
@@ -39,7 +39,7 @@ describe("resolveRepeatedFallbackOverride: S01-only phase-aware exception", () =
       recentAssistantMessages: threeRepeats(APPROVED),
       lastPatientMessage: "hmm",
       locale: "en-US",
-      activePromptItemId: "tbct-s01-n04-p02-candidate-one-behavior",
+      activePromptItemId: "tbct-s01-n11-p03-candidate-one-behavior",
     });
     expect(result).toMatch(/behav/i);
     expect(result).not.toContain("specific moment");
@@ -53,7 +53,7 @@ describe("resolveRepeatedFallbackOverride: S01-only phase-aware exception", () =
       recentAssistantMessages: threeRepeats(APPROVED),
       lastPatientMessage: "not sure",
       locale: "en-US",
-      activePromptItemId: "tbct-s01-n07-p01-three-person-insight",
+      activePromptItemId: "tbct-s01-n14-p04-what-made-difference",
     });
     expect(result).toBeDefined();
     expect(result).not.toContain("specific moment");
@@ -68,7 +68,7 @@ describe("resolveRepeatedFallbackOverride: S01-only phase-aware exception", () =
       recentAssistantMessages: threeRepeats(APPROVED),
       lastPatientMessage: "I don't know",
       locale: "en-US",
-      activePromptItemId: "tbct-s01-n02-p02-initial-thought-probe",
+      activePromptItemId: "tbct-s01-n06-p01-thought-behind-emotion",
     });
     expect(result).toMatch(/thought|mind/i);
     expect(result).not.toMatch(/where were you|who was there|tell me (?:more )?about (?:a|the) (?:new |recent )?situation/i);
@@ -82,7 +82,7 @@ describe("resolveRepeatedFallbackOverride: S01-only phase-aware exception", () =
       recentAssistantMessages: threeRepeats(APPROVED),
       lastPatientMessage: "not sure",
       locale: "en-US",
-      activePromptItemId: "tbct-s01-n08-p01-personal-emotion",
+      activePromptItemId: "tbct-s01-n05-p01-first-emotion",
     });
     const behavior = resolveRepeatedFallbackOverride({
       sessionDefinitionId: "tbct-s01",
@@ -91,7 +91,7 @@ describe("resolveRepeatedFallbackOverride: S01-only phase-aware exception", () =
       recentAssistantMessages: threeRepeats(APPROVED),
       lastPatientMessage: "not sure",
       locale: "en-US",
-      activePromptItemId: "tbct-s01-n08-p02-personal-behavior",
+      activePromptItemId: "tbct-s01-n07-p01-first-behavior",
     });
     for (const result of [emotion, behavior]) {
       expect(result).toBeDefined();
@@ -108,7 +108,7 @@ describe("resolveRepeatedFallbackOverride: S01-only phase-aware exception", () =
       recentAssistantMessages: threeRepeats(APPROVED),
       lastPatientMessage: "not sure",
       locale: "en-US",
-      activePromptItemId: "tbct-s01-n09-p01-participant-summary",
+      activePromptItemId: "tbct-s01-n16-p01-participant-summary",
     });
     expect(result).toContain(APPROVED);
     expect(result).not.toContain("specific moment");
@@ -122,7 +122,7 @@ describe("resolveRepeatedFallbackOverride: S01-only phase-aware exception", () =
       recentAssistantMessages: threeRepeats(APPROVED),
       lastPatientMessage: "잘 모르겠어요",
       locale: "ko-KR",
-      activePromptItemId: "tbct-s01-n04-p01-candidate-one-emotion",
+      activePromptItemId: "tbct-s01-n11-p01-candidate-one-emotion",
     });
     expect(result).toMatch(/[가-힣]/);
     expect(result).not.toContain("specific moment");
@@ -223,7 +223,7 @@ describe("resolveRepeatedFallbackOverride: S04-S08 regression (unchanged generic
       recentAssistantMessages: threeRepeats(APPROVED),
       lastPatientMessage: "ok",
       locale: "en-US",
-      activePromptItemId: "tbct-s01-n04-p01-candidate-one-emotion",
+      activePromptItemId: "tbct-s01-n11-p01-candidate-one-emotion",
     });
     expect(result).toBeUndefined();
   });

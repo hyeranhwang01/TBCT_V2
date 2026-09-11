@@ -7,6 +7,7 @@ import { resolveBracketPlaceholders } from "@/shared/runtime/runtime-static-mess
 import type { DialogueContract, ExpectedInputType } from "@/shared/dialogue-agent/dialogue-agent-contract";
 import { dialogueContractSchema } from "@/shared/dialogue-agent/dialogue-agent-contract";
 import type { WorksheetBinding, WorksheetValueType } from "@/types/worksheet";
+import { isS01SummaryCheckForbidden, s01DialogueGuidance } from "@/patient/sessions/s01/dialogue-guidance";
 
 // Pattern-based, session-agnostic construct terminology. Keyed by field-NAME
 // shape rather than an exact per-session map, because the same construct
@@ -302,7 +303,11 @@ const SUMMARY_CHECK_FORBIDDEN_VALIDATION_KINDS: ReadonlySet<string> = new Set(["
 
 export function summaryCheckForbiddenFor(sourcePromptItem: PromptItem): boolean {
   const kind = (sourcePromptItem.validation as { kind?: unknown } | null)?.kind;
-  return SUMMARY_CHECK_FORBIDDEN_PROMPT_IDS.has(sourcePromptItem.id) || (typeof kind === "string" && SUMMARY_CHECK_FORBIDDEN_VALIDATION_KINDS.has(kind));
+  return SUMMARY_CHECK_FORBIDDEN_PROMPT_IDS.has(sourcePromptItem.id)
+    || (typeof kind === "string" && SUMMARY_CHECK_FORBIDDEN_VALIDATION_KINDS.has(kind))
+    // S01 ids are positional and were all renumbered by the S01 redesign
+    // (note2026_09_12_s01_redesign), so its forbidden steps are matched by slug.
+    || (sourcePromptItem.sessionId === "tbct-s01" && isS01SummaryCheckForbidden(sourcePromptItem.id));
 }
 
 /** Exported for the catalog-integrity test only (every id must exist). */
@@ -316,6 +321,7 @@ export function stepSpecificGuidanceFor(sourcePromptItem: PromptItem): string[] 
   // prompt outside the curated table still gets its rule.
   if (validation?.requiresThirdPerson && !curated.includes(THIRD_PERSON_RULE)) derived.push(THIRD_PERSON_RULE);
   if (validation?.stateScaleEveryTime) derived.push("State the scale explicitly every time you ask for this rating -- the words 'from 0 to 100' must survive your paraphrase.");
+  if (sourcePromptItem.sessionId === "tbct-s01") derived.push(...s01DialogueGuidance(sourcePromptItem.id));
   const all = [...curated, ...derived];
   return all.length ? all : undefined;
 }

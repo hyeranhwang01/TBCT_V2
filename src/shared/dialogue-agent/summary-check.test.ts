@@ -181,7 +181,7 @@ describe("summarize_and_confirm: where it is allowed", () => {
   });
 
   it.each([
-    "tbct-s01-n09-p01-participant-summary",
+    "tbct-s01-n16-p01-participant-summary",
     "tbct-s03-n08-p03-participant-summary",
     "tbct-s06-n06-p03-participant-capsule-summary",
     "tbct-s06-n10-p05-circuit-two-summary",
@@ -190,6 +190,10 @@ describe("summarize_and_confirm: where it is allowed", () => {
   });
 
   it.each([
+    // S01 redesign (note2026_09_12): matched by slug because S01 ids are positional.
+    "tbct-s01-n12-p01-candidate-two-thought",
+    "tbct-s01-n14-p04-what-made-difference",
+    "tbct-s01-n17-p04-identify-distortion",
     "tbct-s03-n11-p01-balanced-conclusion",
     "tbct-s03-n11-p02-therefore-extension",
     "tbct-s06-n10-p02-patient-formulates-ua",

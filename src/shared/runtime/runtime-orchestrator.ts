@@ -47,7 +47,13 @@ async function callDistortionClassifier(request: { locale: string; situation: st
   }
 }
 
-const IDENTIFY_DISTORTION_PROMPT_ID = "tbct-s01-n10-p02-identify-distortion";
+// S01 redesign (note2026_09_12_s01_redesign): candidates are offered only
+// when the participant explicitly asked for suggestions -- the
+// suggested-candidates prompt, activated by s01/turn-rules.ts. The
+// identify-distortion prompt itself shows only its static question.
+function isS01SuggestedCandidatesPrompt(promptItemId: string) {
+  return /^tbct-s01-n\d+-p\d+-suggested-candidates$/.test(promptItemId);
+}
 
 async function resolveS01DistortionCandidateText(input: { sessionId: string; turnId: string; locale: string; fields: Record<string, unknown> }): Promise<string | undefined> {
   const situation = input.fields.situationThoughtDistinction;
@@ -190,7 +196,7 @@ export async function orchestrateRuntimeAssistantTurn(input: RuntimeOrchestrator
   // distortion names) rather than the generic static fallback above -- see
   // resolveS01DistortionCandidateText and .claude/TASK_SCOPE.json's
   // note2026_08_17d entry. No other session's prompt ids ever match this.
-  if (input.session.sessionDefinitionId === "tbct-s01" && input.sourcePromptItem.id === IDENTIFY_DISTORTION_PROMPT_ID) {
+  if (input.session.sessionDefinitionId === "tbct-s01" && isS01SuggestedCandidatesPrompt(input.sourcePromptItem.id)) {
     const candidateText = await resolveS01DistortionCandidateText({ sessionId: input.session.id, turnId: makeId("DISTORTION"), locale: input.session.locale, fields: input.session.runtimeContext.fields });
     if (candidateText) approvedPatientText = candidateText;
   }

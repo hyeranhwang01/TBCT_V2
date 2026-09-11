@@ -56,8 +56,15 @@ const BRACKET_PLACEHOLDER_SOURCES: Array<{ pattern: RegExp; fieldCandidates: str
   // surviving "[...]" -- each is a genuine slot a human therapist fills
   // from session context (source-fidelity-catalog.ts's own S01/S02/S03
   // nodes name the field that holds it), not a decorative bracket.
-  { pattern: /\[their situation[^\]]*\]/gi, fieldCandidates: ["situationThoughtDistinction"], naturalFallback: "that situation" },
-  { pattern: /\[their initial thought[^\]]*\]/gi, fieldCandidates: ["openingInitialThought"], naturalFallback: "the thought you mentioned" },
+  // S01 (note2026_09_12_s01_redesign): the participant's own one-line
+  // version, when they wrote one, comes before their full answer.
+  { pattern: /\[their situation[^\]]*\]/gi, fieldCandidates: ["situationLine", "situationThoughtDistinction"], naturalFallback: "that situation" },
+  { pattern: /\[their initial thought[^\]]*\]/gi, fieldCandidates: ["thoughtLine", "openingInitialThought"], naturalFallback: "the thought you mentioned" },
+  { pattern: /\[representative difficulty\]/gi, fieldCandidates: ["s01RepresentativeProblem"], naturalFallback: "that difficulty" },
+  { pattern: /\[their emotion\]/gi, fieldCandidates: ["personalEmotion"], naturalFallback: "that feeling" },
+  { pattern: /\[their behavior\]/gi, fieldCandidates: ["personalBehavior"], naturalFallback: "what you did" },
+  { pattern: /\[person two hint\]/gi, fieldCandidates: ["candidateTwoThoughtHint"], naturalFallback: "they probably say that to everyone" },
+  { pattern: /\[person three hint\]/gi, fieldCandidates: ["candidateThreeThoughtHint"], naturalFallback: "why would they talk to me like that" },
   { pattern: /\[situation\]/gi, fieldCandidates: [], naturalFallback: "that situation" },
   { pattern: /\[description of lower score\]/gi, fieldCandidates: [], naturalFallback: "the lower rating" },
   { pattern: /\[description of higher score\]/gi, fieldCandidates: [], naturalFallback: "the higher rating" },

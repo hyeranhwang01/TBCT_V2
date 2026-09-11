@@ -99,34 +99,21 @@ describe("S02 passive reflections do not demand a meaningless patient reply", ()
   });
 });
 
-describe("S01 three-person insight reflects the participant's actual answers", () => {
-  const promptItemId = "tbct-s01-n07-p01-three-person-insight";
+// S01 redesign (note2026_09_12_s01_redesign): the three-person conclusion is
+// now asked step by step and never stated first, so the old dynamic insight
+// sentence is gone. The one dynamic S01 text left is the scene.
+describe("S01 three-person scene", () => {
+  const promptItemId = "tbct-s01-n10-p02-scene";
 
-  it("does not claim that feelings and actions differed when the participant gave the same answers", () => {
-    const fields = {
-      candidateOneEmotion: "불안해요",
-      candidateTwoEmotion: "불안해요",
-      candidateThreeEmotion: "불안해요",
-      candidateOneBehavior: "피할 것 같아요",
-      candidateTwoBehavior: "피할 것 같아요",
-      candidateThreeBehavior: "피할 것 같아요",
-    };
-    const result = resolveStaticPatientMessage(makePromptWithFallback(promptItemId, ""), "ko-KR", { fields, riskSignals: [], iterationCounts: {}, riskLevel: "low" });
-    expect(result?.patientMessage).toContain("비슷하게 느껴진 부분");
-    expect(result?.patientMessage).not.toContain("기분과 행동도 달라졌");
+  it("shows the scene generated for this session", () => {
+    const scene = "동아리 첫 모임이 끝나고 선배가 세 사람에게 똑같이 말했어요. “오늘 와줘서 반가웠어요.”";
+    const result = resolveStaticPatientMessage(makePromptWithFallback(promptItemId, ""), "ko-KR", { fields: { threePersonScene: scene }, riskSignals: [], iterationCounts: {}, riskLevel: "low" });
+    expect(result?.patientMessage).toBe(scene);
   });
 
-  it("uses the direct contrast when both the feelings and actions actually differed", () => {
-    const fields = {
-      candidateOneEmotion: "기뻐요",
-      candidateTwoEmotion: "슬퍼요",
-      candidateThreeEmotion: "화가 나요",
-      candidateOneBehavior: "웃어요",
-      candidateTwoBehavior: "자리를 피해요",
-      candidateThreeBehavior: "따져 물어요",
-    };
-    const result = resolveStaticPatientMessage(makePromptWithFallback(promptItemId, ""), "ko-KR", { fields, riskSignals: [], iterationCounts: {}, riskLevel: "low" });
-    expect(result?.patientMessage).toContain("기분과 행동도 달라졌");
+  it("falls back to the fixed real-session scene when none was generated", () => {
+    const result = resolveStaticPatientMessage(makePromptWithFallback(promptItemId, ""), "ko-KR", { fields: {}, riskSignals: [], iterationCounts: {}, riskLevel: "low" });
+    expect(result?.patientMessage).toContain("만나서 반가웠어요");
   });
 });
 
