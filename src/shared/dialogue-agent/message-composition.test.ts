@@ -286,15 +286,22 @@ describe("Patient Authorship Invariant: the 32 real violations all reject via as
   });
 });
 
-describe("Patient Authorship Invariant: the 20 S08 violations reject end-to-end, live, today", () => {
-  const s08Violations = VIOLATIONS.filter((v) => v.promptItemId.startsWith("tbct-s08"));
+// Upgraded from "the 20 S08 violations" when the gate was widened to all
+// eight sessions (.claude/TASK_SCOPE.json note2026_09_11): the S01/S03
+// fixtures now reject end-to-end in their own sessions too, not only at the
+// assembleMessage unit level above.
+function sessionIdOf(promptItemId: string) {
+  return promptItemId.split("-").slice(0, 2).join("-");
+}
 
-  it("has exactly the 20 S08 fixtures", () => {
-    expect(s08Violations).toHaveLength(20);
+describe("Patient Authorship Invariant: all 32 violations reject end-to-end in the session they came from", () => {
+  it("covers every stored violation, from S01, S03, S07 and S08", () => {
+    expect(VIOLATIONS).toHaveLength(32);
+    expect(new Set(VIOLATIONS.map((v) => sessionIdOf(v.promptItemId)))).toEqual(new Set(["tbct-s01", "tbct-s03", "tbct-s07", "tbct-s08"]));
   });
 
-  it.each(s08Violations)("$label -- resubmitted verbatim as free prose is rejected by validateDialogueDecision", ({ lastParticipantMessage, violatingSpan, contractOverrides }) => {
-    const contract = baseContract({ sessionId: "tbct-s08", lastParticipantMessage, ...contractOverrides });
+  it.each(VIOLATIONS)("$label -- resubmitted verbatim as free prose is rejected by validateDialogueDecision", ({ promptItemId, locale, lastParticipantMessage, violatingSpan, contractOverrides }) => {
+    const contract = baseContract({ sessionId: sessionIdOf(promptItemId), locale, lastParticipantMessage, ...contractOverrides });
     // The historical failure mode: Claude submits ordinary free-form prose
     // containing the fabricated content, no messageParts at all -- exactly
     // what every one of the 32 stored transcripts actually did.
@@ -308,8 +315,8 @@ describe("Patient Authorship Invariant: the 20 S08 violations reject end-to-end,
     expect(validateDialogueDecision(decision, contract)).toEqual({ accepted: false, reason: "missing_message_parts" });
   });
 
-  it.each(s08Violations)("$label -- laundered through a dishonest quote part is still rejected", ({ lastParticipantMessage, violatingSpan, contractOverrides }) => {
-    const contract = baseContract({ sessionId: "tbct-s08", lastParticipantMessage, ...contractOverrides });
+  it.each(VIOLATIONS)("$label -- laundered through a dishonest quote part is still rejected", ({ promptItemId, locale, lastParticipantMessage, violatingSpan, contractOverrides }) => {
+    const contract = baseContract({ sessionId: sessionIdOf(promptItemId), locale, lastParticipantMessage, ...contractOverrides });
     const decision: DialogueDecision = {
       responseType: "reflect_and_ask",
       patientFacingMessage: "(ignored once messageParts governs)",
@@ -321,12 +328,21 @@ describe("Patient Authorship Invariant: the 20 S08 violations reject end-to-end,
   });
 });
 
-describe("Patient Authorship Invariant: progressive rollout boundary is explicit, not accidental", () => {
-  it("gates tbct-s08 (enabled) but not tbct-s01 (not yet enabled) for an identical protected field", () => {
-    const enabled = baseContract({ sessionId: "tbct-s08" });
-    const notYetEnabled = baseContract({ sessionId: "tbct-s01" });
-    expect(contractMayRequireAssembly(enabled)).toBe(true);
-    expect(contractMayRequireAssembly(notYetEnabled)).toBe(false);
+describe("Patient Authorship Invariant: the gate covers every session (Reflect-and-Confirm)", () => {
+  // The only guarantee that every assistant summary ends in a confirmation
+  // question is that no other patient-content response type can carry free
+  // prose -- which holds only if no session is left ungated
+  // (.claude/TASK_SCOPE.json note2026_09_11).
+  it.each(["tbct-s01", "tbct-s02", "tbct-s03", "tbct-s04", "tbct-s05", "tbct-s06", "tbct-s07", "tbct-s08"])("gates %s for a protected field", (sessionId) => {
+    expect(contractMayRequireAssembly(baseContract({ sessionId }))).toBe(true);
+  });
+
+  it("gates a purely administrative turn too -- what a turn may say about the participant does not depend on the field it records", () => {
+    // The 2026-09-11 mock-Claude audit found invented conclusions shipped
+    // without confirmation on exactly these turns (rating-card check, scale
+    // presentation, three-person preview) while they were left ungated.
+    expect(contractMayRequireAssembly(baseContract({ sessionId: "tbct-s01", assistantMustNotSupply: false, participantOwned: false, nodeRequiresProtectedField: false }))).toBe(true);
+    expect(contractMayRequireAssembly(baseContract({ sessionId: "unregistered-session", assistantMustNotSupply: true }))).toBe(false);
   });
 });
 

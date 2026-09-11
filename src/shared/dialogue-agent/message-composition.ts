@@ -156,33 +156,33 @@ export const PATIENT_CONTENT_RESPONSE_TYPES: ReadonlySet<string> = new Set([
   "request_missing_field",
 ]);
 
-// Progressive rollout (plan Phase 2-5): enforce the assembled-message gate
-// only for sessions where the failure has actually been observed and
-// measured, expanding once fallback-rate/conversation-quality impact is
-// reviewed at each step. Order per the plan: S08 -> S07 -> S03 -> S01/S02.
-// Widening this set changes REAL Claude phrasing behavior in production for
-// participant-owned fields in the newly-added session -- do not widen it
-// without that review having happened.
-export const MESSAGE_COMPOSITION_ENABLED_SESSIONS: ReadonlySet<string> = new Set(["tbct-s08"]);
+// Originally a progressive rollout (S08 first). Widened to all eight sessions
+// by the user's 2026-09-11 decision (.claude/TASK_SCOPE.json
+// note2026_09_11_reflect_and_confirm): assistant summaries/conclusions are
+// allowed again, but only through summarize_and_confirm, which always ends
+// in a confirmation question. That guarantee holds only if no OTHER
+// patient-content response type can carry free prose -- i.e. only if every
+// session is gated. Live fallback rate and tone for S01-S07 still need
+// measuring (audit:sessions:constrained with a real key).
+export const MESSAGE_COMPOSITION_ENABLED_SESSIONS: ReadonlySet<string> = new Set(["tbct-s01", "tbct-s02", "tbct-s03", "tbct-s04", "tbct-s05", "tbct-s06", "tbct-s07", "tbct-s08"]);
 
 /** The contract-level half of the gate -- knowable before Claude has chosen
  * a responseType, so the system prompt (built from the contract alone) can
  * decide whether to even mention the assembly requirement.
  *
- * Checks BOTH contract.assistantMustNotSupply (this turn's own field) and
- * contract.nodeRequiresProtectedField (a DIFFERENT field the same node is
- * responsible for -- Patient Authorship Invariant gap fix,
- * .claude/TASK_SCOPE.json note2026_09_07). Without the second check, a
- * pure instruction/orientation turn whose own field is an administrative
- * flag could still freely restate or invent content belonging to another
- * participant-owned field the node touches -- confirmed live in S08's
- * roles-orientation turn, which restated the participant's own hedged
- * charge as a flat, invented declarative while its own field was just
- * courtroomOrientationAcknowledged. Measured against all 51 real S08
- * prompts: adding this check gates exactly the 2 turns that were missing
- * it and changes nothing else (49 already gated, 0 left uncovered). */
+ * Every turn of an enabled session, regardless of field ownership. This
+ * used to gate only turns whose own field (assistantMustNotSupply) or node
+ * (nodeRequiresProtectedField, note2026_09_07) was participant-owned. The
+ * 2026-09-11 mock-Claude audit (Reflect-and-Confirm follow-up) showed why
+ * that is not enough once free prose is the channel being closed: on the
+ * 13 of 272 prompts whose field is a pure administrative flag ("do you have
+ * the rating card?", the scale presentation, the three-person preview), a
+ * model could still ship an invented conclusion about the participant as
+ * ordinary prose with no confirmation question -- 5 such turns reached the
+ * participant across S01/S02/S06. What a turn may SAY about the participant
+ * does not depend on which field the turn happens to record. */
 export function contractMayRequireAssembly(contract: DialogueContract): boolean {
-  return MESSAGE_COMPOSITION_ENABLED_SESSIONS.has(contract.sessionId) && (contract.assistantMustNotSupply || contract.nodeRequiresProtectedField);
+  return MESSAGE_COMPOSITION_ENABLED_SESSIONS.has(contract.sessionId);
 }
 
 export function requiresAssembledMessage(contract: DialogueContract, decision: Pick<DialogueDecision, "responseType">): boolean {
@@ -252,6 +252,41 @@ function isVerifiedQuote(text: string, sources: string[]): boolean {
   const normalizedQuote = normalizeForQuoteMatch(text);
   if (normalizedQuote.length < MIN_QUOTE_LENGTH) return false;
   return sources.some((source) => normalizeForQuoteMatch(source).includes(normalizedQuote));
+}
+
+/** Reflect-and-Confirm (.claude/TASK_SCOPE.json note2026_09_11): the fixed
+ * question every assistant summary ends with -- the existing
+ * check_understanding connector, not new wording. */
+export const SUMMARY_CHECK_QUESTION = CONNECTOR_TEXT.check_understanding;
+
+const MAX_SUMMARY_LENGTH = 300;
+// Formal/polite Korean interrogative endings. "?" alone would miss "…하셨나요."
+// typed with a full stop; "니까" is left out because "…했으니까" (because)
+// is an ordinary declarative.
+const KOREAN_QUESTION_ENDING = /(?:나요|까요|습니까|는지요|인가요)$/;
+
+function containsQuestion(text: string) {
+  if (/[?？]/.test(text)) return true;
+  return text.split(/[.!。\n]+/).some((sentence) => KOREAN_QUESTION_ENDING.test(sentence.trim()));
+}
+
+export type SummaryCheckAssemblyResult = { ok: true; text: string; summaryText: string } | { ok: false; reason: string };
+
+/** Server-side assembly of a summarize_and_confirm turn: Claude's summary
+ * body followed by SUMMARY_CHECK_QUESTION, which Claude never writes itself.
+ * Every rejection is a checkable fact about the text (not a judgment of its
+ * clinical quality): the body may not ask anything -- the confirmation is
+ * the turn's only question, and the next task is held back until it is
+ * answered (runtime-execution-api.ts's deliverReflectionCheckReplyTurn). */
+export function assembleSummaryCheck(summary: string, contract: DialogueContract): SummaryCheckAssemblyResult {
+  if (!contract.summaryCheckAllowed) return { ok: false, reason: "summary_check_not_allowed" };
+  const body = summary.replace(/\s+/g, " ").trim();
+  if (!body) return { ok: false, reason: "empty_summary" };
+  if (body.length > MAX_SUMMARY_LENGTH) return { ok: false, reason: "summary_too_long" };
+  const task = normalizeForQuoteMatch(contract.currentTaskText);
+  if (task.length >= MIN_QUOTE_LENGTH && normalizeForQuoteMatch(body).includes(task)) return { ok: false, reason: "summary_contains_task" };
+  if (containsQuestion(body)) return { ok: false, reason: "summary_contains_question" };
+  return { ok: true, text: `${body} ${SUMMARY_CHECK_QUESTION[localeBucket(contract.locale)]}`, summaryText: body };
 }
 
 export type MessageAssemblyResult = { ok: true; text: string } | { ok: false; reason: string };

@@ -1,14 +1,16 @@
 import type { DialogueContract, DialogueDecision } from "@/shared/dialogue-agent/dialogue-agent-contract";
 import { hasUnresolvedTemplateVariable } from "@/shared/dialogue-agent/unresolved-template-detector";
 import { isPatientFacingLocaleConsistent } from "@/shared/runtime/runtime-output-validator";
-import { assembleMessage, requiresAssembledMessage } from "@/shared/dialogue-agent/message-composition";
+import { assembleMessage, assembleSummaryCheck, requiresAssembledMessage } from "@/shared/dialogue-agent/message-composition";
 
 export type DialogueValidationResult =
   // finalText is present only when assembleMessage produced the shipped
   // text (see requiresAssembledMessage below) -- callers must ship finalText
   // instead of decision.patientFacingMessage whenever it is set, since
   // patientFacingMessage was never trusted or even inspected in that case.
-  | { accepted: true; finalText?: string }
+  // summaryCheck is set only for an accepted summarize_and_confirm turn; its
+  // presence is what opens a pending confirmation (runtime-orchestrator.ts).
+  | { accepted: true; finalText?: string; summaryCheck?: { summaryText: string } }
   | { accepted: false; reason: string };
 
 const DIAGNOSIS_PATTERN = /\b(?:you have|this (?:is|sounds like|indicates)) (?:a |an )?(?:diagnos|disorder|clinical depression|generalized anxiety disorder|bipolar|PTSD|OCD)\b/i;
@@ -21,6 +23,32 @@ function normalizeForRepeatCheck(text: string): string {
   return text.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
+/** Content-hygiene rules every free-prose string must pass before it can
+ * reach the participant -- shared by the ordinary free-text path and the
+ * summarize_and_confirm summary body below. */
+function freeTextHygieneIssue(text: string, contract: DialogueContract): string | undefined {
+  if (hasUnresolvedTemplateVariable(text)) return "unresolved_template_variable";
+  if (!text.trim()) return "empty_message";
+  if (text.length > 700) return "message_too_long";
+  // The older structured-output validator (runtime-output-validator.ts) has
+  // always rejected a locale mismatch -- this dialogue-agent path grew
+  // independently and never carried that check over, so a Korean session
+  // could silently ship an English Claude reply (or vice versa) with
+  // nothing here to catch it before display. (A near-duplicate-message
+  // check was considered too, mirroring that same older validator, but a
+  // repeat_until prompt -- e.g. "what is one specific example of X
+  // evidence?" asked 2-4 times to collect a list -- legitimately repeats
+  // near-identical text across iterations, so a blanket duplicate check
+  // over recent assistant turns rejects correct behavior; see the
+  // simulated-patient audit's fallback counts before ruling this back in.)
+  if (!isPatientFacingLocaleConsistent(text, contract.locale)) return "locale_mismatch";
+  if (DIAGNOSIS_PATTERN.test(text)) return "diagnosis_language";
+  if (TREATMENT_ADVICE_PATTERN.test(text)) return "unsolicited_treatment_advice";
+  if (PROTOCOL_STATE_PATTERN.test(text)) return "protocol_state_language";
+  if (AI_SELF_REFERENCE_PATTERN.test(text)) return "ai_self_reference";
+  return undefined;
+}
+
 /**
  * Section 15's pre-display gate: everything here is a REFUSAL check, not a
  * rewrite -- if patientFacingMessage fails any of these, the caller falls
@@ -30,6 +58,19 @@ function normalizeForRepeatCheck(text: string): string {
  * verbatim, or it's the known-safe fallback.
  */
 export function validateDialogueDecision(decision: DialogueDecision, contract: DialogueContract): DialogueValidationResult {
+  // Reflect-and-Confirm (.claude/TASK_SCOPE.json note2026_09_11): the one
+  // response type allowed to put the participant's words into Claude's own.
+  // The summary body gets the same hygiene checks as any free prose, then
+  // the server -- never Claude -- appends the confirmation question.
+  if (decision.responseType === "summarize_and_confirm") {
+    const hygieneIssue = freeTextHygieneIssue(decision.patientFacingMessage, contract);
+    if (hygieneIssue) return { accepted: false, reason: hygieneIssue };
+    const assembled = assembleSummaryCheck(decision.patientFacingMessage, contract);
+    if (!assembled.ok) return { accepted: false, reason: assembled.reason };
+    const finished = finishValidation(decision, contract, assembled.text);
+    return finished.accepted ? { ...finished, summaryCheck: { summaryText: assembled.summaryText } } : finished;
+  }
+
   // Patient Authorship Invariant (.claude/TASK_SCOPE.json note2026_09_05,
   // plan file goofy-orbiting-noodle.md Phase 2): for a turn that talks
   // ABOUT a participant-owned field's content, decision.patientFacingMessage
@@ -56,25 +97,8 @@ export function validateDialogueDecision(decision: DialogueDecision, contract: D
 
   const text = decision.patientFacingMessage;
 
-  if (hasUnresolvedTemplateVariable(text)) return { accepted: false, reason: "unresolved_template_variable" };
-  if (!text.trim()) return { accepted: false, reason: "empty_message" };
-  if (text.length > 700) return { accepted: false, reason: "message_too_long" };
-  // The older structured-output validator (runtime-output-validator.ts) has
-  // always rejected a locale mismatch -- this dialogue-agent path grew
-  // independently and never carried that check over, so a Korean session
-  // could silently ship an English Claude reply (or vice versa) with
-  // nothing here to catch it before display. (A near-duplicate-message
-  // check was considered too, mirroring that same older validator, but a
-  // repeat_until prompt -- e.g. "what is one specific example of X
-  // evidence?" asked 2-4 times to collect a list -- legitimately repeats
-  // near-identical text across iterations, so a blanket duplicate check
-  // over recent assistant turns rejects correct behavior; see the
-  // simulated-patient audit's fallback counts before ruling this back in.)
-  if (!isPatientFacingLocaleConsistent(text, contract.locale)) return { accepted: false, reason: "locale_mismatch" };
-  if (DIAGNOSIS_PATTERN.test(text)) return { accepted: false, reason: "diagnosis_language" };
-  if (TREATMENT_ADVICE_PATTERN.test(text)) return { accepted: false, reason: "unsolicited_treatment_advice" };
-  if (PROTOCOL_STATE_PATTERN.test(text)) return { accepted: false, reason: "protocol_state_language" };
-  if (AI_SELF_REFERENCE_PATTERN.test(text)) return { accepted: false, reason: "ai_self_reference" };
+  const hygieneIssue = freeTextHygieneIssue(text, contract);
+  if (hygieneIssue) return { accepted: false, reason: hygieneIssue };
   // Widening this to every prompt (not just ordered_list) was tried and
   // reverted: "괜찮으실까요?" in particular is common Korean phrasing inside
   // otherwise-legitimate confirmation questions elsewhere (S06/S07's real

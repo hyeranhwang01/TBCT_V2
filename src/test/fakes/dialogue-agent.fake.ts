@@ -1,6 +1,10 @@
 import type { DialogueAgentResult, DialogueContract, DialogueDecision } from "@/shared/dialogue-agent/dialogue-agent-contract";
 import { contractMayRequireAssembly } from "@/shared/dialogue-agent/message-composition";
 
+/** Tests put this in a participant message to make the fake answer with a
+ * summarize_and_confirm turn (see fakeDialogueDecision). */
+export const SUMMARY_CHECK_TRIGGER = "#요약확인";
+
 // Deterministic stand-in for the real Anthropic dialogue agent
 // (anthropic-dialogue-agent.ts) -- tests need a REALISTIC classifier (not
 // just the constant "provider unavailable" fallback every call would hit in
@@ -25,6 +29,21 @@ export function fakeDialogueDecision(contract: DialogueContract): DialogueDecisi
   // place unconditionally too: harmless when messageParts also governs (it
   // is never read), and still exactly what ships on any non-gated session.
   const gated = contractMayRequireAssembly(contract);
+
+  // Reflect-and-Confirm (.claude/TASK_SCOPE.json note2026_09_11): a real
+  // Claude decides for itself when a summary helps; this fake only
+  // summarizes when a test asks it to (SUMMARY_CHECK_TRIGGER in the
+  // participant's message) or when revising a summary the participant did not
+  // confirm -- so every other test's transcript is unchanged.
+  if (contract.summaryCheckAllowed && (contract.reflectionCheckContext || message.includes(SUMMARY_CHECK_TRIGGER))) {
+    const said = message.replace(SUMMARY_CHECK_TRIGGER, "").trim();
+    return {
+      responseType: "summarize_and_confirm",
+      patientFacingMessage: contract.locale.toLowerCase().startsWith("ko") ? `정리해 보면, "${said}"라는 말씀이시군요.` : `So what you're describing is: "${said}".`,
+      keepCurrentNode: true,
+      participantResponseState: "valid_answer",
+    };
+  }
 
   if (!message) {
     return { responseType: "reflect_and_ask", patientFacingMessage: contract.currentTaskText, keepCurrentNode: true, participantResponseState: "valid_answer", messageParts: gated ? [{ kind: "approved_task" }] : undefined };

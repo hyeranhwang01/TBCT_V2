@@ -32,6 +32,7 @@ import {
 import { attachSessionToParticipant, getOrCreateDemoParticipant, getRuntimeParticipant } from "@/shared/api/participant-api";
 import { listHomeworkRecordsByParticipant } from "@/shared/data/repositories/homework-repository";
 import { EMPTY_CONTINUITY_SEED, computeSessionContinuitySeed } from "@/shared/runtime/session-continuity";
+import { findPendingReflectionCheck } from "@/shared/runtime/reflection-check";
 import { listMemoryRetrievalRuns, listMemoryUsageLogs } from "@/shared/data/repositories/longitudinal-memory-repository";
 import { getPilotParticipantByRuntimeParticipantId, getPilotStudyArm, listProtocolAssignments } from "@/shared/data/repositories/pilot-repository";
 import { assertRuntimeTransition } from "@/shared/runtime/runtime-state-machine";
@@ -306,7 +307,16 @@ export async function getPatientRuntimeSession(sessionId: string): Promise<Patie
   const sourceFidelity = getRuntimeReleaseSourceSnapshot(release);
   const currentNode = sourceFidelity.clinicalStageNodes.find((node) => node.id === hydratedSession.currentNodeId);
   const currentPromptItem = sourceFidelity.promptItems.find((promptItem) => promptItem.id === hydratedSession.currentPromptItemId);
-  const messages = (await listRuntimeMessages(sessionId))
+  const storedMessages = await listRuntimeMessages(sessionId);
+  // Reflect-and-Confirm (.claude/TASK_SCOPE.json note2026_09_11): while the
+  // assistant's "did I get that right?" is the question on screen, the
+  // held-back prompt's own control (a 0-100 rating input, yes/no buttons, ...)
+  // would leave no way to answer it or to type a correction, so the patient
+  // gets the ordinary free-text box instead. outputFields are kept, so the
+  // worksheet keeps highlighting the same field. Computed here because the
+  // metadata that marks the open check is stripped from the messages below.
+  const reflectionCheckOpen = Boolean(findPendingReflectionCheck(storedMessages));
+  const messages = storedMessages
     .filter((message) => message.role === "patient"
       || (message.role === "assistant" && ["validated", "delivered", "replaced_by_fallback"].includes(message.status))
       || (message.role === "system" && message.metadata?.patientVisible === true))
@@ -332,7 +342,11 @@ export async function getPatientRuntimeSession(sessionId: string): Promise<Patie
       runtimeContext: { riskLevel: hydratedSession.runtimeContext.riskLevel },
     },
     currentNode: currentNode ? { id: currentNode.id, title: currentNode.title } : undefined,
-    currentPromptInput: currentPromptItem ? { type: currentPromptItem.type, validation: currentPromptItem.validation, outputFields: currentPromptItem.outputFields } : undefined,
+    currentPromptInput: currentPromptItem
+      ? reflectionCheckOpen
+        ? { type: "question", validation: null, outputFields: currentPromptItem.outputFields }
+        : { type: currentPromptItem.type, validation: currentPromptItem.validation, outputFields: currentPromptItem.outputFields }
+      : undefined,
     messages,
     hasSafetyReview: hydratedSession.status === "safety_paused" || hydratedSession.status === "escalated",
   } satisfies PatientRuntimeSessionView;

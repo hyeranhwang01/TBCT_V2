@@ -253,6 +253,61 @@ const STEP_GUIDANCE_BY_PROMPT_ID: Record<string, string[]> = {
   "tbct-s08-n17-p02-prosecution-satisfaction": ["If the participant says the prosecution was NOT satisfied, respond with the source's bridge: the prosecution may be requesting an appeal -- which is exactly why an appeal record will be prepared next. Then continue."],
 };
 
+// Reflect-and-Confirm (.claude/TASK_SCOPE.json note2026_09_11): prompts at
+// which the assistant must NOT offer its own summary/conclusion, even with a
+// confirmation question. Keyed, like STEP_GUIDANCE_BY_PROMPT_ID above, by the
+// prompt about to be DELIVERED -- a summary turn stands in for that prompt's
+// question, so a summary here would pre-empt exactly what the source says the
+// participant must produce themselves, or break a step rule about staying out
+// of the exchange:
+//   - S03 Q10 conclusion and its readback (the conclusion is theirs; the
+//     readback is already a fixed verbatim template)
+//   - S04's own fixed summary check (a second, assistant-written summary
+//     would compete with it)
+//   - S06 "the patient formulates the UA, not you"
+//   - S07 empty chair (never summarise or paraphrase), name-the-split (let it
+//     stand), consensus learning / emotion intent / parts needs (never supply)
+//   - S08 downward arrow (never propose the belief), prosecution and rebuttal
+//     (never coach / soften), surrebuttal and "Therefore..." (the meaning must
+//     come from the participant), jury review and verdict (never state or lean
+//     toward it), the judge moment, and the positive belief
+// Every participant_summary_required prompt (S01/S03 participant summary, S06
+// capsule and circuit-two summaries -- "Do not summarize, always ask") is
+// covered by validation kind below instead of by id.
+const SUMMARY_CHECK_FORBIDDEN_PROMPT_IDS: ReadonlySet<string> = new Set([
+  "tbct-s03-n11-p01-balanced-conclusion",
+  "tbct-s03-n11-p02-therefore-extension",
+  "tbct-s03-n11-p03-full-conclusion-readback",
+  "tbct-s03-n11-p04-conclusion-belief",
+  "tbct-s04-n05-p03-confirm-summary",
+  "tbct-s06-n10-p02-patient-formulates-ua",
+  "tbct-s07-n05-p03-name-the-split",
+  "tbct-s07-n06-p02-emotion-to-reason",
+  "tbct-s07-n06-p03-continue-dialogue",
+  "tbct-s07-n07-p02-consensus-learning",
+  "tbct-s07-n07-p04-consensus-emotion-intent",
+  "tbct-s07-n07-p05-consensus-parts-needs",
+  "tbct-s08-n01-p05-downward-arrow",
+  "tbct-s08-n06-p02-prosecution-evidence",
+  "tbct-s08-n10-p02-rebut-each-defense-item",
+  "tbct-s08-n12-p02-surrebut-each-pair",
+  "tbct-s08-n12-p03-participant-therefore",
+  "tbct-s08-n14-p03-review-four-blocks",
+  "tbct-s08-n14-p04-participant-verdict",
+  "tbct-s08-n14-p05-guilty-verdict-recheck",
+  "tbct-s08-n15-p01-announce-verdict",
+  "tbct-s08-n18-p01-participant-positive-belief",
+]);
+const SUMMARY_CHECK_FORBIDDEN_VALIDATION_KINDS: ReadonlySet<string> = new Set(["participant_summary_required"]);
+
+export function summaryCheckForbiddenFor(sourcePromptItem: PromptItem): boolean {
+  const kind = (sourcePromptItem.validation as { kind?: unknown } | null)?.kind;
+  return SUMMARY_CHECK_FORBIDDEN_PROMPT_IDS.has(sourcePromptItem.id) || (typeof kind === "string" && SUMMARY_CHECK_FORBIDDEN_VALIDATION_KINDS.has(kind));
+}
+
+/** Exported for the catalog-integrity test only (every id must exist). */
+export const SUMMARY_CHECK_FORBIDDEN_PROMPT_ID_LIST: readonly string[] = [...SUMMARY_CHECK_FORBIDDEN_PROMPT_IDS];
+
 export function stepSpecificGuidanceFor(sourcePromptItem: PromptItem): string[] | undefined {
   const curated = STEP_GUIDANCE_BY_PROMPT_ID[sourcePromptItem.id] ?? [];
   const validation = sourcePromptItem.validation as { requiresThirdPerson?: boolean; stateScaleEveryTime?: boolean } | null;
@@ -293,8 +348,17 @@ export function compileDialogueContract(input: {
    * session has no tone guidance configured, same as every other optional
    * contract field here. */
   sessionToneGuidance?: string;
+  /** Whether the CALLER is at a point where an assistant summary could be
+   * confirmed (Reflect-and-Confirm) -- narrowed below to prompts that wait
+   * for input and are not in the forbidden set. */
+  summaryCheckAllowed?: boolean;
+  reflectionCheckContext?: { previousSummary: string; attempt: number };
 }): DialogueContract {
   const { session, node, sourcePromptItem, runtimePromptItem } = input;
+  // A summary turn holds back this prompt's question until the participant
+  // answers "did I get that right?" -- impossible on a prompt the runtime
+  // doesn't wait on (it would advance straight past the confirmation).
+  const summaryCheckAllowed = Boolean(input.summaryCheckAllowed) && runtimePromptItem.requiresPatientInput && !summaryCheckForbiddenFor(sourcePromptItem);
   const targetField = sourcePromptItem.outputFields[0];
   const binding = getWorksheetBindings(session.sessionDefinitionId).find((item) => item.canonicalFieldKey === targetField);
   const expectedInputType = resolveExpectedInputType(binding, sourcePromptItem.validation);
@@ -363,6 +427,7 @@ export function compileDialogueContract(input: {
       "explain_scale",
       "explain_rationale",
       "request_missing_field",
+      ...(summaryCheckAllowed ? ["summarize_and_confirm"] : []),
     ],
     forbiddenActions: [
       "advance_protocol",
@@ -400,6 +465,8 @@ export function compileDialogueContract(input: {
     // actually written one.
     clinicianGuidance: sourcePromptItem.modelGuidance?.trim() || undefined,
     sessionToneGuidance: input.sessionToneGuidance?.trim() || undefined,
+    summaryCheckAllowed,
+    reflectionCheckContext: summaryCheckAllowed ? input.reflectionCheckContext : undefined,
   };
 
   return dialogueContractSchema.parse(contract);

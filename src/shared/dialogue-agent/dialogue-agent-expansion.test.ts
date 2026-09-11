@@ -209,7 +209,9 @@ describe("revision_request: honest handling depends on worksheetEditAvailable", 
     const decision = fakeDialogueDecision(contract);
     expect(decision.participantResponseState).toBe("revision_request");
     expect(decision.patientFacingMessage).toContain("edit");
-    expect(validateDialogueDecision(decision, contract)).toEqual({ accepted: true });
+    // Gated since note2026_09_11 (every session): the shipped text is the
+    // server-assembled worksheet_edit_available connector.
+    expect(validateDialogueDecision(decision, contract)).toEqual({ accepted: true, finalText: "Of course -- you can edit that directly, and I'll use your updated answer from here on." });
   });
 
   it("says plainly that it isn't automated yet when the session has no worksheet", () => {
@@ -239,7 +241,9 @@ describe("revision_request: honest handling depends on worksheetEditAvailable", 
     const decision = fakeDialogueDecision(contract);
     expect(decision.participantResponseState).toBe("revision_request");
     expect(decision.patientFacingMessage).toMatch(/isn't automated|don't have a way/);
-    expect(validateDialogueDecision(decision, contract)).toEqual({ accepted: true });
+    // Gated since note2026_09_11 (the contract's sessionId comes from the
+    // real S01 node): the shipped text is the worksheet_edit_unavailable connector.
+    expect(validateDialogueDecision(decision, contract)).toEqual({ accepted: true, finalText: "I hear you. Changing an earlier answer isn't automated in this conversation yet, but let's continue and you can tell me the correction." });
   });
 });
 

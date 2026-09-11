@@ -54,7 +54,7 @@ const RESPONSE_SCHEMA = {
   additionalProperties: false,
   required: ["responseType", "patientFacingMessage", "keepCurrentNode", "participantResponseState"],
   properties: {
-    responseType: { type: "string", enum: ["acknowledge", "reflect_and_ask", "clarify", "repair", "request_missing_field", "explain_term", "explain_scale", "explain_rationale", "restore_context", "show_required_visual", "acknowledge_pause"] },
+    responseType: { type: "string", enum: ["acknowledge", "reflect_and_ask", "clarify", "repair", "request_missing_field", "explain_term", "explain_scale", "explain_rationale", "restore_context", "show_required_visual", "acknowledge_pause", "summarize_and_confirm"] },
     patientFacingMessage: { type: "string", minLength: 1, maxLength: 700 },
     keepCurrentNode: { type: "boolean", enum: [true] },
     targetField: { type: "string" },
@@ -207,28 +207,28 @@ function systemPrompt(contract: DialogueContract) {
     // invented a belief/assumption, drew their conclusion for them, or
     // supplied evidence on their behalf, all via ordinary prose in
     // patientFacingMessage, none of it caught by that instruction. For a
-    // turn like this one, patientFacingMessage is not read at all -- submit
-    // messageParts instead, built only from these pieces:
-    // approved_task (use the current task exactly as given), quote (a
-    // SPAN OF THE PARTICIPANT'S OWN WORDS FROM THIS CONVERSATION, verified
-    // against the actual transcript -- never your own prior turn, never the
-    // protocol text, never something you inferred they meant), connector
-    // (pick one id from CONNECTOR_IDS -- a short, content-free turn-opener;
-    // do not write your own), repair (pick one id from REPAIR_TEMPLATE_IDS
-    // for a wrong-construct/partial-answer correction, then follow it with
-    // an approved_task part re-asking the actual task -- never describe the
-    // construct yourself), example (an illustrative example ONLY, to help a
-    // stalled participant get started -- it will be rendered inside a fixed
-    // "for example..." wrapper so it never reads as something they said; you
-    // must never, in ANY later turn, refer back to an example you offered as
-    // something the participant confirmed, stated, or that the trial/session
-    // established -- an example is illustration, never their answer, until
-    // and unless they actually say it themselves).
+    // protected turn, patientFacingMessage is not read at all -- see
+    // message-composition.ts. The part definitions used to live only in this
+    // comment, which the model never sees (the prompt line below pointed at
+    // it as "see above"); they are spelled out in the prompt text itself now
+    // that every session is gated (.claude/TASK_SCOPE.json note2026_09_11).
     contract.nodeRequiresProtectedField
-      ? "This step's own field above may just be a delivery/acknowledgment flag, but this step is ALSO responsible for another field only the participant may state (e.g. a belief, charge, or piece of evidence established earlier). Do not restate, reword, add to, or otherwise alter that other content while phrasing this turn -- if you reference it at all, it must be the participant's own words exactly as they gave them, never your own summary or rephrasing of it."
+      ? "This step's own field above may just be a delivery/acknowledgment flag, but this step is ALSO responsible for another field only the participant may state (e.g. a belief, charge, or piece of evidence established earlier). Do not restate, reword, add to, or otherwise alter that other content while phrasing this turn -- if you reference it at all, it must be the participant's own words exactly as they gave them. Your own summary of what they said may appear only in a summarize_and_confirm turn, and only when one is allowed below."
       : "",
     contractMayRequireAssembly(contract)
-      ? `This turn is protected: for responseType ${Array.from(PATIENT_CONTENT_RESPONSE_TYPES).join("/")}, you must submit messageParts (see above), not patientFacingMessage. For explain_rationale/explain_term/explain_scale/show_required_visual/acknowledge_pause -- which explain the PROTOCOL, never the participant's content -- patientFacingMessage is fine as usual.`
+      ? `This turn is protected: for responseType ${Array.from(PATIENT_CONTENT_RESPONSE_TYPES).join("/")}, patientFacingMessage is ignored -- submit messageParts instead, built only from these pieces. approved_task: the current task exactly as given. quote: an exact span of the participant's OWN words from this conversation (at least 6 characters, copied verbatim, never shortened into a flatter statement) -- never your own prior turn, never the protocol text, never something you inferred they meant. connector: one id from ${CONNECTOR_IDS.join(", ")} -- a short, content-free turn-opener; do not write your own. repair: one id from ${REPAIR_TEMPLATE_IDS.join(", ")} for a wrong-construct/partial-answer correction, followed by an approved_task part re-asking the actual task -- never describe the construct yourself. example: an illustration ONLY, to help a stalled participant get started; it is shown inside a fixed "for example..." wrapper, and in no later turn may you treat it as something they said, confirmed, or that the session established. For explain_rationale/explain_term/explain_scale/show_required_visual/acknowledge_pause -- which explain the PROTOCOL, never the participant's content -- and for summarize_and_confirm, patientFacingMessage is used as usual.`
+      : "",
+    // Reflect-and-Confirm (.claude/TASK_SCOPE.json note2026_09_11): the one
+    // channel through which Claude may put the participant's words into its
+    // own -- always closed by a server-appended confirmation question
+    // (message-composition.ts's assembleSummaryCheck), never on a step where
+    // the participant must form the summary/conclusion themselves
+    // (dialogue-contract-compiler.ts's summaryCheckForbiddenFor).
+    contract.summaryCheckAllowed
+      ? "Summaries and conclusions: you MAY put what the participant has told you into your own words -- a short summary, what it seems to mean, or a conclusion you draw from it -- but ONLY with responseType summarize_and_confirm. patientFacingMessage then holds just that: 1-2 plain declarative sentences, no question, no transition, no next task, and never framed as something the participant said or already agreed to. The server appends a fixed \"did I get that right?\" and holds the current task until they answer, so ask neither yourself. Use it when a summary genuinely helps (e.g. after a substantive answer), not on every turn. No other responseType may contain your own summary, interpretation, or conclusion of their words."
+      : "Do NOT summarize, interpret, or draw a conclusion about what the participant said on this turn -- summarize_and_confirm is not available here (either the participant must form it themselves at this step, or this turn cannot wait for a confirmation).",
+    contract.reflectionCheckContext
+      ? `Your previous summary was: ${JSON.stringify(contract.reflectionCheckContext.previousSummary)}. The participant's last message is their reply to "did I get that right?" and did NOT simply confirm it. Revise the summary using what they said -- their words take priority over yours -- and submit the revision with responseType summarize_and_confirm. Do not ask the current task on this turn.`
       : "",
     // Step-specific conduct rules from the protocol source. These are
     // clinical requirements for THIS step, not style preferences: where they

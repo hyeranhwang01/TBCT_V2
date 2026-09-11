@@ -16,6 +16,7 @@ import { injectLongitudinalMemory } from "@/shared/memory/memory-context-injecto
 import { projectRuntimeFieldsToWorksheet } from "@/shared/worksheet/worksheet-projection";
 import { isDialogueAgentEnabled, resolveDialogueAgentMessage } from "@/shared/dialogue-agent/dialogue-agent-orchestrator";
 import { resolveBracketPlaceholders, resolveStaticPatientMessage } from "@/shared/runtime/runtime-static-message";
+import { MAX_SUMMARIES_PER_CHECK, REFLECTION_ASK_WHAT_DIFFERS, REFLECTION_MOVE_ON, classifyReflectionCheckReply, findPendingReflectionCheck, reflectionText, type PendingReflectionCheck, type ReflectionCheckResolution } from "@/shared/runtime/reflection-check";
 import { composeCrpPlanSummary } from "@/patient/sessions/s07/messages";
 import { composeTrialClosingSummary } from "@/patient/sessions/s08/messages";
 import type { ClinicalStageNode, PromptItem } from "@/shared/protocol/source-fidelity-types";
@@ -738,6 +739,157 @@ async function deliverProcessClarificationTurn(input: {
   return { assistantMessage, sessionStatus: "waiting_for_input" as RuntimeSessionStatus };
 }
 
+// Reflect-and-Confirm (.claude/TASK_SCOPE.json note2026_09_11): the
+// participant is answering the assistant's "did I get that right?" about its
+// own summary -- not the active prompt, whose task the summary turn held
+// back. Like deliverProcessClarificationTurn above, nothing here writes a
+// field, moves runtimeState, or touches clarificationAttemptCount; the
+// active prompt simply stays active.
+//   - plain yes      -> the held-back task (the dialogue agent may phrase it,
+//                       but may not summarize again on this turn)
+//   - bare no        -> ask once which part felt different; the check stays open
+//   - correction     -> a revised summary with the same confirmation question,
+//                       up to MAX_SUMMARIES_PER_CHECK summaries per check
+//   - anything else  -> leave the participant's own words exactly as recorded
+//                       and ask the task
+async function deliverReflectionCheckReplyTurn(input: {
+  session: RuntimeSession;
+  node: ClinicalStageNode;
+  promptItem: PromptItem;
+  runtimePromptItem: import("@/types/protocol-runtime").RuntimePromptItem;
+  runtimeState: NonNullable<RuntimeSession["runtimeState"]>;
+  patientMessage: RuntimeMessage;
+  pendingCheck: PendingReflectionCheck;
+  recentMessages: RuntimeMessage[];
+  sessionToneGuidance?: string;
+}) {
+  const locale = input.session.locale;
+  const currentTaskText = resolveBracketPlaceholders(
+    resolveStaticPatientMessage(input.promptItem, locale, input.session.runtimeContext)?.patientMessage
+      ?? resolvePromptLocaleText(input.runtimePromptItem.id, input.runtimePromptItem.fallbackPatientText, locale),
+    input.session.runtimeContext,
+  );
+  const moveOnText = `${reflectionText(REFLECTION_MOVE_ON, locale)} ${currentTaskText}`;
+  const reply = classifyReflectionCheckReply(input.patientMessage.content);
+  const check = input.pendingCheck;
+  const agentEnabled = isDialogueAgentEnabled(input.node.sessionId);
+  const askDialogueAgent = (options: { deterministicFallbackText: string; summaryCheckAllowed: boolean; reflectionCheckContext?: { previousSummary: string; attempt: number } }) => resolveDialogueAgentMessage({
+    session: input.session,
+    node: input.node,
+    sourcePromptItem: input.promptItem,
+    runtimePromptItem: input.runtimePromptItem,
+    lastParticipantMessage: input.patientMessage.content,
+    recentMessages: input.recentMessages,
+    clarificationAttemptCount: input.session.runtimeContext.clarificationAttemptCount ?? 0,
+    turnId: makeId("TURN"),
+    currentTaskTextOverride: currentTaskText,
+    isFirstPromptOfNode: false,
+    isFirstPromptOfSession: false,
+    sessionToneGuidance: input.sessionToneGuidance,
+    ...options,
+  });
+  const leaveAsParticipantWords: ReflectionCheckResolution = { checkId: check.checkId, outcome: "left_as_participant_words", summaries: check.attempt };
+  let content = moveOnText;
+  let dialogueOutcome: Awaited<ReturnType<typeof resolveDialogueAgentMessage>> | null = null;
+  let nextCheck: PendingReflectionCheck | undefined;
+  let resolution: ReflectionCheckResolution | undefined;
+  if (reply === "affirm") {
+    dialogueOutcome = agentEnabled ? await askDialogueAgent({ deterministicFallbackText: currentTaskText, summaryCheckAllowed: false }) : null;
+    content = dialogueOutcome?.patientMessage ?? currentTaskText;
+    resolution = { checkId: check.checkId, outcome: "confirmed", summaries: check.attempt };
+  } else if (reply === "deny" && !check.askedWhatDiffers) {
+    content = reflectionText(REFLECTION_ASK_WHAT_DIFFERS, locale);
+    nextCheck = { ...check, askedWhatDiffers: true };
+  } else if (reply === "correction" && check.attempt < MAX_SUMMARIES_PER_CHECK && agentEnabled) {
+    dialogueOutcome = await askDialogueAgent({ deterministicFallbackText: moveOnText, summaryCheckAllowed: true, reflectionCheckContext: { previousSummary: check.summaryText, attempt: check.attempt } });
+    // Anything other than an accepted revised summary (a fallback, or Claude
+    // choosing a different response type) ends the check with the
+    // participant's own words standing, rather than shipping a turn that
+    // might neither re-confirm nor ask the task.
+    if (dialogueOutcome.summaryCheck) {
+      content = dialogueOutcome.patientMessage;
+      nextCheck = { ...check, attempt: check.attempt + 1, summaryText: dialogueOutcome.summaryCheck.summaryText };
+    } else {
+      resolution = leaveAsParticipantWords;
+    }
+  } else {
+    resolution = leaveAsParticipantWords;
+  }
+  const assistantMessage: RuntimeMessage = {
+    id: makeId("RMSG"),
+    runtimeSessionId: input.session.id,
+    role: "assistant",
+    content,
+    status: "validated",
+    nodeId: input.node.id,
+    promptItemId: input.promptItem.id,
+    sourceEvidenceIds: [],
+    createdAt: new Date().toISOString(),
+    deliveredAt: new Date().toISOString(),
+    metadata: { turnId: makeId("TURN"), turnOutcome: "reflection_check", reflectionReply: reply, reflectionCheck: nextCheck, reflectionCheckResolution: resolution, dialogueDecision: dialogueOutcome?.decision ?? undefined, dialogueFallbackUsed: dialogueOutcome?.usedFallback },
+  };
+  const outputValidation = deterministicValidation(content);
+  const usedDialogueAgent = Boolean(dialogueOutcome && !dialogueOutcome.usedFallback && !dialogueOutcome.excludedBySafety);
+  await commitRuntimeAssistantTurn({
+    sessionId: input.session.id,
+    assistantMessage,
+    providerEvent: {
+      id: makeId("RPE"),
+      runtimeSessionId: input.session.id,
+      provider: usedDialogueAgent && dialogueOutcome ? dialogueOutcome.provider : "deterministic",
+      model: usedDialogueAgent && dialogueOutcome ? (dialogueOutcome.model ?? "dialogue-agent") : "runtime-reflection-check",
+      nodeId: input.node.id,
+      promptItemId: input.promptItem.id,
+      inputSummary: `reflection_check:${reply}`,
+      outputText: content,
+      createdAt: new Date().toISOString(),
+      dialogueResponseType: dialogueOutcome?.decision?.responseType,
+      dialogueParticipantResponseState: dialogueOutcome?.decision?.participantResponseState,
+      dialogueFallbackUsed: dialogueOutcome?.usedFallback,
+    },
+    validationEvent: {
+      id: makeId("RVE"),
+      runtimeSessionId: input.session.id,
+      nodeId: input.node.id,
+      promptItemId: input.promptItem.id,
+      ...outputValidation,
+      createdAt: new Date().toISOString(),
+    },
+    trace: createRuntimeExecutionTrace({
+      runtimeSessionId: input.session.id,
+      releaseId: input.session.releaseId,
+      nodeId: input.node.id,
+      promptItemId: input.promptItem.id,
+      roleId: input.runtimePromptItem.roleId,
+      provider: "deterministic",
+      model: "runtime-reflection-check",
+      contractHash: `reflection-check:${input.session.id}:${input.promptItem.id}`,
+      validation: outputValidation,
+      fallbackUsed: false,
+      transitionDecision: "clarification",
+      stateChanges: { activeNodeId: input.node.id, activePromptItemId: input.promptItem.id },
+      fidelityEvidence: {
+        locale: input.session.locale,
+        patientFacingText: content,
+        activePromptMatches: true,
+        patientInputPresent: true,
+      },
+    }),
+    sessionPatch: {
+      runtimeContext: {
+        ...input.session.runtimeContext,
+        lastPatientMessage: input.patientMessage.content,
+      },
+      currentNodeId: input.node.id,
+      currentPromptItemId: input.promptItem.id,
+      runtimeState: input.runtimeState,
+      promptProgressionReason: "clarification_sent",
+      status: "waiting_for_input",
+    },
+  });
+  return { assistantMessage, sessionStatus: "waiting_for_input" as RuntimeSessionStatus, reply, resolution };
+}
+
 async function deliverSafetyOverrideTurn(input: {
   session: RuntimeSession;
   node: ClinicalStageNode;
@@ -1423,6 +1575,14 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
   const currentPromptItem = initialView.promptItems.find((promptItem) => promptItem.id === activeStep.promptItem.sourcePromptItemId);
   if (!currentPromptItem) throw new Error("Current source PromptItem is missing");
   if (!activeStep.promptItem.requiresPatientInput) throw new Error("Current PromptItem does not accept patient input");
+  // Reflect-and-Confirm: when the last thing on screen is the assistant's
+  // own summary ending in "did I get that right?", this reply answers that
+  // -- see deliverReflectionCheckReplyTurn. Only a typed/spoken reply or a
+  // yes/no can answer it (the patient view offers a free-text box while a
+  // check is open -- runtime-session-api.ts); any other structured input
+  // (a rating, a choice) is an answer to the held-back prompt itself and is
+  // processed as usual.
+  const pendingReflectionCheck = patientInput.kind === "text" || patientInput.kind === "boolean" ? findPendingReflectionCheck(initialView.messages) : undefined;
   const clientTurnId = options.clientTurnId ?? makeId("TURN");
   const patientMessage: RuntimeMessage = {
     id: makeId("RMSG"),
@@ -1436,7 +1596,7 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
     deliveredAt: new Date().toISOString(),
     metadata: { inputKind: patientInput.kind, promptItemId: currentPromptItem.id, clientTurnId },
   };
-  const extracted = await extractRuntimeState({ patientInput, currentNode, currentPromptItem, currentContext: initialSession.runtimeContext, locale: turnLocale });
+  const extracted = await extractRuntimeState({ patientInput, currentNode, currentPromptItem, currentContext: initialSession.runtimeContext, locale: turnLocale, pendingReflectionCheck: Boolean(pendingReflectionCheck) });
   // Worksheet projection is a best-effort read-side mirror of the canonical
   // extracted fields (src/shared/worksheet/worksheet-projection.ts) -- never
   // allowed to FAIL a real turn (errors are swallowed below), but it IS
@@ -1525,6 +1685,28 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
     void saveRuntimeLog(makeLog(sessionId, "input", "completed", `Patient asked to switch response language to ${languageSwitchLocale}`, { nodeId: currentNode.id })).catch(() => {});
     void createRuntimeCheckpoint(sessionId).catch(() => {});
     return { sessionId, previousNodeId: session.previousNodeId, currentNodeId: currentNode.id, currentPromptItemId: currentPromptItem.id, stateExtraction: extracted, safetyResult, generatedMessage: languageSwitch.assistantMessage, turnOutcome: "clarification", fallbackUsed: false, sessionStatus: languageSwitch.sessionStatus, logIds: [] };
+  }
+  // Reflect-and-Confirm (.claude/TASK_SCOPE.json note2026_09_11): after the
+  // safety/refusal/language branches above, which always keep precedence,
+  // and before every branch that would grade this reply as an answer to the
+  // active prompt -- it isn't one. extractRuntimeState already skipped field
+  // extraction for it (pendingReflectionCheck), so a triggered safety result
+  // still falls through to the safety route below unchanged.
+  if (pendingReflectionCheck && !safetyResult.triggered) {
+    const reflectionReply = await deliverReflectionCheckReplyTurn({
+      session,
+      node: currentNode,
+      promptItem: currentPromptItem,
+      runtimePromptItem: activeStep.promptItem,
+      runtimeState,
+      patientMessage,
+      pendingCheck: pendingReflectionCheck,
+      recentMessages: [...view.messages, patientMessage],
+      sessionToneGuidance: runtimeRelease.policies.sessionPolicies?.[session.sessionDefinitionId]?.toneGuidance,
+    });
+    void saveRuntimeLog(makeLog(sessionId, "input", "completed", `Participant replied to a summary check (${reflectionReply.reply}${reflectionReply.resolution ? `, ${reflectionReply.resolution.outcome}` : ", still open"})`, { nodeId: currentNode.id })).catch(() => {});
+    void createRuntimeCheckpoint(sessionId).catch(() => {});
+    return { sessionId, previousNodeId: session.previousNodeId, currentNodeId: currentNode.id, currentPromptItemId: currentPromptItem.id, stateExtraction: extracted, safetyResult, generatedMessage: reflectionReply.assistantMessage, turnOutcome: "clarification", fallbackUsed: false, sessionStatus: reflectionReply.sessionStatus, logIds: [] };
   }
   // P0-5, checked before the normal missing-fields/clarification branch below
   // for the same reason as the language-switch check above: "뭘요?" / "왜

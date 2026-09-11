@@ -45,6 +45,10 @@ export type DialogueAgentTurnResult = {
   provider: string;
   model?: string;
   latencyMs?: number;
+  // Set only when the shipped text is an accepted summarize_and_confirm turn
+  // (Reflect-and-Confirm, .claude/TASK_SCOPE.json note2026_09_11) -- the
+  // caller opens a pending confirmation from it. Never set on a fallback.
+  summaryCheck?: { summaryText: string };
 };
 
 /**
@@ -71,6 +75,8 @@ export async function resolveDialogueAgentMessage(input: {
   isFirstPromptOfNode: boolean;
   isFirstPromptOfSession: boolean;
   sessionToneGuidance?: string;
+  summaryCheckAllowed?: boolean;
+  reflectionCheckContext?: { previousSummary: string; attempt: number };
 }): Promise<DialogueAgentTurnResult> {
   if (isSafetyCriticalPrompt(input.sourcePromptItem)) {
     return { patientMessage: input.deterministicFallbackText, decision: null, usedFallback: false, excludedBySafety: true, fallbackReason: "safety_critical_prompt_excluded", provider: "deterministic" };
@@ -87,6 +93,8 @@ export async function resolveDialogueAgentMessage(input: {
     isFirstPromptOfNode: input.isFirstPromptOfNode,
     isFirstPromptOfSession: input.isFirstPromptOfSession,
     sessionToneGuidance: input.sessionToneGuidance,
+    summaryCheckAllowed: input.summaryCheckAllowed,
+    reflectionCheckContext: input.reflectionCheckContext,
   });
 
   const result = await callDialogueAgent(contract, { sessionId: input.session.id, turnId: input.turnId });
@@ -107,5 +115,5 @@ export async function resolveDialogueAgentMessage(input: {
   // itself (Patient Authorship Invariant) -- decision.patientFacingMessage
   // was never trusted or even inspected in that case, so it must not be
   // shipped here.
-  return { patientMessage: validation.finalText ?? result.decision.patientFacingMessage, decision: result.decision, usedFallback: false, provider: result.provider, model: result.model, latencyMs: result.latencyMs };
+  return { patientMessage: validation.finalText ?? result.decision.patientFacingMessage, decision: result.decision, usedFallback: false, provider: result.provider, model: result.model, latencyMs: result.latencyMs, summaryCheck: validation.summaryCheck };
 }

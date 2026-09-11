@@ -119,6 +119,16 @@ export const dialogueContractSchema = z.object({
   // roleAndStance, e.g. "speak warmly, use short sentences, avoid clinical
   // jargon"). Same additive-only guarantee as clinicianGuidance above.
   sessionToneGuidance: z.string().optional(),
+  // Reflect-and-Confirm (.claude/TASK_SCOPE.json note2026_09_11): true only
+  // when this turn may carry the assistant's own summary/conclusion of what
+  // the participant said -- see dialogue-contract-compiler.ts for the exact
+  // conditions. Absent/false means a summarize_and_confirm decision is
+  // rejected outright.
+  summaryCheckAllowed: z.boolean().optional(),
+  // Set only on the turn right after the participant did NOT simply confirm
+  // the previous summary -- carries that summary so Claude revises it against
+  // their correction instead of repeating it.
+  reflectionCheckContext: z.object({ previousSummary: z.string(), attempt: z.number().int().min(1) }).optional(),
 });
 export type DialogueContract = z.infer<typeof dialogueContractSchema>;
 
@@ -142,6 +152,11 @@ export const dialogueResponseTypeSchema = z.enum([
   "restore_context",
   "show_required_visual",
   "acknowledge_pause",
+  // Reflect-and-Confirm (note2026_09_11): the assistant's own short summary
+  // or conclusion of what the participant said. The server always closes it
+  // with a fixed "did I get that right?" and never combines it with the next
+  // task -- see message-composition.ts's assembleSummaryCheck.
+  "summarize_and_confirm",
 ]);
 
 export const participantResponseStateSchema = z.enum([

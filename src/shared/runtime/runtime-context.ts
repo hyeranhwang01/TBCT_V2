@@ -819,6 +819,9 @@ export async function extractRuntimeState(input: {
   currentPromptItem?: PromptItem;
   currentContext: RuntimeContext;
   locale?: string;
+  /** Reflect-and-Confirm: the reply answers the assistant's "did I get that
+   * right?", not the active prompt (see the early return below). */
+  pendingReflectionCheck?: boolean;
 }): Promise<StateExtractionResult> {
   const nextFields = { ...input.currentContext.fields };
   const rawText = Array.isArray(input.patientInput.value) ? input.patientInput.value.join(" ") : String(input.patientInput.value);
@@ -855,6 +858,28 @@ export async function extractRuntimeState(input: {
       return { fields: nextFields, responseCategory: "negative", riskLevel: "low", riskSignals: [], confidence: 1, missingFields: expectedFields };
     }
     return { fields: nextFields, responseCategory: "text", riskLevel: "low", riskSignals: ["ambiguous_safety_language"], confidence: 0.4, missingFields: expectedFields };
+  }
+  // Reflect-and-Confirm (.claude/TASK_SCOPE.json note2026_09_11): the
+  // assistant's last turn was its own summary closed with "did I get that
+  // right?", so this reply answers THAT, not the active prompt --
+  // runtime-execution-api.ts's deliverReflectionCheckReplyTurn handles it.
+  // Only risk detection runs, by the same rule as the main path below (a
+  // current disclosure sets crisisSignal; a negated/historical/third-party
+  // mention is flagged ambiguous so the neutral safety clarification still
+  // fires). A "네", a "아니요", or a correction is never stored in the active
+  // prompt's field or projected to the worksheet.
+  if (input.pendingReflectionCheck) {
+    const riskSignals = detectRuntimeRiskSignals(lowered);
+    const isAmbiguousRiskMention = riskSignals.length > 0 && isNonCurrentRiskMention(rawText);
+    const isCurrentRisk = riskSignals.length > 0 && !isAmbiguousRiskMention;
+    return {
+      fields: isCurrentRisk ? { ...nextFields, crisisSignal: true } : nextFields,
+      responseCategory: "text",
+      riskLevel: isCurrentRisk ? "high" : input.currentContext.riskLevel ?? "low",
+      riskSignals: isAmbiguousRiskMention ? [...riskSignals, "ambiguous_safety_language"] : riskSignals,
+      confidence: 1,
+      missingFields: [],
+    };
   }
   const kind = String(validation?.kind ?? payload.kind ?? input.patientInput.kind);
   const derivedBooleanFields = kind === "rating_or_absent" ? expectedFields.filter((item) => /Recorded$/i.test(item)) : [];
