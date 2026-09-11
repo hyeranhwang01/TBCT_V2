@@ -6,7 +6,7 @@ import { CheckCircle2, Circle } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, Button, Card, SectionHeader } from "@/shared/components/ui/primitives";
 import { confirmWorksheetField, editWorksheetField, getWorksheetView } from "@/shared/worksheet/worksheet-projection";
-import { getComposedWorksheet } from "@/shared/worksheet/composed-worksheet-registry";
+import { PATIENT_COMPOSED_WORKSHEET_SESSIONS, getComposedWorksheet } from "@/shared/worksheet/composed-worksheet-registry";
 import { QuestCompleteBadge, WorksheetSourceProvider, useJustFilled } from "@/patient/components/worksheet-renderers/shared";
 import { useRealtimeInvalidate } from "@/shared/supabase/use-realtime-invalidate";
 import { fadeUp } from "@/shared/motion/motion-variants";
@@ -23,12 +23,15 @@ import type { RuntimeMessage } from "@/types/runtime-session";
 // real HTML/CSS (see composed-worksheet-registry.ts, one per session
 // s01-s08), values and all, plus the flat field-status/"Advanced" list.
 //
-// variant="patient" (the participant's own chat page): NEVER shows a field's
-// actual value -- the participant already said it, in the chat transcript
-// right next to this panel; this side only confirms "this is recorded" as
-// each field fills, as a lightweight progress feed (PatientProgressFeed
-// below). This used to render the exact same value-revealing view as the
-// clinician's, which is what motivated this split.
+// variant="patient" (the participant's own chat page): by default NEVER
+// shows a field's actual value -- the participant already said it, in the
+// chat transcript right next to this panel; this side only confirms "this is
+// recorded" as each field fills, as a lightweight progress feed
+// (PatientProgressFeed below). Exception: sessions in
+// PATIENT_COMPOSED_WORKSHEET_SESSIONS (S01) show their own worksheets,
+// read-only, because the real first session filled two paper worksheets
+// together with the participant (.claude/TASK_SCOPE.json
+// note2026_09_12_s01_redesign).
 
 const STATUS_TONE: Record<WorksheetFieldStatus, "success" | "primary" | "neutral" | "warning" | "critical"> = {
   empty: "neutral",
@@ -139,6 +142,22 @@ export function WorksheetPane({
 
   if (variant === "patient") {
     const isKorean = locale.toLowerCase().startsWith("ko");
+    // S01 only (PATIENT_COMPOSED_WORKSHEET_SESSIONS): the participant sees
+    // the session's own worksheets filling in beside the chat, read-only.
+    const PatientWorksheet = PATIENT_COMPOSED_WORKSHEET_SESSIONS.has(sessionDefinitionId) ? getComposedWorksheet(sessionDefinitionId) : undefined;
+    if (PatientWorksheet) {
+      return (
+        <Card className="overflow-hidden">
+          <SectionHeader
+            title={isKorean ? "워크시트" : "Worksheet"}
+            description={isKorean ? "대화하면서 자동으로 채워져요 — 평가하는 게 아니고, 채팅에서 말씀하신 내용이에요." : "Fills in automatically as we talk — nothing here is graded; it is what you said in the chat."}
+          />
+          <div className="max-h-[calc(100vh-260px)] overflow-auto p-4">
+            <PatientWorksheet view={view} activeCanonicalFieldKey={activeCanonicalFieldKey} onConfirm={() => undefined} onEdit={() => undefined} busy={false} runtimeSessionId={runtimeSessionId} locale={locale} readOnly />
+          </div>
+        </Card>
+      );
+    }
     return (
       <Card className="overflow-hidden">
         <SectionHeader

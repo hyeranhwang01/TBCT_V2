@@ -20,7 +20,19 @@ export interface ComposedWorksheetProps {
   // session -- see getListScoreHistory). Every other session component
   // simply doesn't destructure it.
   runtimeSessionId: string;
+  // Only read by sessions listed in PATIENT_COMPOSED_WORKSHEET_SESSIONS: the
+  // participant's session locale for labels, and a read-only rendering (no
+  // edit/confirm controls) for the participant's own chat page.
+  locale?: string;
+  readOnly?: boolean;
 }
+
+// Sessions whose composed worksheet is shown to the PARTICIPANT beside the
+// chat, filled as they answer (S01 redesign, .claude/TASK_SCOPE.json
+// note2026_09_12_s01_redesign -- the real first session filled two paper
+// worksheets live). Every other session keeps the value-free progress
+// checklist on the participant side.
+export const PATIENT_COMPOSED_WORKSHEET_SESSIONS: ReadonlySet<string> = new Set(["tbct-s01"]);
 
 // Session-specific "recreate the figure in real HTML/CSS" worksheets --
 // each one has a genuinely different layout matching that session's own

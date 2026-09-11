@@ -1,26 +1,89 @@
 "use client";
 
+import { useEffect, useRef, type ReactNode } from "react";
 import { useReducedMotionPreference } from "@/shared/motion/use-reduced-motion-preference";
-import { CycleArrow, FocusLine, SessionSignals, WorksheetCell, capturedStatus, listCount } from "@/patient/components/worksheet-renderers/shared";
+import { WorksheetCell } from "@/patient/components/worksheet-renderers/shared";
+import { DistortionTable } from "@/patient/sessions/s01/distortion-table";
+import { CcdLevel1Diagram, Placeholder, S01Box, fieldText, scrollWithinPanel } from "@/patient/sessions/s01/worksheet-diagram";
+import { S01_LABELS, s01Locale } from "@/patient/sessions/s01/worksheet-labels";
 import type { WorksheetFieldView, WorksheetView } from "@/types/worksheet";
 
-// Recreates the TBCT Session 1 "Conceptualization Diagram" (three-person
-// teaching example): the participant's own situation and initial thought
-// (captured in Opening, before the example), then one shared Situation
-// feeding three parallel Thought -> Emotion -> Behavior branches (people
-// 1-3), then the participant's own Emotion/Behavior/Body -- reusing the
-// same situation+thought already captured above rather than a separate
-// discrete quad. See tbct-s01.ts's header for the full field mapping.
+// Session 1 worksheets, rebuilt to match the two paper worksheets filled
+// together with the participant in the real first session
+// (.claude/TASK_SCOPE.json note2026_09_12_s01_redesign):
+//   1. problems and goals, then "my cognitive model" -- the TBCT
+//      Conceptualization Diagram Phase 1 Level 1 for the participant's own
+//      moment (worksheet-diagram.tsx);
+//   2. the three-person example -- Level 1 repeated three times for one
+//      shared scene;
+// followed by the participant's summary, the distortions they picked, and
+// (from the distortions step on) the read-only list of 15 distortions.
 //
-// Labels say "Person N" (not "Candidate N") to match the dialogue's own
-// wording; the underlying field names (candidateOneEmotion, etc.) are
-// unchanged -- see .claude/TASK_SCOPE.json's note2026_08_17b entry.
+// The participant sees this read-only beside the chat (readOnly, in their
+// session locale). The clinician view keeps a review/edit list for every
+// participant-owned field underneath, as the previous S01 worksheet did.
+// Labels say "Person N"; the field names (candidateOneEmotion, ...) are
+// unchanged -- see note2026_08_17b.
 
-const CANDIDATES = [
-  { n: "1", tone: "Person 1", thought: "candidateOneThought", emotion: "candidateOneEmotion", behavior: "candidateOneBehavior" },
-  { n: "2", tone: "Person 2", thought: "candidateTwoThought", emotion: "candidateTwoEmotion", behavior: "candidateTwoBehavior" },
-  { n: "3", tone: "Person 3", thought: "candidateThreeThought", emotion: "candidateThreeEmotion", behavior: "candidateThreeBehavior" },
+const PROBLEM_KEYS = ["s01Problems", "s01ProblemExample", "s01RepresentativeProblem", "s01Goal", "s01GoalBenefit"];
+
+const PERSONS = [
+  { n: 1, thought: "candidateOneThought", emotion: "candidateOneEmotion", behavior: "candidateOneBehavior", body: "candidateOneBodySensations", givenEmotion: false },
+  { n: 2, thought: "candidateTwoThought", emotion: "candidateTwoEmotion", behavior: "candidateTwoBehavior", body: "candidateTwoBodySensations", givenEmotion: true },
+  { n: 3, thought: "candidateThreeThought", emotion: "candidateThreeEmotion", behavior: "candidateThreeBehavior", body: "candidateThreeBodySensations", givenEmotion: true },
 ] as const;
+
+// Active prompts (outputFields[0]) from the distortions step onward. The list
+// appears once any of them is reached, or once the summary is in.
+const DISTORTION_STEP_KEYS = ["distortionListPresented", "distortionsIntroductionAcknowledged", "distortionListRead", "participantSelectedDistortions", "distortionMeaning", "dailyObservationPractice", "homeworkCommitment"];
+const DISTORTION_LIST_FOCUS_KEYS = ["distortionListPresented", "distortionListRead", "participantSelectedDistortions"];
+
+function isFilled(field?: WorksheetFieldView): boolean {
+  const value = field?.value?.value;
+  if (Array.isArray(value)) return value.length > 0;
+  return value !== undefined && value !== null && value !== "";
+}
+
+function listValue(field?: WorksheetFieldView): string[] {
+  const value = field?.value?.value;
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+  const text = fieldText(field);
+  return text ? [text] : [];
+}
+
+function SectionTitle({ n, children }: { n: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 text-sm font-semibold text-text-primary">
+      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-clinical-blue-light/50 text-xs text-clinical-blue">{n}</span>
+      {children}
+    </div>
+  );
+}
+
+function Row({ label, value, tag, empty }: { label: string; value?: string; tag?: string; empty: string }) {
+  return (
+    <div className="grid grid-cols-[4.5rem_1fr] gap-2">
+      <span className="text-xs font-semibold text-text-muted">{label}</span>
+      <span className="min-w-0 font-serif">
+        {value ?? <Placeholder text={empty} />}
+        {value && tag && <span className="ml-1.5 rounded-full border border-border px-1.5 py-px align-middle font-sans text-[10px] text-text-muted">{tag}</span>}
+      </span>
+    </div>
+  );
+}
+
+function DistortionReference({ title, locale, focused, reducedMotion, autoScroll }: { title: string; locale?: string; focused: boolean; reducedMotion: boolean; autoScroll: boolean }) {
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (focused && autoScroll && ref.current) scrollWithinPanel(ref.current, reducedMotion);
+  }, [focused, autoScroll, reducedMotion]);
+  return (
+    <section ref={ref} className={`rounded-panel border p-3 ${focused ? "border-clinical-blue ring-2 ring-clinical-blue" : "border-border"}`} aria-current={focused ? "step" : undefined}>
+      <div className="text-sm font-semibold text-text-primary">{title}</div>
+      <DistortionTable locale={locale} />
+    </section>
+  );
+}
 
 export function S01Worksheet({
   view,
@@ -28,79 +91,108 @@ export function S01Worksheet({
   onConfirm,
   onEdit,
   busy,
+  locale,
+  readOnly,
 }: {
   view: WorksheetView;
   activeCanonicalFieldKey?: string;
   onConfirm: (worksheetFieldKey: string) => void;
   onEdit: (worksheetFieldKey: string, value: unknown) => void;
   busy: boolean;
+  locale?: string;
+  readOnly?: boolean;
 }) {
   const reducedMotion = Boolean(useReducedMotionPreference());
+  const labels = S01_LABELS[s01Locale(locale)];
   const byKey = new Map(view.fields.map((field) => [field.binding.worksheetFieldKey, field]));
   const get = (key: string) => byKey.get(key);
-  const isActive = (field?: WorksheetFieldView) => Boolean(field && field.binding.canonicalFieldKey === activeCanonicalFieldKey);
-  const isFilled = (field?: WorksheetFieldView) => field?.value?.value !== undefined && field?.value?.value !== null && field?.value?.value !== "";
+  const isActive = (keys: readonly string[]) => Boolean(activeCanonicalFieldKey && keys.includes(activeCanonicalFieldKey));
+  // Only the participant's panel follows the conversation; the clinician
+  // scrolls on their own.
+  const autoScroll = Boolean(readOnly);
+  const box = { reducedMotion, autoScroll };
 
-  // S01 has no belief/emotion-intensity percent fields at all (see
-  // tbct-s01.ts) -- its signals are structural completion counts instead of
-  // ratings, sourced only from fields already bound above.
-  const candidatesComplete = CANDIDATES.filter((c) => isFilled(get(c.thought)) && isFilled(get(c.emotion)) && isFilled(get(c.behavior))).length;
-  const personalComplete = [get("personalEmotion"), get("personalBehavior"), get("personalBodySensations")].filter(isFilled).length;
+  const problems = listValue(get("s01Problems"));
+  const representative = fieldText(get("s01RepresentativeProblem"));
+  const goal = fieldText(get("s01Goal"));
+  const goalBenefit = fieldText(get("s01GoalBenefit"));
+  const scene = fieldText(get("threePersonScene"));
+  const summary = fieldText(get("participantSummary"));
+  const chosen = listValue(get("participantSelectedDistortions"));
+  const showDistortionList = isActive(DISTORTION_STEP_KEYS) || isFilled(get("participantSummary")) || chosen.length > 0;
+  const editable = readOnly ? [] : [...view.fields].filter((field) => field.binding.participantOwned).sort((a, b) => a.binding.displayOrder - b.binding.displayOrder);
 
   return (
-    <div className="space-y-5 rounded-panel border border-border bg-[linear-gradient(180deg,var(--surface)_0%,var(--surface-subtle)_100%)] p-4 sm:p-6">
-      <FocusLine text={get("situationThoughtDistinction")?.value?.displayValue} />
-      <SessionSignals
-        items={[
-          { label: "People explored", value: `${candidatesComplete} of 3` },
-          { label: "My own emotion/behavior/body", value: `${personalComplete} of 3` },
-          { label: "Summary", value: capturedStatus(get("participantSummary")) },
-          { label: "Distortions recognized", value: listCount(get("participantSelectedDistortions")) },
-        ]}
-      />
+    <div className="space-y-5" data-testid="s01-worksheet">
+      <section className="space-y-2">
+        <SectionTitle n="1">{labels.problemsTitle}</SectionTitle>
+        <S01Box title={labels.problems} active={isActive(PROBLEM_KEYS)} filled={problems.length > 0} {...box}>
+          {problems.length ? (
+            <ol className="list-decimal space-y-0.5 pl-5 font-serif">
+              {problems.map((problem, index) => <li key={index}>{problem}</li>)}
+            </ol>
+          ) : <Placeholder text={labels.empty} />}
+          {representative && <Row label={labels.representative} value={representative} empty={labels.empty} />}
+          {goal && <Row label={labels.goal} value={goal} empty={labels.empty} />}
+          {goalBenefit && <Row label={labels.goalBenefit} value={goalBenefit} empty={labels.empty} />}
+        </S01Box>
+      </section>
 
-      {/* Situation and the first, uncertainty-tolerant look at the thought,
-          both captured in Opening before the three-person example */}
-      <WorksheetCell field={get("situationThoughtDistinction")} q="1" active={isActive(get("situationThoughtDistinction"))} onConfirm={onConfirm} onEdit={onEdit} busy={busy} reducedMotion={reducedMotion} label="My situation" />
-      <WorksheetCell field={get("openingInitialThought")} q="1" active={isActive(get("openingInitialThought"))} onConfirm={onConfirm} onEdit={onEdit} busy={busy} reducedMotion={reducedMotion} label="My first thought about it" />
+      <section className="space-y-2">
+        <SectionTitle n="2">{labels.ccdTitle}</SectionTitle>
+        <CcdLevel1Diagram get={get} isActive={isActive} labels={labels} {...box} />
+      </section>
 
-      <div className="space-y-3">
-        {CANDIDATES.map((candidate) => (
-          <div key={candidate.n} className="rounded-panel border border-border/70 bg-surface/60 p-2 sm:p-3">
-            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-clinical-blue/30 bg-clinical-blue-light/30 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-clinical-blue">
-              {candidate.tone}
-            </div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-stretch">
-              <WorksheetCell field={get(candidate.thought)} q="2" label="Thought" compact active={isActive(get(candidate.thought))} onConfirm={onConfirm} onEdit={onEdit} busy={busy} reducedMotion={reducedMotion} />
-              <CycleArrow reducedMotion={reducedMotion} />
-              <WorksheetCell field={get(candidate.emotion)} q="2" label="Emotion" compact active={isActive(get(candidate.emotion))} onConfirm={onConfirm} onEdit={onEdit} busy={busy} reducedMotion={reducedMotion} />
-              <CycleArrow reducedMotion={reducedMotion} />
-              <WorksheetCell field={get(candidate.behavior)} q="2" label="Behavior" compact active={isActive(get(candidate.behavior))} onConfirm={onConfirm} onEdit={onEdit} busy={busy} reducedMotion={reducedMotion} />
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <WorksheetCell field={get("threePersonModelInsight")} q="2" label="What the three-person example showed me" active={isActive(get("threePersonModelInsight"))} onConfirm={onConfirm} onEdit={onEdit} busy={busy} reducedMotion={reducedMotion} />
-
-      {/* Personal cycle -- same situation+thought as above, now the
-          participant's own emotion/behavior/body */}
-      <div className="rounded-panel border border-dashed border-clinical-blue/40 p-3 sm:p-4">
-        <div className="mb-2 text-xs font-semibold uppercase tracking-[0.06em] text-text-muted">My own experience</div>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_1fr_auto_1fr]">
-          <WorksheetCell field={get("personalEmotion")} q="3" label="Emotion" compact active={isActive(get("personalEmotion"))} onConfirm={onConfirm} onEdit={onEdit} busy={busy} reducedMotion={reducedMotion} />
-          <CycleArrow reducedMotion={reducedMotion} />
-          <WorksheetCell field={get("personalBehavior")} q="3" label="Behavior" compact active={isActive(get("personalBehavior"))} onConfirm={onConfirm} onEdit={onEdit} busy={busy} reducedMotion={reducedMotion} />
-          <CycleArrow reducedMotion={reducedMotion} />
-          <WorksheetCell field={get("personalBodySensations")} q="3" label="Body" compact active={isActive(get("personalBodySensations"))} onConfirm={onConfirm} onEdit={onEdit} busy={busy} reducedMotion={reducedMotion} />
+      <section className="space-y-2">
+        <SectionTitle n="3">{labels.threeTitle}</SectionTitle>
+        <S01Box title={labels.scene} active={false} filled={Boolean(scene)} {...box}>
+          <div className="font-serif">{scene ?? <Placeholder text={labels.empty} />}</div>
+        </S01Box>
+        <div className="space-y-2">
+          {PERSONS.map((person) => {
+            const emotion = fieldText(get(person.emotion));
+            const own = [person.thought, person.behavior, person.body, ...(person.givenEmotion ? [] : [person.emotion])];
+            return (
+              <S01Box key={person.n} title={labels.person(person.n)} active={isActive([person.thought, person.emotion, person.behavior, person.body])} filled={own.some((key) => isFilled(get(key)))} {...box}>
+                <Row label={labels.thought} value={fieldText(get(person.thought))} empty={labels.empty} />
+                <Row label={labels.feeling} value={emotion} tag={person.givenEmotion ? labels.given : undefined} empty={labels.empty} />
+                <Row label={labels.behavior} value={fieldText(get(person.behavior))} empty={labels.empty} />
+                <Row label={labels.body} value={fieldText(get(person.body))} empty={labels.empty} />
+              </S01Box>
+            );
+          })}
         </div>
-      </div>
+        <S01Box title={labels.insight} active={isActive(["threePersonModelInsight"])} filled={isFilled(get("threePersonModelInsight"))} {...box}>
+          <div className="font-serif">{fieldText(get("threePersonModelInsight")) ?? <Placeholder text={labels.empty} />}</div>
+        </S01Box>
+      </section>
 
-      <div className="rounded-panel border-2 border-clinical-blue/40 bg-clinical-blue-light/20 p-1">
-        <WorksheetCell field={get("participantSummary")} q="4" label="My summary" borderless active={isActive(get("participantSummary"))} onConfirm={onConfirm} onEdit={onEdit} busy={busy} reducedMotion={reducedMotion} />
-      </div>
+      <section className="space-y-2">
+        <SectionTitle n="4">{labels.summary}</SectionTitle>
+        <S01Box title={labels.summary} active={isActive(["participantSummary"])} filled={Boolean(summary)} {...box}>
+          <div className="font-serif">{summary ?? <Placeholder text={labels.empty} />}</div>
+        </S01Box>
+        <S01Box title={labels.distortionsChosen} active={isActive(["participantSelectedDistortions"])} filled={chosen.length > 0} {...box}>
+          {chosen.length ? (
+            <div className="flex flex-wrap gap-1.5">
+              {chosen.map((item, index) => <span key={index} className="rounded-full border border-clinical-blue/40 bg-clinical-blue-light/30 px-2 py-0.5 text-xs font-semibold text-clinical-blue">{item}</span>)}
+            </div>
+          ) : <Placeholder text={labels.empty} />}
+        </S01Box>
+      </section>
 
-      <WorksheetCell field={get("participantSelectedDistortions")} q="5" label="Distortions I recognized" list active={isActive(get("participantSelectedDistortions"))} onConfirm={onConfirm} onEdit={onEdit} busy={busy} reducedMotion={reducedMotion} />
+      {showDistortionList && <DistortionReference title={labels.distortionListTitle} locale={locale} focused={isActive(DISTORTION_LIST_FOCUS_KEYS)} {...box} />}
+
+      {editable.length > 0 && (
+        <details className="rounded-panel border border-border bg-surface p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-text-primary">{labels.reviewTitle}</summary>
+          <div className="mt-3 space-y-2">
+            {editable.map((field) => (
+              <WorksheetCell key={field.definition.id} field={field} q={String(field.binding.displayOrder + 1)} label={field.binding.label} list={field.binding.valueType === "text_list"} active={field.binding.canonicalFieldKey === activeCanonicalFieldKey} onConfirm={onConfirm} onEdit={onEdit} busy={busy} reducedMotion={reducedMotion} />
+            ))}
+          </div>
+        </details>
+      )}
     </div>
   );
 }

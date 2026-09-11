@@ -4,6 +4,7 @@ import { startRuntimeSession, submitPatientInput } from "@/shared/api/runtime-ex
 import { getLocalDb } from "@/shared/data/db/tbct-local-db";
 import { S01_COGNITIVE_DISTORTIONS } from "@/patient/sessions/s01/cognitive-distortions";
 import { s01PromptSlug } from "@/patient/sessions/s01/turn-rules";
+import { getWorksheetView } from "@/shared/worksheet/worksheet-projection";
 import type { PatientInput } from "@/types/runtime-session";
 
 type RuntimeSessionView = NonNullable<Awaited<ReturnType<typeof getRuntimeSession>>>;
@@ -156,6 +157,21 @@ describe("S01 redesign: real first session replay", () => {
     }
     // The bridge back to the participant's own case uses their own line.
     expect(texts.some((text) => text.includes("팀원들과 프로젝트 방식에 의견 차이가 있었다"))).toBe(true);
+
+    // The two worksheets beside the chat filled as the participant answered:
+    // their own words, the gauges, and the scene/given feelings marked as
+    // written by the session rather than the participant.
+    const worksheet = await getWorksheetView(session.id, "tbct-s01");
+    const cell = (key: string) => worksheet?.fields.find((item) => item.definition.worksheetFieldKey === key)?.value;
+    expect(cell("situationLine")?.value).toBe("팀원들과 프로젝트 방식에 의견 차이가 있었다");
+    expect(cell("personalEmotion")?.value).toBe("배신감");
+    expect(Number(cell("personalEmotionIntensity")?.value)).toBeGreaterThan(0);
+    expect(Number(cell("s01ThoughtBeliefPercent")?.value)).toBeGreaterThan(0);
+    expect(cell("candidateOneThought")?.provenance).toBe("participant_verbatim");
+    expect(cell("threePersonScene")?.value).toBe(fields.threePersonScene);
+    expect(cell("threePersonScene")?.provenance).toBe("system_calculated");
+    expect(cell("candidateTwoEmotion")?.provenance).toBe("system_calculated");
+    expect(cell("participantSummary")?.value).toBeTruthy();
   }, 90_000);
 
   it("stops collecting difficulties on '없어요' and lets the participant pick one by number", async () => {
