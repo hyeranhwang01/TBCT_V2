@@ -57,6 +57,7 @@ export function PatientSessionPage() {
   // Messages already present the first time the session loads are shown in full;
   // only messages that arrive afterwards stream in, so history never replays.
   const historicalMessageIdsRef = useRef<Set<string> | null>(null);
+  const messageScrollRef = useRef<HTMLDivElement>(null);
   // One server turn can deliver several new Program messages at once (e.g.
   // a few auto-advanced steps chained before the next one that actually
   // needs a patient answer) -- without this, every one of those bubbles
@@ -255,6 +256,13 @@ export function PatientSessionPage() {
     return result;
   }, [patientVisibleMessages, revealedNewMessageIds]);
 
+  // Keep the newest message in view: on a wide screen the conversation now
+  // scrolls inside its own box, so the page no longer scrolls itself down.
+  useEffect(() => {
+    const box = messageScrollRef.current;
+    if (box) box.scrollTop = box.scrollHeight;
+  }, [displayMessages]);
+
   useEffect(() => {
     if (historicalMessageIdsRef.current === null && messages.length) {
       historicalMessageIdsRef.current = new Set(messages.map((message) => message.id));
@@ -325,6 +333,11 @@ export function PatientSessionPage() {
             </div>
           </div>
           <div className="space-y-3 p-4">
+            {/* The conversation scrolls inside its own box on a wide screen,
+                so the worksheet next to it stays on screen as the log grows
+                (2026-09-13). Below lg the two stack vertically, where a fixed
+                height would only get in the way. */}
+            <div ref={messageScrollRef} className="space-y-3 lg:max-h-[calc(100vh-340px)] lg:overflow-y-auto lg:pr-1">
             <AnimatePresence initial={false}>
               {displayMessages.map((message) => {
                 const isNewAssistantTurn = message.role === "assistant" && historicalMessageIdsRef.current !== null && !historicalMessageIdsRef.current.has(message.id);
@@ -386,6 +399,7 @@ export function PatientSessionPage() {
                 </motion.div>
               )}
             </AnimatePresence>
+            </div>
             {activeSession.status === "waiting_for_input" && currentNode && !inSafetyHold && !isSubmittingTurn ? (
               <PatientInputControls
                 payload={payload}
@@ -452,6 +466,7 @@ export function PatientSessionPage() {
           </div>
         </Card>
         {hasWorksheetBindings(activeSession.sessionDefinitionId) && (
+          <div className="lg:sticky lg:top-4 lg:self-start">
           <WorksheetPane
             runtimeSessionId={activeSession.id}
             sessionDefinitionId={activeSession.sessionDefinitionId}
@@ -460,6 +475,7 @@ export function PatientSessionPage() {
             locale={displayLocale}
             isConversationUpdating={isSubmittingTurn}
           />
+          </div>
         )}
       </div>
       <ConfirmActionDialog
