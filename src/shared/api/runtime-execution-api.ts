@@ -1618,7 +1618,15 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
   // would visibly lag behind what the patient just said. Awaiting it here
   // (still a cheap, local write) means "the turn finished" now reliably
   // means "the worksheet projection for it is already there to refetch."
-  void projectRuntimeFieldsToWorksheet({ runtimeSessionId: sessionId, sessionDefinitionId: initialSession.sessionDefinitionId, fields: extracted.fields, sourceTurnId: patientMessage.id }).catch(() => {});
+  // The catch logs instead of swallowing: this call was `void ... .catch(()
+  // => {})` until 2026-09-13, which hid a production outage completely --
+  // every server-side projection was failing (see runtime-request-context.ts)
+  // and the only symptom was a permanently empty worksheet beside the chat.
+  try {
+    await projectRuntimeFieldsToWorksheet({ runtimeSessionId: sessionId, sessionDefinitionId: initialSession.sessionDefinitionId, fields: extracted.fields, sourceTurnId: patientMessage.id });
+  } catch (error) {
+    console.error("[runtime-execution-api] worksheet projection failed", { sessionId, sessionDefinitionId: initialSession.sessionDefinitionId, error });
+  }
   const safetyContext = {
     ...initialSession.runtimeContext,
     riskLevel: extracted.riskLevel,

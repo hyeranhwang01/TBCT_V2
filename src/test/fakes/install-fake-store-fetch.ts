@@ -83,10 +83,21 @@ export function installFakeStoreFetch(options?: { interceptDialogueAgent?: boole
         return errorResponse(error);
       }
     }
-    // endsWith, not equality: the browser path sends the relative endpoint
-    // while resolveStoreUrl prefixes an absolute origin server-side. One
-    // matcher serves both.
-    const store = init?.method === "POST" ? FAKE_STORES.find((candidate) => url.endsWith(candidate.endpoint)) : undefined;
+    // Compare pathnames, not string suffixes: the browser path sends the
+    // relative endpoint while resolveStoreUrl prefixes an absolute origin
+    // server-side, and new URL(url, base) normalizes both. endsWith used to
+    // serve both shapes but accepted ANY host, so a server-side call that
+    // went out to an unreachable absolute URL still matched here -- which is
+    // why the suite stayed green through the 2026-09-13 production outage
+    // (see runtime-request-context.ts).
+    const requestPath = (() => {
+      try {
+        return new URL(url, "http://localhost:3000").pathname;
+      } catch {
+        return url;
+      }
+    })();
+    const store = init?.method === "POST" ? FAKE_STORES.find((candidate) => candidate.endpoint === requestPath) : undefined;
     if (store) {
       try {
         const op = JSON.parse(init!.body as string);
