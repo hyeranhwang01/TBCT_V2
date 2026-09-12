@@ -65,7 +65,11 @@ export const spec: SessionSpec = {
         { slug: "difficulty-example", type: "question", source: [263, 279], patientText: "Could you give me one concrete example of when that shows up?", outputFields: ["s01ProblemExample"] },
         { slug: "other-difficulty", type: "follow_up", source: [263, 279], patientText: "Is there any other difficulty you would like help with?", outputFields: ["s01Problems"], validation: { kind: "array" }, activationCondition: { field: "s01ProblemsNoMore", operator: "not_equals", value: true } },
         { slug: "other-difficulty-more", type: "follow_up", source: [263, 279], patientText: "Anything else you would like help with? It's fine to say there isn't.", outputFields: ["s01Problems"], validation: { kind: "array" }, activationCondition: { field: "s01ProblemsNoMore", operator: "not_equals", value: true } },
-        { slug: "representative-difficulty", type: "question", source: [263, 279], patientText: "Of the difficulties you mentioned, which one feels like the biggest -- the one that sits underneath the others? You can simply say 'the second one'.", outputFields: ["s01RepresentativeProblem"] },
+        // Skipped when the participant named only one difficulty: s01/turn-rules.ts
+        // records that one as representative and sets s01RepresentativeAuto,
+        // because asking "which of these is the biggest" about a list of one
+        // reads as if the session were not listening (2026-09-13 live session).
+        { slug: "representative-difficulty", type: "question", source: [263, 279], patientText: "Of the difficulties you mentioned, which one feels like the biggest -- the one that sits underneath the others? You can simply say 'the second one'.", outputFields: ["s01RepresentativeProblem"], activationCondition: { field: "s01RepresentativeAuto", operator: "not_equals", value: true } },
         { slug: "goal-at-end", type: "question", source: [334, 350], patientText: "When counseling ends, how would you like [representative difficulty] to be different?", outputFields: ["s01Goal"] },
         { slug: "goal-benefit", type: "question", source: [334, 350], patientText: "If that happened, how would you feel, and what would change in your daily life?", outputFields: ["s01GoalBenefit"] },
       ],
@@ -80,7 +84,7 @@ export const spec: SessionSpec = {
       objective: "As in the real first session, explain briefly that this work is built together and that practice between conversations matters: of the 168 hours in a week the conversation takes only about one, so what the participant tries in the rest of the week makes much of the difference. Then ask whether they are willing to work this way. Do not assign any exercise yet.",
       prompts: [
         { slug: "collaboration-and-practice", type: "explanation", source: [48, 49], patientText: "This works best as something we build together. A week has 168 hours, and our conversation takes only about one of them, so the small practice you do outside our conversations makes a big difference." },
-        { slug: "practice-commitment", type: "question", source: [48, 49], patientText: "Would you be willing to work on it together this way?", outputFields: ["treatmentCommitment"] },
+        { slug: "practice-commitment", type: "question", source: [48, 49], patientText: "Would you be willing to work on it together this way?", outputFields: ["treatmentCommitment"], validation: { kind: "boolean" } },
       ],
     },
     {
@@ -154,9 +158,9 @@ export const spec: SessionSpec = {
       requiredFields: ["friendThought"],
       objective: "Help the participant see the chain on their own worksheet: situation, then thought, then feeling, then behavior and body. Point out that the arrow from the situation to the thought is dotted -- the same situation does not force the same thought -- then ask whether a close friend in the same situation would have thought exactly the same, and what the friend might have thought. Ask; do not lecture.",
       prompts: [
-        { slug: "link-check", type: "question", source: [34, 37], patientText: "Looking at the worksheet: the situation, then the thought, then the feeling, then what you did and felt in your body. Can you see how they connect?", outputFields: ["cycleLinkRecognized"] },
+        { slug: "link-check", type: "question", source: [34, 37], patientText: "Looking at the worksheet: the situation, then the thought, then the feeling, then what you did and felt in your body. Can you see how they connect?", outputFields: ["cycleLinkRecognized"], validation: { kind: "boolean" } },
         { slug: "dotted-line", type: "explanation", source: [34, 37], patientText: "The arrow from the situation to the thought is dotted. It means the same situation does not have to lead to the same thought." },
-        { slug: "friend-same-thought", type: "question", source: [34, 37], patientText: "If a close friend had been in exactly the same situation, do you think they would have had exactly the same thought?", outputFields: ["friendWouldThinkSame"] },
+        { slug: "friend-same-thought", type: "question", source: [34, 37], patientText: "If a close friend had been in exactly the same situation, do you think they would have had exactly the same thought?", outputFields: ["friendWouldThinkSame"], validation: { kind: "boolean" } },
         { slug: "friend-thought", type: "question", source: [34, 37], patientText: "What might your friend have thought instead?", outputFields: ["friendThought"] },
       ],
     },
@@ -294,7 +298,7 @@ export const spec: SessionSpec = {
       prompts: [
         { slug: "show-list", type: "worksheet_instruction", source: [146, 146], patientText: "Beside our conversation there is a list of 15 common thinking patterns, called cognitive distortions.", outputFields: ["distortionListPresented"] },
         { slug: "intro-distortions", type: "explanation", source: [145, 155], marker: "These negative automatic thoughts", patientText: "These negative automatic thoughts we've been looking at — they sometimes have a name in cognitive therapy. We call them cognitive distortions. Not every automatic thought is a distortion, but some of them are errors or exaggerations in our thinking that are worth examining.", outputFields: ["distortionsIntroductionAcknowledged"] },
-        { slug: "read-a-few", type: "question", source: [148, 149], patientText: "Could you read through two or three of them?", outputFields: ["distortionListRead"] },
+        { slug: "read-a-few", type: "question", source: [148, 149], patientText: "Could you read through two or three of them?", outputFields: ["distortionListRead"], validation: { kind: "boolean" } },
         { slug: "identify-distortion", type: "question", source: [145, 155], marker: "Looking at what went through your mind", patientText: "Looking at what went through your mind in that situation — do any of these distortions seem to fit? It's fine if none of them feel like a match.", outputFields: ["participantSelectedDistortions"] },
         // Only when the participant explicitly asks for suggestions
         // (s01/turn-rules.ts); runtime-orchestrator.ts then grounds this turn
@@ -313,7 +317,7 @@ export const spec: SessionSpec = {
       objective: "Give this week's practice concretely, as in the real first session: keep the cognitive distortions list nearby and, whenever such a thought comes up, write a short example in the 'My examples' column of the matching distortion; you will look at it together next time. Ask whether they can do it. Do not mention the Intrapersonal Thought Record, do not summarize the session and do not ask for feedback. Close with one short goodbye.",
       prompts: [
         { slug: "homework-assignment", type: "worksheet_instruction", source: [156, 157], patientText: "This week, keep the cognitive distortions list nearby. Whenever a thought like this comes up, write a short example in the 'My examples' column of the pattern it fits. We'll look at them together next time.", outputFields: ["dailyObservationPractice"] },
-        { slug: "homework-commitment", type: "question", source: [156, 157], patientText: "Do you think you can do that?", outputFields: ["homeworkCommitment"] },
+        { slug: "homework-commitment", type: "question", source: [156, 157], patientText: "Do you think you can do that?", outputFields: ["homeworkCommitment"], validation: { kind: "boolean" } },
         { slug: "goodbye", type: "closing", source: [159, 159], patientText: "Thank you for sharing today. See you next time.", completionEffect: { type: "complete_session" } },
       ],
     },

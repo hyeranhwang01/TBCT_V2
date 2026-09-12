@@ -80,10 +80,17 @@ function currentSlug(view: RuntimeSessionView) {
   return id ? s01PromptSlug(id) : null;
 }
 
+// These prompts declare validation.kind "boolean" (spec.ts), so the
+// participant answers them with the yes/no buttons rather than free text --
+// the replay has to send the same shape the UI does.
+const BOOLEAN_SLUGS = new Set(["practice-commitment", "link-check", "friend-same-thought", "read-a-few", "homework-commitment"]);
+
 function answerFor(slug: string, overrides: Record<string, string>): PatientInput {
   const text = overrides[slug] ?? REAL_SESSION[slug];
   if (text === undefined) throw new Error(`No scripted answer for ${slug}.`);
-  return RATING_SLUGS.has(slug) ? { kind: "rating", value: text } : { kind: "text", value: text };
+  if (RATING_SLUGS.has(slug)) return { kind: "rating", value: text };
+  if (BOOLEAN_SLUGS.has(slug)) return { kind: "boolean", value: !/^(아니|no)/i.test(text.trim()) };
+  return { kind: "text", value: text };
 }
 
 async function startSession(locale = "ko-KR") {
@@ -174,14 +181,61 @@ describe("S01 redesign: real first session replay", () => {
     expect(cell("participantSummary")?.value).toBeTruthy();
   }, 90_000);
 
-  it("stops collecting difficulties on '없어요' and lets the participant pick one by number", async () => {
+  it("stops collecting difficulties on '없어요' and skips the representative question when only one was named", async () => {
     const session = await startSession();
-    const { view, visited } = await driveUntil(session.id, "goal-at-end", { "other-difficulty": "없어요", "representative-difficulty": "두 번째요" }, 20);
+    const { view, visited } = await driveUntil(session.id, "goal-at-end", { "other-difficulty": "없어요" }, 20);
     expect(visited).not.toContain("other-difficulty-more");
-    // Only one difficulty was listed, so "the second one" does not match an item
-    // and the participant's own words are kept as the representative difficulty.
+    // Asking "which of these is the biggest" about a list of one reads as if
+    // the session were not listening (2026-09-13 live session), so the single
+    // difficulty is recorded as the representative one and the question is skipped.
+    expect(visited).not.toContain("representative-difficulty");
     expect(view.session.runtimeContext.fields.s01Problems).toEqual(["걱정이 많아요"]);
-    expect(view.session.runtimeContext.fields.s01RepresentativeProblem).toBe("두 번째요");
+    expect(view.session.runtimeContext.fields.s01RepresentativeProblem).toBe("걱정이 많아요");
+  }, 30_000);
+
+  it("treats '아니요 없습니다' as the end of the list instead of storing it as a difficulty", async () => {
+    const session = await startSession();
+    const { view, visited } = await driveUntil(session.id, "goal-at-end", { "other-difficulty": "아니요 없습니다" }, 20);
+    expect(view.session.runtimeContext.fields.s01Problems).toEqual(["걱정이 많아요"]);
+    expect(visited).not.toContain("other-difficulty-more");
+  }, 30_000);
+
+  it("still asks which difficulty is the biggest when the participant named several", async () => {
+    const session = await startSession();
+    const { view, visited } = await driveUntil(session.id, "goal-at-end", { "representative-difficulty": "두 번째요" }, 25);
+    expect(visited).toContain("representative-difficulty");
+    expect(view.session.runtimeContext.fields.s01RepresentativeProblem).toBe("계획을 반드시 세우고 그대로 해야 하는 강박이 있어요");
+  }, 30_000);
+
+  it("accepts 'ㅇㅇ' as yes, and asks plainly again for a bare 'ㄴ'", async () => {
+    // Without a model the deterministic clarification is what actually ships
+    // -- which is the wording this test is about. (With one, the dialogue
+    // agent rephrases the same question instead.)
+    const previousProvider = process.env.AI_PROVIDER;
+    process.env.AI_PROVIDER = "mock";
+    try {
+      const session = await startSession();
+      await driveUntil(session.id, "practice-commitment", {}, 25);
+      // A bare "ㄴ" is either the first letter of "네" or "노" -- never guessed at.
+      const ambiguous = await submitPatientInput(session.id, { kind: "text", value: "ㄴ" });
+      expect(ambiguous.turnOutcome).toBe("clarification");
+      const afterAmbiguous = await currentView(session.id);
+      expect(currentSlug(afterAmbiguous)).toBe("practice-commitment");
+      // The point of the boolean validation: a yes/no question must never be
+      // re-asked with "give me a short, concrete example" (2026-09-13 live
+      // session). The exact re-ask wording is not asserted here because the
+      // test suite always answers with a stubbed dialogue agent, which
+      // rephrases the question itself; without a model the deterministic
+      // "네 또는 아니요로 간단히 답해 주시겠어요?" ships instead.
+      expect(assistantTexts(afterAmbiguous).at(-1)).not.toMatch(/구체적인 예/);
+
+      const accepted = await submitPatientInput(session.id, { kind: "text", value: "ㅇㅇ" });
+      expect(accepted.turnOutcome).toBe("normal");
+      expect(currentSlug(await currentView(session.id))).not.toBe("practice-commitment");
+    } finally {
+      if (previousProvider === undefined) delete process.env.AI_PROVIDER;
+      else process.env.AI_PROVIDER = previousProvider;
+    }
   }, 30_000);
 
   it("redirects small talk at the situation question without storing it", async () => {

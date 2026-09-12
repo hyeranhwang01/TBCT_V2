@@ -38,10 +38,16 @@ const YES = new Set([
   "할게요", "네 할게요", "해볼게요", "해 볼게요", "네 해볼게요", "할 수 있어요", "할 수 있을 것 같아요", "가능해요", "가능할 것 같아요",
   "보여요", "네 보여요", "이해돼요", "이해가 돼요", "알겠어요", "네 알겠어요", "같아요", "같았어요", "비슷해요",
   "yes", "yeah", "yep", "sure", "ok", "okay", "i can", "i will", "i see", "i see it", "got it", "same",
+  // Korean chat shorthand a participant actually types (2026-09-13 live
+  // session). A bare "ㄴ" is deliberately NOT here: it reads as either the
+  // first letter of "네" (yes) or as "노" (no), so it stays unrecognized and
+  // gets a plain yes/no re-ask instead of being guessed at.
+  "ㅇ", "ㅇㅇ", "ㅇㅋ",
 ]);
 const NO = new Set([
   "아니요", "아뇨", "아니", "아니에요", "아닌 것 같아요", "달라요", "달랐어요", "다를 것 같아요", "다르게 생각했을 것 같아요", "안 보여요", "잘 안 보여요",
   "no", "nope", "not really", "different",
+  "ㄴㄴ",
 ]);
 const STOP = new Set([
   "없어요", "없습니다", "없어", "없음", "없다", "없었어요", "없었습니다", "없었던 것 같아요", "없는 것 같아요", "딱히 없어요", "따로 없어요", "더 없어요", "더는 없어요",
@@ -64,7 +70,15 @@ function isBareNo(text: string) {
 }
 export function isStopAnswer(text: string) {
   const normalized = normalize(text);
-  return STOP.has(normalized) || STOP_CONTAINS.some((phrase) => normalized.includes(phrase));
+  if (STOP.has(normalized) || STOP_CONTAINS.some((phrase) => normalized.includes(phrase))) return true;
+  // "아니요 없습니다" (2026-09-13 live session): a leading no in front of the
+  // closer is still a closer. The shared detector matches the whole message
+  // exactly, so this combined form fell through and was stored as another
+  // difficulty. Only the leading no is stripped -- "아니요 그건 다른 문제예요"
+  // still has real content after it and stays a normal answer.
+  const withoutLeadingNo = normalized.replace(/^(아니요|아니오|아뇨|아니)\s*[,.]?\s*/, "").trim();
+  if (withoutLeadingNo === normalized || !withoutLeadingNo) return false;
+  return STOP.has(withoutLeadingNo) || STOP_CONTAINS.some((phrase) => withoutLeadingNo.includes(phrase));
 }
 export function isUncertainAnswer(text: string) {
   return UNCERTAIN.has(normalize(text));
@@ -115,6 +129,15 @@ export function parseOrdinal(text: string): number | null {
 // treats a bare "네"/"yes" as a non-answer on free-text prompts.
 const BARE_YES_NO_SLUGS = new Set(["practice-commitment", "link-check", "friend-same-thought", "problem-link", "situation-same", "feelings-compared", "actions-compared", "read-a-few", "homework-commitment"]);
 const STOP_FLAG_BY_SLUG: Record<string, string> = { "second-emotion": "personalEmotionsNoMore", "third-emotion": "personalEmotionsNoMore", "second-behavior": "personalBehaviorsNoMore" };
+// List-shaped prompts need their OWN stop handling: STOP_FLAG_BY_SLUG above
+// deletes the target field, and for a list that would throw away every item
+// collected so far (mergeExtractedRuntimeContext replaces fields wholesale
+// rather than merging them). Here the array is kept and only the closer that
+// the shared extractor appended this turn is taken back out.
+const LIST_STOP_BY_SLUG: Record<string, { listField: string; flag: string }> = {
+  "other-difficulty": { listField: "s01Problems", flag: "s01ProblemsNoMore" },
+  "other-difficulty-more": { listField: "s01Problems", flag: "s01ProblemsNoMore" },
+};
 // "잘 모르겠어요" on these routes to a follow-up that offers examples/a hint
 // instead of burning a clarification attempt.
 const NEEDS_HELP_FLAG_BY_SLUG: Record<string, string> = {
@@ -161,6 +184,26 @@ export async function applyS01TurnRules(input: S01TurnRulesInput): Promise<S01Tu
     delete fields[target];
     fields[stopFlag] = true;
     accept();
+  }
+
+  const listStop = LIST_STOP_BY_SLUG[slug];
+  if (listStop && isStopAnswer(text)) {
+    const list = (Array.isArray(fields[listStop.listField]) ? [...(fields[listStop.listField] as unknown[])] : []).filter((item): item is string => typeof item === "string");
+    if (list.length > 0 && normalize(list[list.length - 1]) === normalize(text)) list.pop();
+    fields[listStop.listField] = list;
+    // Recomputed here because the shared extractor derives the count before
+    // this hook runs (runtime-context.ts).
+    fields[`${listStop.listField}Count`] = list.length;
+    fields[listStop.flag] = true;
+    accept();
+    // With a single difficulty there is nothing to choose between, so record
+    // it as the representative one and let spec.ts skip that question.
+    if (list.length === 1 && !hasValue(fields.s01RepresentativeProblem)) {
+      fields.s01RepresentativeProblem = list[0];
+      fields.s01RepresentativeProblemSource = "only_item";
+      fields.s01RepresentativeAuto = true;
+    }
+    logs.push({ summary: `${slug}: closed the difficulty list (${list.length} kept)`, output: { slug, kept: list.length, representativeAuto: fields.s01RepresentativeAuto === true } });
   }
 
   const helpFlag = NEEDS_HELP_FLAG_BY_SLUG[slug];
