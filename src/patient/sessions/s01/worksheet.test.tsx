@@ -113,19 +113,24 @@ describe("S01Worksheet (participant, read-only)", () => {
     expect(screen.queryByText("칸별 확인 · 수정")).toBeNull();
   });
 
-  it("renders an empty worksheet with placeholders", () => {
+  it("renders an empty worksheet with placeholders, with the distortion drawer closed", () => {
     render(<S01Worksheet view={view({})} onConfirm={noop} onEdit={noop} busy={false} locale="ko-KR" readOnly />);
     expect(screen.getAllByText("대화하면서 채워져요").length).toBeGreaterThan(10);
-    expect(screen.queryByTestId("s01-distortion-list")).toBeNull();
+    expect((screen.getByTestId("s01-distortion-drawer") as HTMLDetailsElement).open).toBe(false);
   });
 
-  it("shows the 15-distortion list from the distortions step on", () => {
+  it("keeps the 15 distortions in a closed drawer and opens it at the distortions step", () => {
     const { rerender } = render(<S01Worksheet view={view(OWN_CASE)} activeCanonicalFieldKey="cycleSafetyStrategy" onConfirm={noop} onEdit={noop} busy={false} locale="ko-KR" readOnly />);
-    expect(screen.queryByTestId("s01-distortion-list")).toBeNull();
-    rerender(<S01Worksheet view={view(OWN_CASE)} activeCanonicalFieldKey="distortionListRead" onConfirm={noop} onEdit={noop} busy={false} locale="ko-KR" readOnly />);
+    // Closed, but reachable at any time -- the participant can open it themselves.
+    expect((screen.getByTestId("s01-distortion-drawer") as HTMLDetailsElement).open).toBe(false);
     const list = screen.getByTestId("s01-distortion-list");
     expect(list.querySelectorAll("li")).toHaveLength(15);
     expect(list.textContent).toContain(S01_COGNITIVE_DISTORTIONS[0].nameKo);
+
+    rerender(<S01Worksheet view={view(OWN_CASE)} activeCanonicalFieldKey="distortionListRead" onConfirm={noop} onEdit={noop} busy={false} locale="ko-KR" readOnly />);
+    expect((screen.getByTestId("s01-distortion-drawer") as HTMLDetailsElement).open).toBe(true);
+    // The list is also the homework sheet, which only exists after the session.
+    expect(screen.getByText(/숙제 화면에서/)).toBeInTheDocument();
   });
 });
 

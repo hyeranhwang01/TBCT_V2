@@ -39,6 +39,7 @@ export type S01Labels = {
   summary: string;
   distortionsChosen: string;
   distortionListTitle: string;
+  distortionListHomeworkNote: string;
   feeling: string;
   given: string;
   reviewTitle: string;
@@ -77,6 +78,7 @@ export const S01_LABELS: Record<S01Locale, S01Labels> = {
     summary: "내 요약",
     distortionsChosen: "내가 알아차린 인지 왜곡",
     distortionListTitle: "인지 왜곡 15가지",
+    distortionListHomeworkNote: "이 목록은 오늘 세션이 끝나면 숙제 화면에서 ‘내 예시’를 적으며 다시 보게 돼요.",
     feeling: "감정",
     given: "주어진 감정",
     reviewTitle: "칸별 확인 · 수정",
@@ -113,6 +115,7 @@ export const S01_LABELS: Record<S01Locale, S01Labels> = {
     summary: "My summary",
     distortionsChosen: "Distortions I recognized",
     distortionListTitle: "The 15 cognitive distortions",
+    distortionListHomeworkNote: "You'll see this same list again in this week's homework, where you write your own examples.",
     feeling: "Feeling",
     given: "given",
     reviewTitle: "Review / edit each field",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useReducedMotionPreference } from "@/shared/motion/use-reduced-motion-preference";
 import { WorksheetCell } from "@/patient/components/worksheet-renderers/shared";
 import { DistortionTable } from "@/patient/sessions/s01/distortion-table";
@@ -33,9 +33,8 @@ const PERSONS = [
   { n: 3, thought: "candidateThreeThought", emotion: "candidateThreeEmotion", behavior: "candidateThreeBehavior", body: "candidateThreeBodySensations", givenEmotion: true },
 ] as const;
 
-// Active prompts (outputFields[0]) from the distortions step onward. The list
-// appears once any of them is reached, or once the summary is in.
-const DISTORTION_STEP_KEYS = ["distortionListPresented", "distortionsIntroductionAcknowledged", "distortionListRead", "participantSelectedDistortions", "distortionMeaning", "dailyObservationPractice", "homeworkCommitment"];
+// Active prompts (outputFields[0]) of the steps that send the participant to
+// the list -- the drawer opens itself on these.
 const DISTORTION_LIST_FOCUS_KEYS = ["distortionListPresented", "distortionListRead", "participantSelectedDistortions"];
 
 function isFilled(field?: WorksheetFieldView): boolean {
@@ -72,16 +71,33 @@ function Row({ label, value, tag, empty }: { label: string; value?: string; tag?
   );
 }
 
-function DistortionReference({ title, locale, focused, reducedMotion, autoScroll }: { title: string; locale?: string; focused: boolean; reducedMotion: boolean; autoScroll: boolean }) {
-  const ref = useRef<HTMLElement>(null);
+/** The 15 distortions live at the bottom of the panel as a closed drawer:
+ * the participant can open them at any time, and the distortions step opens
+ * them automatically. Kept closed by default so the two worksheets above
+ * stay visible without scrolling past fifteen entries. The same list is the
+ * homework sheet, which only exists after the session completes -- hence the
+ * note rather than a link. */
+function DistortionReference({ title, note, locale, focused, reducedMotion, autoScroll }: { title: string; note: string; locale?: string; focused: boolean; reducedMotion: boolean; autoScroll: boolean }) {
+  const ref = useRef<HTMLDetailsElement>(null);
+  const [open, setOpen] = useState(focused);
   useEffect(() => {
-    if (focused && autoScroll && ref.current) scrollWithinPanel(ref.current, reducedMotion);
+    if (!focused) return;
+    setOpen(true);
+    if (autoScroll && ref.current) scrollWithinPanel(ref.current, reducedMotion);
   }, [focused, autoScroll, reducedMotion]);
   return (
-    <section ref={ref} className={`rounded-panel border p-3 ${focused ? "border-clinical-blue ring-2 ring-clinical-blue" : "border-border"}`} aria-current={focused ? "step" : undefined}>
-      <div className="text-sm font-semibold text-text-primary">{title}</div>
+    <details
+      ref={ref}
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+      data-testid="s01-distortion-drawer"
+      className={`rounded-panel border p-3 ${focused ? "border-clinical-blue ring-2 ring-clinical-blue" : "border-border"}`}
+      aria-current={focused ? "step" : undefined}
+    >
+      <summary className="cursor-pointer text-sm font-semibold text-text-primary">{title}</summary>
       <DistortionTable locale={locale} />
-    </section>
+      <p className="mt-2 text-xs text-text-muted">{note}</p>
+    </details>
   );
 }
 
@@ -119,7 +135,6 @@ export function S01Worksheet({
   const scene = fieldText(get("threePersonScene"));
   const summary = fieldText(get("participantSummary"));
   const chosen = listValue(get("participantSelectedDistortions"));
-  const showDistortionList = isActive(DISTORTION_STEP_KEYS) || isFilled(get("participantSummary")) || chosen.length > 0;
   const editable = readOnly ? [] : [...view.fields].filter((field) => field.binding.participantOwned).sort((a, b) => a.binding.displayOrder - b.binding.displayOrder);
 
   return (
@@ -181,7 +196,7 @@ export function S01Worksheet({
         </S01Box>
       </section>
 
-      {showDistortionList && <DistortionReference title={labels.distortionListTitle} locale={locale} focused={isActive(DISTORTION_LIST_FOCUS_KEYS)} {...box} />}
+      <DistortionReference title={labels.distortionListTitle} note={labels.distortionListHomeworkNote} locale={locale} focused={isActive(DISTORTION_LIST_FOCUS_KEYS)} {...box} />
 
       {editable.length > 0 && (
         <details className="rounded-panel border border-border bg-surface p-3">
