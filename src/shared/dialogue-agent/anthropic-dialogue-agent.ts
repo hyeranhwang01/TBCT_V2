@@ -359,7 +359,16 @@ export async function generateDialogueDecision(contract: DialogueContract, conte
         tool_choice: { type: "tool", name: "submit_dialogue_decision", disable_parallel_tool_use: true },
       }),
     });
-    if (!response.ok) throw new Error(`Anthropic dialogue agent failed (${response.status})`);
+    if (!response.ok) {
+      // Keep Anthropic's own reason, not just the status: "(400)" alone
+      // cannot distinguish a billing problem ("credit balance is too low")
+      // from an unavailable model or a malformed request, which left a live
+      // deployment undiagnosable from outside (2026-09-13). The body is
+      // Anthropic's error JSON; the API key is never part of it. Truncated
+      // because this string is stored on every model-usage row.
+      const detail = (await response.text().catch(() => "")).replace(/\s+/g, " ").trim().slice(0, 200);
+      throw new Error(`Anthropic dialogue agent failed (${response.status})${detail ? `: ${detail}` : ""}`);
+    }
     const json = (await response.json()) as { content?: Array<{ type?: string; name?: string; input?: unknown }>; usage?: { input_tokens?: number; output_tokens?: number } };
     const toolInput = json.content?.find((item) => item.type === "tool_use" && item.name === "submit_dialogue_decision")?.input;
     if (!toolInput) throw new Error("Anthropic omitted the structured dialogue decision");
