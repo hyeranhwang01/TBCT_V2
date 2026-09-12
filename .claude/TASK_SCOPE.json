@@ -3,6 +3,10 @@
   "createdAt": "2026-08-13",
   "updatedAt": "2026-09-13",
   "allowedPaths": [
+    "src/patient/pages/homework-list-page.tsx",
+    "src/patient/pages/patient-list-page.tsx",
+    "src/patient/components/patient-shell.tsx",
+    "src/app/studio-app.tsx",
     "src/shared/data/server/runtime-request-context.ts",
     "src/shared/data/server/runtime-request-context.test.ts",
     "src/test/fakes/install-fake-store-fetch.ts",
@@ -285,5 +289,13 @@
     "notDone": "Existing sessions with empty worksheets are NOT backfilled (user decision 2026-09-13); scripts/backfill-worksheet-projections.ts stays unused, and its RUNTIME_BASE_URL rewrite is dead code because resolveStoreUrl already absolutizes. Separately reported, not fixed here: completeRuntimeSession reaches a browser-only Dexie path on the server, which can make a session's final turn look like an error.",
     "regressionPlan": "npx tsc --noEmit; new runtime-request-context.test.ts (in-process dispatch for both url shapes, no network fetch, unmapped endpoint still goes out with the cookie, dispatch failure returns {ok:false} + 500); full npx vitest run in a worktree outside the nested parent repo; npm run audit:sessions 8/8 with 0 fallbacks. Local tests cannot reproduce the original bug (the browser path is used under NODE_ENV=test), so the real check is a deployment: run one S01 turn and confirm the worksheet fills and no projection-failed line appears in the Vercel logs.",
     "allowedPaths": "src/shared/data/server/runtime-request-context.ts, src/shared/data/server/runtime-request-context.test.ts, src/shared/api/runtime-execution-api.ts, src/test/fakes/install-fake-store-fetch.ts"
+  },
+  "note2026_09_13_homework_reachability": {
+    "task": "Make the homework reachable on its own, not only through the session that produced it. Asked for by the user after seeing that S01's 15-distortion sheet IS the homework: (1) a Homework entry in the patient nav listing every session's homework, (2) homework openable while a session is still in progress.",
+    "change": "New src/patient/pages/homework-list-page.tsx (patient-scoped, same participant + listRuntimeSessionsForParticipant pattern as patient-list-page.tsx), one route in studio-app.tsx placed AFTER the existing '/patient/homework/' detail route so the bare path reaches the list, one nav link in patient-shell.tsx, and patient-list-page.tsx's homework button no longer requires status === 'completed' (only excludes 'preparing'). New homeworkList.* strings in ko/en.",
+    "whyNoBackendChange": "homework-page.tsx already calls ensureHomeworkForSession on open and never checked session status, so an in-progress session's homework record is created on demand. Nothing in the storage layer or session lifecycle changed.",
+    "blastRadius": "Patient-facing navigation and the patient session list, all eight sessions. No session content, runtime or store code. A homework record may now be created earlier (on first open rather than at session completion); session-continuity only reads records of COMPLETED prior sessions, so the S02 bridge is unaffected. The clinician homework panel may show an in-progress session's empty record.",
+    "regressionPlan": "npx tsc --noEmit; full npx vitest run in a worktree outside the nested parent repo; npm run audit:sessions 8/8; visual check of the new list and the nav entry.",
+    "allowedPaths": "src/patient/pages/homework-list-page.tsx, src/patient/pages/patient-list-page.tsx, src/patient/components/patient-shell.tsx, src/app/studio-app.tsx, src/shared/i18n/dictionaries/{ko,en}.ts"
   }
 }

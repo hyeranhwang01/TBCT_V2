@@ -419,6 +419,17 @@ const ko = {
     memory: { title: "메모리", description: "선택적 조회 결과, 제외 항목, 주입 추적.", run: "실행 {id}", selected: "{evaluated}개 중 {selected}개 선택", noExclusions: "제외 항목 없음", none: "아직 기록된 조회 실행이 없습니다." },
     memoryUsage: { title: "메모리 사용", description: "조회 및 주입 사용 로그.", none: "아직 메모리 사용 로그가 없습니다." },
   },
+  homeworkList: {
+    navLabel: "숙제",
+    title: "숙제",
+    eyebrow: "회기별 후속 활동",
+    description: "회기마다 받은 숙제를 여기서 한 번에 볼 수 있어요. 진행 중인 회기의 숙제도 미리 열어 볼 수 있습니다.",
+    empty: "아직 숙제가 없어요",
+    emptyHint: "회기를 시작하면 여기에 숙제가 생겨요.",
+    open: "열기",
+    sessionDone: "회기 완료",
+    sessionOngoing: "진행 중",
+  },
   patientShell: {
     eyebrow: "TBCT 프로그램",
     sessionList: "세션 목록",

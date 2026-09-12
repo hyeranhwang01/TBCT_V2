@@ -419,6 +419,17 @@ const en = {
     memory: { title: "Memory", description: "Selective retrieval result, exclusions, and injection trace.", run: "Run {id}", selected: "Selected {selected} of {evaluated}", noExclusions: "No exclusions", none: "No retrieval run recorded yet." },
     memoryUsage: { title: "Memory Usage", description: "Retrieval and injection usage logs.", none: "No memory usage log yet." },
   },
+  homeworkList: {
+    navLabel: "Homework",
+    title: "Homework",
+    eyebrow: "Follow-up activities",
+    description: "Every session's homework in one place. You can also open the homework for a session that is still in progress.",
+    empty: "No homework yet",
+    emptyHint: "Once you start a session, its homework appears here.",
+    open: "Open",
+    sessionDone: "Session complete",
+    sessionOngoing: "In progress",
+  },
   patientShell: {
     eyebrow: "TBCT Program",
     sessionList: "Session List",

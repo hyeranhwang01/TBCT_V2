@@ -195,9 +195,13 @@ function SessionRow({ session }: { session: ListedSession }) {
               can only manage/continue their own session and view its summary. */}
           <Link href={`/projects/demo/patient/sessions/${session.id}`}><Button variant="secondary">{t("patientPortal.row.open")}</Button></Link>
           <Link href={`/runtime/sessions/${session.id}/summary`}><Button variant="secondary">{t("patientPortal.row.summary")}</Button></Link>
-          {session.status === "completed" && hasHomeworkActivity(session.sessionDefinitionId) && (
+          {/* Also shown while the session is still running (2026-09-13): the
+              homework screen ensures its own record on open, and S01's sheet
+              is the same 15-distortion list used during the session. Only a
+              session that has not started yet has nothing to show. */}
+          {session.status !== "preparing" && hasHomeworkActivity(session.sessionDefinitionId) && (
             <Link href={`/projects/demo/patient/homework/${session.id}`}>
-              <Button variant="violet">{HOMEWORK_LABEL_BY_SESSION[session.sessionDefinitionId]}</Button>
+              <Button variant={session.status === "completed" ? "violet" : "secondary"}>{HOMEWORK_LABEL_BY_SESSION[session.sessionDefinitionId]}</Button>
             </Link>
           )}
         </div>

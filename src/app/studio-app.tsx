@@ -28,6 +28,7 @@ const PatientNewSessionPage = dynamic(() => import("@/patient/pages/patient-new-
 const PatientSessionPage = dynamic(() => import("@/patient/pages/patient-session-page").then((mod) => mod.PatientSessionPage), { ssr: false });
 const PatientSessionCompletePage = dynamic(() => import("@/patient/pages/patient-session-complete-page").then((mod) => mod.PatientSessionCompletePage), { ssr: false });
 const HomeworkPage = dynamic(() => import("@/patient/pages/homework-page").then((mod) => mod.HomeworkPage), { ssr: false });
+const HomeworkListPage = dynamic(() => import("@/patient/pages/homework-list-page").then((mod) => mod.HomeworkListPage), { ssr: false });
 const PatientProfilePage = dynamic(() => import("@/patient/pages/patient-profile-page").then((mod) => mod.PatientProfilePage), { ssr: false });
 const PatientCheckinPage = dynamic(() => import("@/patient/pages/patient-checkin-page").then((mod) => mod.PatientCheckinPage), { ssr: false });
 const PatientMessagesPage = dynamic(() => import("@/patient/pages/patient-messages-page").then((mod) => mod.PatientMessagesPage), { ssr: false });
@@ -109,6 +110,9 @@ const studioRoutes: StudioRoute[] = [
   { matches: (pathname) => pathname.includes("/patient/memory"), Page: PatientMemoryPage, audience: "patient" },
   { matches: (pathname) => pathname.includes("/patient/sessions/new"), Page: PatientNewSessionPage, audience: "patient" },
   { matches: (pathname) => pathname.includes("/patient/homework/"), Page: HomeworkPage, audience: "patient" },
+  // Checked after the detail route above, so "/patient/homework/{id}" keeps
+  // winning and only the bare "/patient/homework" reaches the list.
+  { matches: (pathname) => pathname.includes("/patient/homework"), Page: HomeworkListPage, audience: "patient" },
   { matches: (pathname) => pathname.includes("/patient/sessions/") && pathname.endsWith("/complete"), Page: PatientSessionCompletePage, audience: "patient" },
   { matches: (pathname) => pathname.includes("/patient/sessions/"), Page: PatientSessionPage, audience: "patient" },
   { matches: (pathname) => pathname.includes("/patient"), Page: PatientListPage, audience: "patient" },
