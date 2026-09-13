@@ -1,3 +1,4 @@
+import { resolveLongitudinalMemoryPolicy } from "@/shared/memory/memory-policy";
 import { claimRuntimePatientTurn, claimRuntimeSessionStart, commitRuntimeAssistantTurn, saveRuntimeEscalation, saveRuntimeLog, updateRuntimeSessionRecord } from "@/shared/data/repositories/runtime-session-repository";
 import { cleanupExpiredTriggerSuppressions, findActiveTriggerSuppression, updateTriggerSuppression } from "@/shared/data/repositories/safety-event-repository";
 import { createRuntimeCheckpoint, getRuntimeSession, getRuntimeSessionForTurn, setRuntimeSessionStatus } from "@/shared/api/runtime-session-api";
@@ -367,7 +368,7 @@ async function deliverClarificationTurn(input: {
     sourceEvidenceIds: [],
     createdAt: new Date().toISOString(),
     deliveredAt: new Date().toISOString(),
-    metadata: { turnId: makeId("TURN"), turnOutcome: "clarification", clarificationReason: input.reason, dialogueDecision: dialogueOutcome?.decision ?? undefined, dialogueFallbackUsed: dialogueOutcome?.usedFallback },
+    metadata: { turnId: makeId("TURN"), turnOutcome: "clarification", clarificationReason: input.reason, dialogueDecision: dialogueOutcome?.decision ?? undefined, dialogueFallbackUsed: dialogueOutcome?.usedFallback, injectedMemoryIds: dialogueOutcome?.injectedMemoryIds, memoryPolicyVersion: dialogueOutcome?.memoryPolicyVersion },
   };
   const outputValidation = deterministicValidation(content);
   await commitRuntimeAssistantTurn({
@@ -827,7 +828,7 @@ async function deliverReflectionCheckReplyTurn(input: {
     sourceEvidenceIds: [],
     createdAt: new Date().toISOString(),
     deliveredAt: new Date().toISOString(),
-    metadata: { turnId: makeId("TURN"), turnOutcome: "reflection_check", reflectionReply: reply, reflectionCheck: nextCheck, reflectionCheckResolution: resolution, dialogueDecision: dialogueOutcome?.decision ?? undefined, dialogueFallbackUsed: dialogueOutcome?.usedFallback },
+    metadata: { turnId: makeId("TURN"), turnOutcome: "reflection_check", reflectionReply: reply, reflectionCheck: nextCheck, reflectionCheckResolution: resolution, dialogueDecision: dialogueOutcome?.decision ?? undefined, dialogueFallbackUsed: dialogueOutcome?.usedFallback, injectedMemoryIds: dialogueOutcome?.injectedMemoryIds, memoryPolicyVersion: dialogueOutcome?.memoryPolicyVersion },
   };
   const outputValidation = deterministicValidation(content);
   const usedDialogueAgent = Boolean(dialogueOutcome && !dialogueOutcome.usedFallback && !dialogueOutcome.excludedBySafety);
@@ -1332,8 +1333,20 @@ export async function completeRuntimeSession(sessionId: string) {
   await updateRuntimeSessionRecord(sessionId, { status: "completed", completedAt: new Date().toISOString() });
   void saveRuntimeLog(makeLog(sessionId, "completion", "completed", "Session completed")).catch(() => {});
   const checkpoint = await createRuntimeCheckpoint(sessionId);
-  const summary = await generateSessionSummary(sessionId);
-  await extractMemoryCandidates(summary.id);
+  // The session is already "completed" and checkpointed above; the memory
+  // step (summary -> candidates for clinician review) must never be able to
+  // turn the participant's last turn into a 500. Until 2026-09-13 it threw
+  // on every server-side completion (the summary/candidate stores were
+  // browser IndexedDB), and none of the five call sites caught it. A
+  // failure is written to the runtime log so it is visible, not silent.
+  try {
+    const summary = await generateSessionSummary(sessionId);
+    await extractMemoryCandidates(summary.id);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[runtime-execution-api] session summary / memory candidate extraction failed", { sessionId, error: message });
+    void saveRuntimeLog(makeLog(sessionId, "completion", "failed", "Session summary / memory candidate extraction failed", { error: message })).catch(() => {});
+  }
   return checkpoint;
 }
 
@@ -1384,7 +1397,12 @@ export async function executeCurrentNode(sessionId: string, prefetchedView?: Run
   if (!node) throw new Error("Current node is missing");
   const activePromptItem = view.promptItems.find((item) => item.id === activeStep.promptItem.sourcePromptItemId);
   if (!activePromptItem) throw new Error("Current source PromptItem is missing");
-  const retrieval = await runMemoryRetrieval({
+  // Whether cross-session memory is part of the intervention at all, and how
+  // much of it, is the PI's decision -- read from memory-policy.ts, never
+  // fixed here. Disabled (the default until that decision) means no
+  // retrieval, no run/usage log, and an unchanged runtimeContext.
+  const memoryPolicy = resolveLongitudinalMemoryPolicy();
+  const retrieval = !memoryPolicy.enabled ? null : await runMemoryRetrieval({
     participantId: session.participantId,
     runtimeSessionId: session.id,
     protocolId: session.protocolId,
@@ -1393,8 +1411,20 @@ export async function executeCurrentNode(sessionId: string, prefetchedView?: Run
     currentNodeId: node.id,
     currentNodeType: node.type as import("@/types/protocol-runtime").ProtocolNodeType,
     currentClinicalIntent: node.clinicalPurpose ?? node.title,
-    maxItems: 5,
-  }).catch(() => null);
+    requestedMemoryTypes: memoryPolicy.allowedMemoryTypes,
+    maxItems: memoryPolicy.maxItemsPerNode,
+  }).catch((error: unknown) => {
+    // Retrieval must never block a turn, but a failure must not be invisible
+    // either: until 2026-09-13 this failed on every server turn (IndexedDB
+    // stores) and nobody knew. A participant who has not consented to
+    // cross-session use is the expected, non-error case -- logged as
+    // skipped, not failed.
+    const message = error instanceof Error ? error.message : String(error);
+    const consentDisabled = message.includes("Cross-session retrieval is disabled");
+    if (!consentDisabled) console.error("[runtime-execution-api] memory retrieval failed", { sessionId, nodeId: node.id, error: message });
+    void saveRuntimeLog(makeLog(sessionId, "node_resolution", consentDisabled ? "skipped" : "failed", consentDisabled ? "Memory retrieval skipped: cross-session use not consented" : "Memory retrieval failed", { nodeId: node.id, error: consentDisabled ? undefined : message })).catch(() => {});
+    return null;
+  });
   const runtimeContext = retrieval ? injectLongitudinalMemory(session.runtimeContext, retrieval.selected) : session.runtimeContext;
   const skippedPromptItemIds = mergePromptItemIds(session.skippedPromptItemIds, activeStep.skippedPromptItemIds);
   const activeSession = { ...session, runtimeContext, skippedPromptItemIds };

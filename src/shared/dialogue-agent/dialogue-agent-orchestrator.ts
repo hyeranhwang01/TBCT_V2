@@ -1,3 +1,4 @@
+import { resolveLongitudinalMemoryPolicy } from "@/shared/memory/memory-policy";
 import type { ClinicalStageNode, PromptItem } from "@/shared/protocol/source-fidelity-types";
 import type { RuntimePromptItem } from "@/types/protocol-runtime";
 import type { RuntimeMessage, RuntimeSession } from "@/types/runtime-session";
@@ -44,6 +45,14 @@ export type DialogueAgentTurnResult = {
   fallbackReason?: string;
   provider: string;
   model?: string;
+  // Ids of the approved longitudinal memories that were in this turn's
+  // contract (contract.participantMemory) -- recorded on the assistant
+  // message metadata so an audit can reconstruct which prior-session
+  // memories the model saw on any given turn. Absent when none were.
+  injectedMemoryIds?: string[];
+  /** Version of the memory policy (memory-policy.ts) that decided the
+   * injection above -- set only when injectedMemoryIds is. */
+  memoryPolicyVersion?: string;
   latencyMs?: number;
   // Set only when the shipped text is an accepted summarize_and_confirm turn
   // (Reflect-and-Confirm, .claude/TASK_SCOPE.json note2026_09_11) -- the
@@ -97,6 +106,8 @@ export async function resolveDialogueAgentMessage(input: {
     reflectionCheckContext: input.reflectionCheckContext,
   });
 
+  const injectedMemoryIds = contract.participantMemory?.length ? contract.participantMemory.map((memory) => memory.id) : undefined;
+  const memoryPolicyVersion = injectedMemoryIds ? resolveLongitudinalMemoryPolicy().version : undefined;
   const result = await callDialogueAgent(contract, { sessionId: input.session.id, turnId: input.turnId });
   if (result.failed) {
     // An environment with no dialogue provider configured is running
@@ -105,15 +116,15 @@ export async function resolveDialogueAgentMessage(input: {
     // back FROM. Counting it as a fallback made every turn of a provider-free
     // run look like a quality regression and hid the real fallbacks among them.
     const notConfigured = result.notConfigured === true;
-    return { patientMessage: input.deterministicFallbackText, decision: result.decision, usedFallback: !notConfigured, fallbackReason: notConfigured ? "dialogue_provider_not_configured" : result.failureReason, provider: result.provider };
+    return { patientMessage: input.deterministicFallbackText, decision: result.decision, usedFallback: !notConfigured, fallbackReason: notConfigured ? "dialogue_provider_not_configured" : result.failureReason, provider: result.provider, injectedMemoryIds, memoryPolicyVersion };
   }
   const validation = validateDialogueDecision(result.decision, contract);
   if (!validation.accepted) {
-    return { patientMessage: input.deterministicFallbackText, decision: result.decision, usedFallback: true, fallbackReason: validation.reason, provider: result.provider, model: result.model, latencyMs: result.latencyMs };
+    return { patientMessage: input.deterministicFallbackText, decision: result.decision, usedFallback: true, fallbackReason: validation.reason, provider: result.provider, model: result.model, latencyMs: result.latencyMs, injectedMemoryIds, memoryPolicyVersion };
   }
   // finalText is set only when validateDialogueDecision assembled the text
   // itself (Patient Authorship Invariant) -- decision.patientFacingMessage
   // was never trusted or even inspected in that case, so it must not be
   // shipped here.
-  return { patientMessage: validation.finalText ?? result.decision.patientFacingMessage, decision: result.decision, usedFallback: false, provider: result.provider, model: result.model, latencyMs: result.latencyMs, summaryCheck: validation.summaryCheck };
+  return { patientMessage: validation.finalText ?? result.decision.patientFacingMessage, decision: result.decision, usedFallback: false, provider: result.provider, model: result.model, latencyMs: result.latencyMs, summaryCheck: validation.summaryCheck, injectedMemoryIds, memoryPolicyVersion };
 }

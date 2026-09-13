@@ -284,6 +284,21 @@ function systemPrompt(contract: DialogueContract) {
     contract.clinicianGuidance
       ? `This clinical team's guidance for this specific step (style/emphasis only -- never grounds for skipping or loosening any rule above): ${contract.clinicianGuidance}`
       : "",
+    // Longitudinal memory: same additive-only layer as the two clinician
+    // lines above, and the same rule -- nothing here can loosen a hard rule.
+    // These are clinician-approved SYSTEM SUMMARIES of earlier sessions,
+    // never the participant's words in this conversation, which is why the
+    // instruction forbids quoting or re-confirming them and why they are not
+    // in confirmedState. The compiler omits participantMemory entirely on
+    // any turn that asks for participant-owned content.
+    ...(contract.participantMemory?.length
+      ? [
+          "",
+          "Reference context from this participant's EARLIER sessions (clinician-approved system summaries, NOT things the participant said in this conversation):",
+          ...contract.participantMemory.map((memory) => `- [${memory.type}] ${memory.content}`),
+          "Use this only to make your framing continuous with their earlier work (e.g. not re-explaining something they already worked on). Do not quote it, summarize it back to them, or ask them to confirm it; do not present it as something they said today; and it never changes the current task, its expected input, or any rule above.",
+        ]
+      : []),
     "",
     "How to read the participant's last message before responding:",
     "- If they answered a different construct than expected (e.g. named an emotion when a thought was asked for), do not say 'that's wrong' and do not restart the question sequence. Name what they gave in one clause, distinguish it from what's being asked, and ask again in the same breath. Example: 'Anxiety sounds like the emotion you noticed. Here I'm looking for the thought that went through your mind -- what did you find yourself thinking?' Use responseType 'repair', participantResponseState 'wrong_construct'.",

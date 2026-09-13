@@ -1,14 +1,20 @@
-import { getLocalDb } from "@/shared/data/db/tbct-local-db";
 import { PARTICIPANT_STORE_ENDPOINT, type ParticipantStoreOp } from "@/shared/runtime/participant-store-ops";
 import { resolveStoreUrl, runtimeFetch } from "@/shared/runtime/resolve-store-url";
+import { getRetentionPolicy as getRetentionPolicyConstant, listRetentionPolicies as listRetentionPoliciesConstant } from "@/shared/memory/retention-policies";
 import type { GoalTrackingRecord, HomeworkTrackingRecord, LongitudinalMemory, MemoryCandidate, MemoryRetrievalResult, MemoryUsageLog } from "@/types/longitudinal-memory";
 
-// Longitudinal memories (including clinician_note entries, i.e. clinician
-// notes added from Patient Monitoring) now live in Neon Postgres alongside
-// the participant roster (src/shared/data/server/participant-store.ts) -- so a note
-// added by a clinician is visible from any browser/session, not just the
-// one it was written in. Memory candidates, goal/homework tracking, and
-// usage logs are not yet part of this migration and remain local-only.
+// Every longitudinal-memory record now lives in Neon Postgres alongside the
+// participant roster (src/shared/data/server/participant-store.ts): approved
+// memories (incl. clinician notes), memory candidates, retrieval runs,
+// usage logs and goal/homework tracking (sql/023_memory_pipeline.sql).
+// Until 2026-09-13 only the approved memories had moved; the rest were
+// browser IndexedDB (Dexie) tables -- and a patient turn runs on the
+// server, where Dexie throws on first access, so candidates were never
+// created, the clinician review screen (a different browser) could never
+// see them, and retrieval logging failed on every turn. Every function
+// keeps its original name/signature so call sites are unaffected.
+// Retention policies are a code constant (src/shared/memory/retention-
+// policies.ts), not stored data -- see that file for why.
 async function callStore<T>(op: ParticipantStoreOp): Promise<T> {
   const response = await runtimeFetch(resolveStoreUrl(PARTICIPANT_STORE_ENDPOINT), {
     method: "POST",
@@ -37,93 +43,85 @@ export async function updateLongitudinalMemory(memoryId: string, patch: Partial<
   return callStore<LongitudinalMemory>({ op: "updateMemory", memoryId, patch });
 }
 
+/** Approved memories whose validUntil has passed -- the input of
+ * expireEligibleMemories (longitudinal-memory-api.ts). */
+export async function listExpiredApprovedMemories(): Promise<LongitudinalMemory[]> {
+  return callStore<LongitudinalMemory[]>({ op: "listExpiredApprovedMemories" });
+}
+
 export async function listMemoryCandidates(participantId?: string) {
-  const table = getLocalDb().memoryCandidates;
-  return participantId
-    ? table.where("participantId").equals(participantId).sortBy("updatedAt")
-    : table.orderBy("updatedAt").reverse().toArray();
+  return callStore<MemoryCandidate[]>({ op: "listMemoryCandidates", participantId });
 }
 
 export async function getMemoryCandidate(candidateId: string) {
-  return getLocalDb().memoryCandidates.get(candidateId);
+  return callStore<MemoryCandidate | undefined>({ op: "getMemoryCandidate", candidateId });
 }
 
 export async function saveMemoryCandidate(candidate: MemoryCandidate) {
-  await getLocalDb().memoryCandidates.put(candidate);
+  await callStore<MemoryCandidate>({ op: "saveMemoryCandidate", candidate });
   return candidate;
 }
 
 export async function updateMemoryCandidate(candidateId: string, patch: Partial<MemoryCandidate>) {
-  const db = getLocalDb();
-  const current = await db.memoryCandidates.get(candidateId);
-  if (!current) throw new Error("Memory candidate not found");
-  const next = { ...current, ...patch, updatedAt: new Date().toISOString() };
-  await db.memoryCandidates.put(next);
-  return next;
+  return callStore<MemoryCandidate>({ op: "updateMemoryCandidate", candidateId, patch });
+}
+
+export async function deleteMemoryCandidate(candidateId: string) {
+  await callStore<void>({ op: "deleteMemoryCandidate", candidateId });
 }
 
 export async function saveMemoryRetrievalRun(run: MemoryRetrievalResult) {
-  await getLocalDb().memoryRetrievalRuns.put(run);
+  await callStore<MemoryRetrievalResult>({ op: "saveMemoryRetrievalRun", run });
   return run;
 }
 
 export async function listMemoryRetrievalRuns(runtimeSessionId: string) {
-  return getLocalDb().memoryRetrievalRuns.where("runtimeSessionId").equals(runtimeSessionId).sortBy("createdAt");
+  return callStore<MemoryRetrievalResult[]>({ op: "listMemoryRetrievalRuns", runtimeSessionId });
 }
 
 export async function saveMemoryUsageLog(log: MemoryUsageLog) {
-  await getLocalDb().memoryUsageLogs.put(log);
+  await callStore<MemoryUsageLog>({ op: "saveMemoryUsageLog", log });
   return log;
 }
 
 export async function listMemoryUsageLogs(runtimeSessionId: string) {
-  return getLocalDb().memoryUsageLogs.where("runtimeSessionId").equals(runtimeSessionId).sortBy("createdAt");
+  return callStore<MemoryUsageLog[]>({ op: "listMemoryUsageLogs", runtimeSessionId });
 }
 
 export async function listAllMemoryUsageLogs(participantId: string) {
-  return getLocalDb().memoryUsageLogs.where("participantId").equals(participantId).sortBy("createdAt");
+  return callStore<MemoryUsageLog[]>({ op: "listAllMemoryUsageLogs", participantId });
 }
 
 export async function listRetentionPolicies() {
-  return getLocalDb().memoryRetentionPolicies.toArray();
+  return listRetentionPoliciesConstant();
 }
 
 export async function getRetentionPolicy(policyId: string) {
-  return getLocalDb().memoryRetentionPolicies.get(policyId);
+  return getRetentionPolicyConstant(policyId);
 }
 
 export async function listGoalTrackingRecords(participantId: string) {
-  return getLocalDb().goalTrackingRecords.where("participantId").equals(participantId).sortBy("updatedAt");
+  return callStore<GoalTrackingRecord[]>({ op: "listGoalTrackingRecords", participantId });
 }
 
 export async function saveGoalTrackingRecord(record: GoalTrackingRecord) {
-  await getLocalDb().goalTrackingRecords.put(record);
+  await callStore<GoalTrackingRecord>({ op: "saveGoalTrackingRecord", record });
   return record;
 }
 
 export async function updateGoalTrackingRecord(recordId: string, patch: Partial<GoalTrackingRecord>) {
-  const db = getLocalDb();
-  const current = await db.goalTrackingRecords.get(recordId);
-  if (!current) throw new Error("Goal tracking record not found");
-  const next = { ...current, ...patch, updatedAt: new Date().toISOString() };
-  await db.goalTrackingRecords.put(next);
-  return next;
+  return callStore<GoalTrackingRecord>({ op: "updateGoalTrackingRecord", recordId, patch });
 }
 
 export async function listHomeworkTrackingRecords(participantId: string) {
-  return getLocalDb().homeworkTrackingRecords.where("participantId").equals(participantId).sortBy("assignedAt");
+  return callStore<HomeworkTrackingRecord[]>({ op: "listHomeworkTrackingRecords", participantId });
 }
 
 export async function saveHomeworkTrackingRecord(record: HomeworkTrackingRecord) {
-  await getLocalDb().homeworkTrackingRecords.put(record);
+  await callStore<HomeworkTrackingRecord>({ op: "saveHomeworkTrackingRecord", record });
   return record;
 }
 
 export async function updateHomeworkTrackingRecord(recordId: string, patch: Partial<HomeworkTrackingRecord>) {
-  const db = getLocalDb();
-  const current = await db.homeworkTrackingRecords.get(recordId);
-  if (!current) throw new Error("Homework tracking record not found");
-  const next = { ...current, ...patch };
-  await db.homeworkTrackingRecords.put(next);
-  return next;
+  return callStore<HomeworkTrackingRecord>({ op: "updateHomeworkTrackingRecord", recordId, patch });
 }
