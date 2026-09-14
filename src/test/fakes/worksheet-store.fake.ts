@@ -101,7 +101,7 @@ export async function dispatchFakeWorksheetStoreOp(op: WorksheetStoreOp): Promis
     case "listFieldValues": return [...(fieldValuesByInstance.get(op.instanceId)?.values() ?? [])];
     case "replaceCollectionItems": {
       const now = new Date().toISOString();
-      collectionItemsByFieldValue.set(op.fieldValueId, op.items.map((item, position) => ({ id: makeId("WKCI"), fieldValueId: op.fieldValueId, position, status: item.status, provenance: item.provenance, sourceTurnId: item.sourceTurnId, createdAt: now, value: item.value, displayValue: item.displayValue })));
+      collectionItemsByFieldValue.set(op.fieldValueId, op.items.map((item, position) => ({ id: makeId("WKCI"), fieldValueId: op.fieldValueId, position, status: item.status, provenance: item.provenance, sourceTurnId: item.sourceTurnId, createdAt: now, value: item.value, displayValue: item.displayValue, participantVerbatim: item.participantVerbatim, confirmedAt: item.confirmedAt })));
       return undefined;
     }
     case "listCollectionItems": return [...(collectionItemsByFieldValue.get(op.fieldValueId) ?? [])].sort((left, right) => left.position - right.position);

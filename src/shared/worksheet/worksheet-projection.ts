@@ -37,6 +37,7 @@ import {
   replaceWorksheetCollectionItems,
   upsertWorksheetFieldValue,
 } from "@/shared/data/repositories/worksheet-repository";
+import type { ConfirmedSummaryRecord } from "@/types/runtime-session";
 import type { CohortProgressSummaryRow, ProgressSeries, SessionProgressCard, WorksheetFieldDefinitionRecord, WorksheetFieldProvenance, WorksheetFieldStatus, WorksheetFieldValueRecord, WorksheetHistoryRow, WorksheetHistoryView, WorksheetView } from "@/types/worksheet";
 
 const TEMPLATE_VERSION = 1;
@@ -83,6 +84,11 @@ export async function projectRuntimeFieldsToWorksheet(input: {
   sessionDefinitionId: string;
   fields: Record<string, unknown>;
   sourceTurnId?: string;
+  /** runtimeContext.confirmedSummaries (open dialogue v1): a field or list
+   * item whose value is a summary the participant confirmed is projected as
+   * confirmed, with their original answer as participantVerbatim. Passed on
+   * every projection so a later turn never knocks it back to a draft. */
+  confirmedSummaries?: Record<string, ConfirmedSummaryRecord>;
 }): Promise<void> {
   if (!hasWorksheetBindings(input.sessionDefinitionId)) return;
   const { instance, fieldDefinitions } = await ensureTemplateAndInstance(input.runtimeSessionId, input.sessionDefinitionId);
@@ -121,8 +127,22 @@ export async function projectRuntimeFieldsToWorksheet(input: {
       const fieldValue = await upsertWorksheetFieldValue(instance.id, definition.id, {
         status, provenance, sourceTurnId: input.sourceTurnId, value: rawValue, displayValue: displayValueFor(rawValue),
       });
-      await replaceWorksheetCollectionItems(fieldValue.id, rawValue.map((item) => ({ value: item, displayValue: String(item), status, provenance, sourceTurnId: input.sourceTurnId })));
+      await replaceWorksheetCollectionItems(fieldValue.id, rawValue.map((item, index) => {
+        const confirmed = input.confirmedSummaries?.[`${definition.canonicalFieldKey}#${index}`];
+        return confirmed && confirmed.summary === item
+          ? { value: item, displayValue: String(item), status: "participant_confirmed" as WorksheetFieldStatus, provenance: "participant_confirmed_summary" as WorksheetFieldProvenance, sourceTurnId: input.sourceTurnId, participantVerbatim: confirmed.original, confirmedAt: confirmed.confirmedAt }
+          : { value: item, displayValue: String(item), status, provenance, sourceTurnId: input.sourceTurnId };
+      }));
       await appendWorksheetFieldRevision({ fieldValueId: fieldValue.id, status, provenance, sourceTurnId: input.sourceTurnId, snapshot: rawValue });
+      continue;
+    }
+
+    const confirmed = input.confirmedSummaries?.[definition.canonicalFieldKey];
+    if (confirmed && confirmed.listIndex === undefined && confirmed.summary === rawValue) {
+      const fieldValue = await upsertWorksheetFieldValue(instance.id, definition.id, {
+        status: "participant_confirmed", provenance: "participant_confirmed_summary", sourceTurnId: input.sourceTurnId, confirmedAt: confirmed.confirmedAt, participantVerbatim: confirmed.original, value: rawValue, displayValue: displayValueFor(rawValue),
+      });
+      await appendWorksheetFieldRevision({ fieldValueId: fieldValue.id, status: "participant_confirmed", provenance: "participant_confirmed_summary", sourceTurnId: input.sourceTurnId, snapshot: rawValue });
       continue;
     }
 

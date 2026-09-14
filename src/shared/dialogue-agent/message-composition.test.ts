@@ -286,63 +286,54 @@ describe("Patient Authorship Invariant: the 32 real violations all reject via as
   });
 });
 
-// Upgraded from "the 20 S08 violations" when the gate was widened to all
-// eight sessions (.claude/TASK_SCOPE.json note2026_09_11): the S01/S03
-// fixtures now reject end-to-end in their own sessions too, not only at the
-// assembleMessage unit level above.
+// Open dialogue v1 (.claude/TASK_SCOPE.json note2026_09_14): no session is
+// gated any more, so these fixtures no longer reject end-to-end. They stay as
+// the record of what the gate used to catch, and pin what now happens to the
+// same content: as unflagged free prose it ships (the gap live review and the
+// guard logs watch for), and flagged as a summary it can only ship as a
+// question the participant confirms.
 function sessionIdOf(promptItemId: string) {
   return promptItemId.split("-").slice(0, 2).join("-");
 }
 
-describe("Patient Authorship Invariant: all 32 violations reject end-to-end in the session they came from", () => {
+describe("Patient Authorship Invariant under open dialogue v1: the 32 stored violations", () => {
   it("covers every stored violation, from S01, S03, S07 and S08", () => {
     expect(VIOLATIONS).toHaveLength(32);
     expect(new Set(VIOLATIONS.map((v) => sessionIdOf(v.promptItemId)))).toEqual(new Set(["tbct-s01", "tbct-s03", "tbct-s07", "tbct-s08"]));
   });
 
-  it.each(VIOLATIONS)("$label -- resubmitted verbatim as free prose is rejected by validateDialogueDecision", ({ promptItemId, locale, lastParticipantMessage, violatingSpan, contractOverrides }) => {
+  it.each(VIOLATIONS)("$label -- as unflagged free prose it is no longer blocked", ({ promptItemId, locale, lastParticipantMessage, violatingSpan, contractOverrides }) => {
     const contract = baseContract({ sessionId: sessionIdOf(promptItemId), locale, lastParticipantMessage, ...contractOverrides });
-    // The historical failure mode: Claude submits ordinary free-form prose
-    // containing the fabricated content, no messageParts at all -- exactly
-    // what every one of the 32 stored transcripts actually did.
     const decision: DialogueDecision = {
       responseType: "reflect_and_ask",
-      patientFacingMessage: `그 이야기를 잘 들었어요. ${violatingSpan}. 계속 진행해 볼까요?`,
+      patientFacingMessage: locale.startsWith("ko") ? `그 이야기를 잘 들었어요. ${violatingSpan}. 계속 진행해 볼까요?` : `I hear you. ${violatingSpan}. Shall we keep going?`,
       keepCurrentNode: true,
       participantResponseState: "valid_answer",
     };
-    expect(requiresAssembledMessage(contract, decision)).toBe(true);
-    expect(validateDialogueDecision(decision, contract)).toEqual({ accepted: false, reason: "missing_message_parts" });
+    expect(requiresAssembledMessage(contract, decision)).toBe(false);
+    expect(validateDialogueDecision(decision, contract)).toMatchObject({ accepted: true });
   });
 
-  it.each(VIOLATIONS)("$label -- laundered through a dishonest quote part is still rejected", ({ promptItemId, locale, lastParticipantMessage, violatingSpan, contractOverrides }) => {
-    const contract = baseContract({ sessionId: sessionIdOf(promptItemId), locale, lastParticipantMessage, ...contractOverrides });
+  it.each(VIOLATIONS)("$label -- flagged as a summary it ships only as a question to confirm", ({ promptItemId, locale, lastParticipantMessage, violatingSpan, contractOverrides }) => {
+    const contract = baseContract({ sessionId: sessionIdOf(promptItemId), locale, lastParticipantMessage, summaryCheckAllowed: true, ...contractOverrides });
     const decision: DialogueDecision = {
-      responseType: "reflect_and_ask",
-      patientFacingMessage: "(ignored once messageParts governs)",
+      responseType: "summarize_and_confirm",
+      patientFacingMessage: `${violatingSpan}.`,
+      reflectionText: violatingSpan,
+      needsConfirmation: true,
       keepCurrentNode: true,
       participantResponseState: "valid_answer",
-      messageParts: [{ kind: "quote", text: violatingSpan }],
     };
-    expect(validateDialogueDecision(decision, contract)).toEqual({ accepted: false, reason: "misquoted_participant" });
+    const result = validateDialogueDecision(decision, contract);
+    expect(result).toMatchObject({ accepted: true, summaryCheck: { summaryText: violatingSpan } });
+    const shipped = result.accepted ? result.finalText ?? decision.patientFacingMessage : "";
+    expect(shipped).toMatch(/[?？][.!~]*$/);
   });
 });
 
-describe("Patient Authorship Invariant: the gate covers every session (Reflect-and-Confirm)", () => {
-  // The only guarantee that every assistant summary ends in a confirmation
-  // question is that no other patient-content response type can carry free
-  // prose -- which holds only if no session is left ungated
-  // (.claude/TASK_SCOPE.json note2026_09_11).
-  it.each(["tbct-s01", "tbct-s02", "tbct-s03", "tbct-s04", "tbct-s05", "tbct-s06", "tbct-s07", "tbct-s08"])("gates %s for a protected field", (sessionId) => {
-    expect(contractMayRequireAssembly(baseContract({ sessionId }))).toBe(true);
-  });
-
-  it("gates a purely administrative turn too -- what a turn may say about the participant does not depend on the field it records", () => {
-    // The 2026-09-11 mock-Claude audit found invented conclusions shipped
-    // without confirmation on exactly these turns (rating-card check, scale
-    // presentation, three-person preview) while they were left ungated.
-    expect(contractMayRequireAssembly(baseContract({ sessionId: "tbct-s01", assistantMustNotSupply: false, participantOwned: false, nodeRequiresProtectedField: false }))).toBe(true);
-    expect(contractMayRequireAssembly(baseContract({ sessionId: "unregistered-session", assistantMustNotSupply: true }))).toBe(false);
+describe("open dialogue v1: no session is gated", () => {
+  it.each(["tbct-s01", "tbct-s02", "tbct-s03", "tbct-s04", "tbct-s05", "tbct-s06", "tbct-s07", "tbct-s08"])("does not gate %s", (sessionId) => {
+    expect(contractMayRequireAssembly(baseContract({ sessionId }))).toBe(false);
   });
 });
 

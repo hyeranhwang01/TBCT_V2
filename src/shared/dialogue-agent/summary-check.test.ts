@@ -8,11 +8,11 @@ import { classifyReflectionCheckReply, findPendingReflectionCheck, summaryCheckA
 import type { RuntimeMessage, RuntimeSession } from "@/types/runtime-session";
 import type { RuntimePromptItem } from "@/types/protocol-runtime";
 
-// Reflect-and-Confirm (.claude/TASK_SCOPE.json note2026_09_11): the
-// assistant may summarize or conclude again, but only through
-// summarize_and_confirm, which the server always closes with a fixed
-// confirmation question -- and never at a step where the participant must
-// form the summary/conclusion themselves.
+// Confirmation re-asks, as changed by open dialogue v1 (.claude/TASK_SCOPE.json
+// note2026_09_14): whenever Claude puts the participant's words into its own,
+// the turn ends in a question the participant answers before the task moves
+// on -- at any step, as often as it happens. The per-node limit and the
+// forbidden-step list of note2026_09_11 are kept in the code but not applied.
 
 const TASK_KO = "그 순간 어떤 생각이 머릿속을 스쳐 지나갔나요?";
 
@@ -46,17 +46,28 @@ function baseContract(overrides: Partial<DialogueContract> = {}): DialogueContra
   };
 }
 
-function summaryDecision(patientFacingMessage: string): DialogueDecision {
-  return { responseType: "summarize_and_confirm", patientFacingMessage, keepCurrentNode: true, participantResponseState: "valid_answer" };
+function summaryDecision(patientFacingMessage: string, extra: Partial<DialogueDecision> = {}): DialogueDecision {
+  return { responseType: "summarize_and_confirm", patientFacingMessage, keepCurrentNode: true, participantResponseState: "valid_answer", ...extra };
 }
 
-describe("summarize_and_confirm: the server closes every summary with the confirmation question", () => {
-  it("appends the fixed Korean question and reports the summary for the pending check", () => {
+describe("confirmation turns: a summary always ends in a question the participant answers", () => {
+  it("keeps Claude's own confirmation question and reports the summary for the pending check", () => {
+    const decision = summaryDecision("상사분이 나를 무능하게 본다고 느끼셨다는 말씀이 맞으실까요?", { needsConfirmation: true, reflectionText: "상사분이 나를 무능하게 본다고 느끼셨다" });
+    expect(validateDialogueDecision(decision, baseContract())).toEqual({ accepted: true, summaryCheck: { summaryText: "상사분이 나를 무능하게 본다고 느끼셨다" }, guardLogs: [] });
+  });
+
+  it("counts needsConfirmation on any response type, not only summarize_and_confirm", () => {
+    const decision: DialogueDecision = { responseType: "reflect_and_ask", patientFacingMessage: "회의 자리가 요즘 가장 힘든 부분이라는 거죠?", needsConfirmation: true, keepCurrentNode: true, participantResponseState: "valid_answer" };
+    expect(validateDialogueDecision(decision, baseContract())).toEqual({ accepted: true, summaryCheck: { summaryText: "회의 자리가 요즘 가장 힘든 부분이라는 거죠?" }, guardLogs: [] });
+  });
+
+  it("appends the fixed Korean question when Claude forgot to ask", () => {
     const summary = "상사분이 나를 무능하게 본다고 느끼셨던 거군요.";
     expect(validateDialogueDecision(summaryDecision(summary), baseContract())).toEqual({
       accepted: true,
       finalText: `${summary} 제가 제대로 이해했나요?`,
       summaryCheck: { summaryText: summary },
+      guardLogs: [],
     });
   });
 
@@ -66,12 +77,32 @@ describe("summarize_and_confirm: the server closes every summary with the confir
     expect(result).toMatchObject({ accepted: true, finalText: "It sounds like you felt your boss sees you as useless. Did I get that right?" });
   });
 
-  it("is rejected outright where summaries are not allowed", () => {
-    expect(validateDialogueDecision(summaryDecision("상사분이 나를 무능하게 본다고 느끼셨던 거군요."), baseContract({ summaryCheckAllowed: false }))).toEqual({ accepted: false, reason: "summary_check_not_allowed" });
-    expect(validateDialogueDecision(summaryDecision("상사분이 나를 무능하게 본다고 느끼셨던 거군요."), baseContract({ summaryCheckAllowed: undefined }))).toEqual({ accepted: false, reason: "summary_check_not_allowed" });
+  it("logs a confirmation it cannot hold (the turn does not wait for an answer) instead of opening a check", () => {
+    const decision = summaryDecision("상사분이 나를 무능하게 본다고 느끼셨던 거군요.", { needsConfirmation: true });
+    expect(validateDialogueDecision(decision, baseContract({ summaryCheckAllowed: false }))).toEqual({ accepted: true, guardLogs: ["guard_log:confirmation_not_held"] });
+    expect(validateDialogueDecision(decision, baseContract({ summaryCheckAllowed: undefined }))).toEqual({ accepted: true, guardLogs: ["guard_log:confirmation_not_held"] });
   });
 
-  it("never lets the summary body ask anything itself -- the confirmation is the turn's only question", () => {
+  it("reports a long answer that was not summarized, so the caller can ask once more", () => {
+    const plain: DialogueDecision = { responseType: "reflect_and_ask", patientFacingMessage: TASK_KO, keepCurrentNode: true, participantResponseState: "valid_answer" };
+    expect(validateDialogueDecision(plain, baseContract({ summarizeLastAnswer: { field: "automaticThought", originalValue: "긴 답" } }))).toEqual({ accepted: true, guardLogs: [], missingRequiredSummary: true });
+  });
+
+  it("still runs the enforced hygiene checks on a confirmation turn, and logs the clinical ones", () => {
+    expect(validateDialogueDecision(summaryDecision("It sounds like you felt your boss sees you as useless."), baseContract())).toEqual({ accepted: false, reason: "locale_mismatch", guardLogs: [] });
+    const english = baseContract({ locale: "en-US", currentTaskText: "What went through your mind?" });
+    expect(validateDialogueDecision(summaryDecision("This sounds like generalized anxiety disorder."), english)).toMatchObject({ accepted: true, guardLogs: ["guard_log:diagnosis_language"] });
+    expect(validateDialogueDecision(summaryDecision("So your conclusion is [initial conclusion]."), english)).toEqual({ accepted: false, reason: "unresolved_template_variable", guardLogs: [] });
+  });
+
+  it("lets ordinary free prose ship as written in every session", () => {
+    const freeProse: DialogueDecision = { responseType: "reflect_and_ask", patientFacingMessage: "말씀해 주셔서 고마워요. 그 순간 어떤 생각이 머릿속을 스쳐 지나갔나요?", keepCurrentNode: true, participantResponseState: "valid_answer" };
+    expect(validateDialogueDecision(freeProse, baseContract({ sessionId: "tbct-s01" }))).toEqual({ accepted: true, guardLogs: [] });
+  });
+});
+
+describe("assembleSummaryCheck (not used by v1, kept for later regulation)", () => {
+  it("never lets the summary body ask anything itself", () => {
     expect(assembleSummaryCheck("무능하게 보인다고 느끼셨군요. 그때 기분이 어땠어요?", baseContract())).toEqual({ ok: false, reason: "summary_contains_question" });
     expect(assembleSummaryCheck("무능하게 보인다고 느끼셨군요. 그때 많이 불안하셨나요.", baseContract())).toEqual({ ok: false, reason: "summary_contains_question" });
     expect(assembleSummaryCheck("무능하게 보인다고 느끼셨군요. 이제 다음 단계로 갈까요", baseContract())).toEqual({ ok: false, reason: "summary_contains_question" });
@@ -87,18 +118,6 @@ describe("summarize_and_confirm: the server closes every summary with the confir
 
   it("rejects an over-long summary", () => {
     expect(assembleSummaryCheck("가".repeat(301), baseContract())).toEqual({ ok: false, reason: "summary_too_long" });
-  });
-
-  it("runs the same content-hygiene checks as any free prose on the summary body", () => {
-    expect(validateDialogueDecision(summaryDecision("It sounds like you felt your boss sees you as useless."), baseContract())).toEqual({ accepted: false, reason: "locale_mismatch" });
-    const english = baseContract({ locale: "en-US", currentTaskText: "What went through your mind?" });
-    expect(validateDialogueDecision(summaryDecision("This sounds like generalized anxiety disorder."), english)).toEqual({ accepted: false, reason: "diagnosis_language" });
-    expect(validateDialogueDecision(summaryDecision("So your conclusion is [initial conclusion]."), english)).toEqual({ accepted: false, reason: "unresolved_template_variable" });
-  });
-
-  it("does not open a free-prose channel for any OTHER patient-content response type", () => {
-    const freeProse: DialogueDecision = { responseType: "reflect_and_ask", patientFacingMessage: "상사분이 나를 무능하게 본다고 느끼셨던 거군요. 그 순간 어떤 생각이 머릿속을 스쳐 지나갔나요?", keepCurrentNode: true, participantResponseState: "valid_answer" };
-    expect(validateDialogueDecision(freeProse, baseContract({ sessionId: "tbct-s01" }))).toEqual({ accepted: false, reason: "missing_message_parts" });
   });
 });
 
@@ -145,7 +164,7 @@ function runtimePromptItemFor(nodeId: string, overrides: Partial<RuntimePromptIt
   };
 }
 
-function compileFor(promptItemId: string, options: { summaryCheckAllowed?: boolean; requiresPatientInput?: boolean } = {}) {
+function compileFor(promptItemId: string, options: { summaryCheckAllowed?: boolean; requiresPatientInput?: boolean; summarizeLastAnswer?: { field: string; originalValue: string } } = {}) {
   const promptItem = CANONICAL_PROMPT_ITEMS.find((item) => item.id === promptItemId);
   if (!promptItem) throw new Error(`Missing prompt ${promptItemId}`);
   const node = CANONICAL_STAGE_NODES.find((item) => item.id === promptItem.nodeId);
@@ -160,10 +179,11 @@ function compileFor(promptItemId: string, options: { summaryCheckAllowed?: boole
     isFirstPromptOfNode: false,
     isFirstPromptOfSession: false,
     summaryCheckAllowed: options.summaryCheckAllowed ?? true,
+    summarizeLastAnswer: options.summarizeLastAnswer,
   });
 }
 
-describe("summarize_and_confirm: where it is allowed", () => {
+describe("where a confirmation is allowed", () => {
   it("is allowed on an ordinary question the runtime waits on, and offered as an action", () => {
     const contract = compileFor("tbct-s03-n04-p01-automatic-thought");
     expect(contract.summaryCheckAllowed).toBe(true);
@@ -185,12 +205,6 @@ describe("summarize_and_confirm: where it is allowed", () => {
     "tbct-s03-n08-p03-participant-summary",
     "tbct-s06-n06-p03-participant-capsule-summary",
     "tbct-s06-n10-p05-circuit-two-summary",
-  ])("stays forbidden where the participant must summarize themselves (%s: \"Do not summarize -- always ask\")", (promptItemId) => {
-    expect(compileFor(promptItemId).summaryCheckAllowed).toBe(false);
-  });
-
-  it.each([
-    // S01 redesign (note2026_09_12): matched by slug because S01 ids are positional.
     "tbct-s01-n12-p01-candidate-two-thought",
     "tbct-s01-n14-p04-what-made-difference",
     "tbct-s01-n17-p04-identify-distortion",
@@ -201,8 +215,14 @@ describe("summarize_and_confirm: where it is allowed", () => {
     "tbct-s08-n12-p03-participant-therefore",
     "tbct-s08-n14-p04-participant-verdict",
     "tbct-s08-n18-p01-participant-positive-belief",
-  ])("stays forbidden at %s", (promptItemId) => {
-    expect(compileFor(promptItemId).summaryCheckAllowed).toBe(false);
+  ])("is allowed again at formerly forbidden %s (the list is kept for regulation, not applied)", (promptItemId) => {
+    expect(compileFor(promptItemId).summaryCheckAllowed).toBe(true);
+  });
+
+  it("passes a summarize-last-answer request through only when a confirmation can be held", () => {
+    const request = { field: "automaticThought", originalValue: "긴 답" };
+    expect(compileFor("tbct-s03-n04-p01-automatic-thought", { summarizeLastAnswer: request }).summarizeLastAnswer).toEqual(request);
+    expect(compileFor("tbct-s03-n04-p01-automatic-thought", { summarizeLastAnswer: request, summaryCheckAllowed: false }).summarizeLastAnswer).toBeUndefined();
   });
 
   it("names only prompts that really exist in the catalog (a typo would silently un-forbid a step)", () => {
@@ -231,6 +251,10 @@ describe("classifyReflectionCheckReply", () => {
     ["네?", "correction"],
     ["아니면 제가 잘못 말했나봐요", "correction"],
     ["네가 보기엔 어때", "correction"],
+    ["그냥 넘어가요", "stop"],
+    ["그만할래요", "stop"],
+    ["네, 이대로 넘어가 주세요", "stop"],
+    ["let's move on", "stop"],
   ])("%s -> %s", (reply, expected) => {
     expect(classifyReflectionCheckReply(reply)).toBe(expected);
   });
@@ -251,7 +275,7 @@ describe("findPendingReflectionCheck", () => {
   });
 });
 
-describe("summaryCheckAlreadyUsedInNode: at most one summary check per node", () => {
+describe("summaryCheckAlreadyUsedInNode (not applied by v1, kept for later regulation)", () => {
   const pending = { status: "pending", checkId: "RMSG-1", attempt: 1, summaryText: "요약" };
   const inNode = (nodeId: string, role: RuntimeMessage["role"], metadata?: Record<string, unknown>): RuntimeMessage => ({ id: `${role}-${Math.random()}`, runtimeSessionId: "s", role, nodeId, content: "x", status: "delivered", createdAt: new Date().toISOString(), metadata } as RuntimeMessage);
 

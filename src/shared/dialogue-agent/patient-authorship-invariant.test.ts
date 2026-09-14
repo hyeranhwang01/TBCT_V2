@@ -130,7 +130,9 @@ describe("Patient Authorship Invariant: node-level protected-field gap (2026-09-
     expect(contract.targetField).toBe("courtroomOrientationAcknowledged");
     expect(contract.assistantMustNotSupply).toBe(false); // own field's meaning stays precise
     expect(contract.nodeRequiresProtectedField).toBe(true); // node also requires "charge"
-    expect(contractMayRequireAssembly(contract)).toBe(true);
+    // Still flagged, but no longer gated: open dialogue v1 (note2026_09_14)
+    // gates no session.
+    expect(contractMayRequireAssembly(contract)).toBe(false);
   });
 
   it("gates S08's daily-appeal-homework turn the same way (node also requires appealEvidence)", () => {
@@ -151,7 +153,7 @@ describe("Patient Authorship Invariant: node-level protected-field gap (2026-09-
     expect(contract.targetField).toBe("appealHomeworkAcknowledged");
     expect(contract.assistantMustNotSupply).toBe(false);
     expect(contract.nodeRequiresProtectedField).toBe(true);
-    expect(contractMayRequireAssembly(contract)).toBe(true);
+    expect(contractMayRequireAssembly(contract)).toBe(false); // open dialogue v1: flagged, not gated
   });
 
   it("does not widen the gate for a turn whose node has no protected requiredFields at all", () => {

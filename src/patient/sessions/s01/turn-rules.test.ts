@@ -35,7 +35,7 @@ describe("answer classifiers", () => {
     expect(isUncertainAnswer("모르겠는데 아마 무시당한 느낌?")).toBe(false);
   });
 
-  it("flags long situation/thought answers for a one-line rewrite", () => {
+  it("measures long answers with the shared threshold (re-exported for S01)", () => {
     expect(isLongAnswer("팀원들 간에 뭔가 이슈가 있었어 가지고 그런 것 때문에 뭔가 불안했던 적이 있던 것 같습니다", "ko-KR")).toBe(true);
     expect(isLongAnswer("팀원들과 의견 차이가 있었다", "ko-KR")).toBe(false);
     expect(isLongAnswer("We disagreed about the project.", "en-US")).toBe(false);
@@ -107,11 +107,14 @@ describe("applyS01TurnRules", () => {
     expect(result.extracted.fields.candidateTwoThoughtSource).toBe("accepted_hint");
   });
 
-  it("asks for a one-line version only when the situation answer is long", async () => {
+  it("no longer asks the participant for a one-line version, however long the situation answer (open dialogue v1)", async () => {
+    // A long answer is summarized by Claude for the participant to confirm
+    // instead (src/shared/runtime/long-answer.ts), so the flag that activated
+    // write-situation-line is never set.
     const long = await run("recent-moment", "situationThoughtDistinction", "x", { situationThoughtDistinction: "팀원들 간에 뭔가 이슈가 있었어 가지고 그런 것 때문에 뭔가 불안했던 적이 있던 것 같습니다" });
-    expect(long.extracted.fields.situationNeedsLine).toBe(true);
+    expect(long.extracted.fields.situationNeedsLine).toBeUndefined();
     const short = await run("recent-moment", "situationThoughtDistinction", "x", { situationThoughtDistinction: "팀원들과 의견 차이가 있었다" });
-    expect(short.extracted.fields.situationNeedsLine).toBe(false);
+    expect(short.extracted.fields.situationNeedsLine).toBeUndefined();
     const skipped = await run("write-situation-line", "situationLine", "모르겠어요", {}, ["situationLine"]);
     expect(skipped.extracted.fields.situationLineSkipped).toBe(true);
     expect(skipped.extracted.fields.situationLine).toBeUndefined();

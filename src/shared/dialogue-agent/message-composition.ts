@@ -156,15 +156,16 @@ export const PATIENT_CONTENT_RESPONSE_TYPES: ReadonlySet<string> = new Set([
   "request_missing_field",
 ]);
 
-// Originally a progressive rollout (S08 first). Widened to all eight sessions
-// by the user's 2026-09-11 decision (.claude/TASK_SCOPE.json
-// note2026_09_11_reflect_and_confirm): assistant summaries/conclusions are
-// allowed again, but only through summarize_and_confirm, which always ends
-// in a confirmation question. That guarantee holds only if no OTHER
-// patient-content response type can carry free prose -- i.e. only if every
-// session is gated. Live fallback rate and tone for S01-S07 still need
-// measuring (audit:sessions:constrained with a real key).
-export const MESSAGE_COMPOSITION_ENABLED_SESSIONS: ReadonlySet<string> = new Set(["tbct-s01", "tbct-s02", "tbct-s03", "tbct-s04", "tbct-s05", "tbct-s06", "tbct-s07", "tbct-s08"]);
+// Open dialogue v1 (.claude/TASK_SCOPE.json note2026_09_14_open_dialogue_v1):
+// no session assembles its text from parts any more. Claude phrases every
+// turn itself, and any summary or conclusion is confirmed with the participant
+// instead (dialogue-output-validator.ts). Kept as an empty set rather than
+// deleted, so a session can be gated again as a later regulation step.
+// History: S08 first, widened to all eight sessions on 2026-09-11
+// (note2026_09_11_reflect_and_confirm); in production that gate told Claude to
+// leave patientFacingMessage out while the schemas still required it, so every
+// turn fell back to the approved text.
+export const MESSAGE_COMPOSITION_ENABLED_SESSIONS: ReadonlySet<string> = new Set<string>();
 
 /** The contract-level half of the gate -- knowable before Claude has chosen
  * a responseType, so the system prompt (built from the contract alone) can

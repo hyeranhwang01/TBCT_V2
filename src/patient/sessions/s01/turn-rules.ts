@@ -84,13 +84,10 @@ export function isUncertainAnswer(text: string) {
   return UNCERTAIN.has(normalize(text));
 }
 
-/** A situation/thought answer long enough that the worksheet box needs the
- * participant's own one-line version (user decision 2026-09-12). */
-export function isLongAnswer(text: string, locale: string) {
-  const trimmed = text.trim();
-  const sentences = trimmed.split(/(?<=[.!?。])\s+|\n+/).filter((part) => part.trim().length > 1).length;
-  return locale.toLowerCase().startsWith("ko") ? trimmed.length > 40 || sentences >= 2 : trimmed.length > 90 || sentences >= 2;
-}
+// Moved to the shared runtime (open dialogue v1, note2026_09_14): the same
+// threshold now decides, in every session, when Claude summarizes a free-text
+// answer for the participant to confirm.
+export { isLongAnswer } from "@/shared/runtime/long-answer";
 
 /** "What made the difference?" answered with the emotion rather than the
  * thought -- triggers the follow-up "and what made the emotions differ?". */
@@ -152,7 +149,6 @@ const NEEDS_HELP_FLAG_BY_SLUG: Record<string, string> = {
 // session can never loop on them.
 const HELP_PROMPT_SLUGS = new Set(["situation-examples", "behavior-examples", "body-examples", "usual-prevention-hint", "candidate-two-thought-hint", "candidate-three-thought-hint"]);
 const HINT_FIELD_BY_SLUG: Record<string, string> = { "candidate-two-thought-hint": "candidateTwoThoughtHint", "candidate-three-thought-hint": "candidateThreeThoughtHint" };
-const LINE_FLAG_BY_SLUG: Record<string, string> = { "recent-moment": "situationNeedsLine", "situation-examples": "situationNeedsLine", "thought-behind-emotion": "thoughtNeedsLine" };
 const LINE_SKIP_FLAG_BY_SLUG: Record<string, string> = { "write-situation-line": "situationLineSkipped", "write-thought-line": "thoughtLineSkipped" };
 
 function hasValue(value: unknown) {
@@ -250,8 +246,9 @@ export async function applyS01TurnRules(input: S01TurnRulesInput): Promise<S01Tu
   }
 
   const accepted = !missing.includes(target) && hasValue(fields[target]);
-  const lineFlag = LINE_FLAG_BY_SLUG[slug];
-  if (lineFlag && accepted) fields[lineFlag] = isLongAnswer(String(fields[target]), input.locale);
+  // situationNeedsLine / thoughtNeedsLine are no longer set (open dialogue v1,
+  // note2026_09_14): Claude summarizes a long answer for the participant to
+  // confirm, and the confirmed summary fills situationLine / thoughtLine.
   if (slug === "what-made-difference" && accepted) fields.conclusionAnsweredEmotion = namesEmotionNotThought(text);
   if (slug === "what-happened" && accepted) fields.fearedOutcomeDidNotMaterialize = fearedOutcomeDidNotHappen(text);
 

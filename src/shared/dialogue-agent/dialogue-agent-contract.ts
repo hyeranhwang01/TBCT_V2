@@ -119,6 +119,10 @@ export const dialogueContractSchema = z.object({
   // roleAndStance, e.g. "speak warmly, use short sentences, avoid clinical
   // jargon"). Same additive-only guarantee as clinicianGuidance above.
   sessionToneGuidance: z.string().optional(),
+  // The session manual's opening rules, required procedure and restrictions
+  // (release.policies.sessionPolicies[session].protocolRules) -- the protocol
+  // Claude phrases within (open dialogue v1, note2026_09_14).
+  sessionProtocolRules: z.array(z.string()).optional(),
   // Reflect-and-Confirm (.claude/TASK_SCOPE.json note2026_09_11): true only
   // when this turn may carry the assistant's own summary/conclusion of what
   // the participant said -- see dialogue-contract-compiler.ts for the exact
@@ -129,6 +133,10 @@ export const dialogueContractSchema = z.object({
   // the previous summary -- carries that summary so Claude revises it against
   // their correction instead of repeating it.
   reflectionCheckContext: z.object({ previousSummary: z.string(), attempt: z.number().int().min(1) }).optional(),
+  // Set when the participant's last answer was long (src/shared/runtime/long-answer.ts):
+  // this turn must summarize it and ask whether that is right. `retry` marks
+  // the one repeat request after a reply that did not summarize.
+  summarizeLastAnswer: z.object({ field: z.string(), originalValue: z.string(), retry: z.boolean().optional() }).optional(),
 });
 export type DialogueContract = z.infer<typeof dialogueContractSchema>;
 
@@ -211,6 +219,14 @@ export const dialogueDecisionSchema = z.object({
   // the final text from it (see message-composition.ts). Optional here
   // because it is irrelevant, and never checked, for every other turn.
   messageParts: z.array(messagePartSchema).optional(),
+  // Open dialogue v1 (note2026_09_14): internal only, never shown. True when
+  // this turn puts the participant's words into Claude's own (a summary,
+  // interpretation or conclusion) and ends by asking whether that is right --
+  // the runtime then holds the task until they answer. reflectionText is that
+  // summary alone, without the question; a confirmed one may be written to the
+  // worksheet (src/shared/runtime/long-answer.ts).
+  needsConfirmation: z.boolean().optional(),
+  reflectionText: z.string().max(700).optional(),
 });
 export type DialogueDecision = z.infer<typeof dialogueDecisionSchema>;
 

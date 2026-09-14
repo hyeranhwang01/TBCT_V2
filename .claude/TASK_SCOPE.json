@@ -297,5 +297,43 @@
     "blastRadius": "Patient-facing navigation and the patient session list, all eight sessions. No session content, runtime or store code. A homework record may now be created earlier (on first open rather than at session completion); session-continuity only reads records of COMPLETED prior sessions, so the S02 bridge is unaffected. The clinician homework panel may show an in-progress session's empty record.",
     "regressionPlan": "npx tsc --noEmit; full npx vitest run in a worktree outside the nested parent repo; npm run audit:sessions 8/8; visual check of the new list and the nav entry.",
     "allowedPaths": "src/patient/pages/homework-list-page.tsx, src/patient/pages/patient-list-page.tsx, src/patient/components/patient-shell.tsx, src/app/studio-app.tsx, src/shared/i18n/dictionaries/{ko,en}.ts"
+  },
+  "note2026_09_14_open_dialogue_v1": {
+    "task": "Open dialogue v1 for all eight sessions (plan file binary-stargazing-hollerith.md). Production DB on 2026-09-14 showed every S01 turn shipping the approved fallback: the gate told Claude to omit patientFacingMessage while the tool schema and zod still required it. The user then chose to open the dialogue up first and add regulation back step by step.",
+    "userDecisions": "2026-09-14, by the user: (1) Claude keeps to the protocol's steps (the deterministic engine still owns progression, completion and safety) but phrases every turn freely, as an experienced TBCT counselor, with the session manual's rules in its prompt; (2) confirmation re-asks are used actively -- whenever Claude summarizes, interprets or concludes, the turn ends with a confirmation question and the task waits; 'no' gets 'could you tell me again?' and the loop repeats until the participant confirms or asks to move on; (3) when an answer to a free-text worksheet field is long (the S01 isLongAnswer threshold), Claude summarizes it, and the summary the participant confirms is written to that field/worksheet with the original answer preserved; (4) clinical wording checks are logged, not enforced, so later regulation can be based on real transcripts.",
+    "invariantsReplaced": "note2026_09_05 (patient-content turns assembled from messageParts) and note2026_09_11 (summaries only via summarize_and_confirm, once per node, never on forbidden steps, at most two per check, never written to a field) and resolvedDecision2026_09_12 (S01 one-liners written by the participant) are suspended by this decision, not deleted: assembleMessage, summaryCheckForbiddenFor and SUMMARY_CHECK_FORBIDDEN_* stay in the code for later regulation.",
+    "keptInvariants": "Safety-critical prompts never reach Claude; keepCurrentNode stays literal true; extractRuntimeState still stores the participant's own answer first; a summary replaces a field value only after an explicit participant 'yes', and the original is kept in runtimeContext.confirmedSummaries, message metadata and worksheet participantVerbatim/revisions.",
+    "manualRelationship": "MANUAL/CODE relationship recorded: several manual sections ask for the participant's own words on the worksheet (S06 generated :1220, S08 :1632, S05 :926, S07 :1385, S01/S03/S06 participant summaries). v1 summarizes long answers there too, by user decision; these fields are the first regulation candidates.",
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/shared/dialogue-agent/anthropic-dialogue-agent.ts",
+      "src/shared/dialogue-agent/dialogue-agent-contract.ts",
+      "src/shared/dialogue-agent/dialogue-output-validator.ts",
+      "src/shared/dialogue-agent/dialogue-agent-orchestrator.ts",
+      "src/shared/dialogue-agent/dialogue-contract-compiler.ts",
+      "src/shared/dialogue-agent/message-composition.ts",
+      "src/shared/dialogue-agent/*.test.ts",
+      "src/shared/runtime/long-answer.ts (new)",
+      "src/shared/runtime/long-answer.test.ts (new)",
+      "src/shared/runtime/reflection-check.ts",
+      "src/shared/runtime/runtime-orchestrator.ts",
+      "src/shared/runtime/runtime-context.ts (export refreshListRatingPointers, comments)",
+      "src/shared/api/runtime-execution-api.ts",
+      "src/shared/api/reflection-check-flow.test.ts",
+      "src/shared/worksheet/worksheet-projection.ts",
+      "src/shared/data/server/worksheet-store.ts",
+      "src/shared/data/repositories/worksheet-repository.ts",
+      "src/shared/runtime/worksheet-store-ops.ts (added during implementation: the store-op type of replaceCollectionItems carries the two new item fields)",
+      "src/test/fakes/worksheet-store.fake.ts",
+      "src/test/fakes/dialogue-agent.fake.ts",
+      "src/types/runtime-session.ts",
+      "src/types/worksheet.ts",
+      "src/patient/sessions/s01/turn-rules.ts",
+      "src/patient/sessions/s01/turn-rules.test.ts",
+      "src/patient/sessions/s01/worksheet-binding.ts (S01_SUMMARY_WRITE_FIELDS only)"
+    ],
+    "doNotTouch": ["src/shared/protocol/tbct-source-text.generated.ts", "sql/**"],
+    "blastRadius": "All eight sessions' dialogue-agent turns (prompt, tool schema, validation, confirmation flow) and worksheet projection provenance. Session specs, messages and progression are unchanged. S01's write-situation-line / write-thought-line prompts are no longer activated (their flags are not set); a confirmed summary fills situationLine / thoughtLine instead.",
+    "regressionPlan": "npm run type-check; npx vitest run; live (needs ANTHROPIC_API_KEY in .env.local): npm run audit:sessions:constrained and npx tsx scripts/run-local-session.ts tbct-s01 reviewed by a person before any push."
   }
 }

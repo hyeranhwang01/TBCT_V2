@@ -5,7 +5,7 @@ import { runMemoryRetrieval } from "@/shared/api/longitudinal-memory-api";
 import { extractMemoryCandidates, generateSessionSummary } from "@/shared/api/session-summary-api";
 import { createSafetyEvent, findOpenSafetyEventByTriggerKey, patchSafetyEvent, placeSessionOnSafetyHold } from "@/shared/api/safety-operations-api";
 import { getRuntimeParticipant } from "@/shared/api/participant-api";
-import { mergeExtractedRuntimeContext, extractRuntimeState, isExplicitPatientRefusal, violatesThirdPersonRequirement, normalizeText, looksLikeMetaQuestionAboutTheProcess, looksLikeMeaningClarificationRequest, looksLikeS02ExplanationRequest } from "@/shared/runtime/runtime-context";
+import { mergeExtractedRuntimeContext, extractRuntimeState, refreshListRatingPointers, isExplicitPatientRefusal, violatesThirdPersonRequirement, normalizeText, looksLikeMetaQuestionAboutTheProcess, looksLikeMeaningClarificationRequest, looksLikeS02ExplanationRequest } from "@/shared/runtime/runtime-context";
 import { detectLanguageSwitchRequest } from "@/shared/runtime/language-switch-detector";
 import { describePatientInputForDisplay } from "@/shared/runtime/patient-input-display";
 import { executeRuntimeNodeMessage } from "@/shared/runtime/runtime-node-executor";
@@ -16,7 +16,8 @@ import { injectLongitudinalMemory } from "@/shared/memory/memory-context-injecto
 import { projectRuntimeFieldsToWorksheet } from "@/shared/worksheet/worksheet-projection";
 import { isDialogueAgentEnabled, resolveDialogueAgentMessage } from "@/shared/dialogue-agent/dialogue-agent-orchestrator";
 import { resolveBracketPlaceholders, resolveStaticPatientMessage } from "@/shared/runtime/runtime-static-message";
-import { MAX_SUMMARIES_PER_CHECK, REFLECTION_ASK_WHAT_DIFFERS, REFLECTION_MOVE_ON, classifyReflectionCheckReply, findPendingReflectionCheck, reflectionText, type PendingReflectionCheck, type ReflectionCheckResolution } from "@/shared/runtime/reflection-check";
+import { REFLECTION_ASK_AGAIN, REFLECTION_MOVE_ON, classifyReflectionCheckReply, findPendingReflectionCheck, reflectionText, type PendingReflectionCheck, type ReflectionCheckResolution } from "@/shared/runtime/reflection-check";
+import { applyConfirmedSummaryToFields, confirmedSummaryKey, confirmedSummaryRecord, resolveLongAnswerSummaryTarget } from "@/shared/runtime/long-answer";
 import { applyS01TurnRules } from "@/patient/sessions/s01/turn-rules";
 import { composeCrpPlanSummary } from "@/patient/sessions/s07/messages";
 import { composeTrialClosingSummary } from "@/patient/sessions/s08/messages";
@@ -740,19 +741,22 @@ async function deliverProcessClarificationTurn(input: {
   return { assistantMessage, sessionStatus: "waiting_for_input" as RuntimeSessionStatus };
 }
 
-// Reflect-and-Confirm (.claude/TASK_SCOPE.json note2026_09_11): the
-// participant is answering the assistant's "did I get that right?" about its
-// own summary -- not the active prompt, whose task the summary turn held
-// back. Like deliverProcessClarificationTurn above, nothing here writes a
-// field, moves runtimeState, or touches clarificationAttemptCount; the
-// active prompt simply stays active.
-//   - plain yes      -> the held-back task (the dialogue agent may phrase it,
-//                       but may not summarize again on this turn)
-//   - bare no        -> ask once which part felt different; the check stays open
-//   - correction     -> a revised summary with the same confirmation question,
-//                       up to MAX_SUMMARIES_PER_CHECK summaries per check
-//   - anything else  -> leave the participant's own words exactly as recorded
-//                       and ask the task
+// Reflect-and-Confirm (.claude/TASK_SCOPE.json note2026_09_11), as changed by
+// open dialogue v1 (note2026_09_14_open_dialogue_v1): the participant is
+// answering the assistant's "is that right?" about its own summary -- not the
+// active prompt, whose task the summary turn held back. The active prompt
+// stays active and clarificationAttemptCount is untouched.
+//   - plain yes   -> the held-back task (the dialogue agent may phrase it, but
+//                    may not summarize again on this turn). When the summary
+//                    was of a long answer (check.summaryTarget) it is written
+//                    to that field first, the original kept in
+//                    runtimeContext.confirmedSummaries, and the worksheet
+//                    re-projected.
+//   - bare no     -> "could you tell me again?"; the check stays open
+//   - correction  -> a revised summary with a confirmation question, as many
+//                    times as it takes
+//   - move on / stop, or no dialogue agent -> the participant's own words stand
+//                    exactly as recorded and the task is asked
 async function deliverReflectionCheckReplyTurn(input: {
   session: RuntimeSession;
   node: ClinicalStageNode;
@@ -763,19 +767,21 @@ async function deliverReflectionCheckReplyTurn(input: {
   pendingCheck: PendingReflectionCheck;
   recentMessages: RuntimeMessage[];
   sessionToneGuidance?: string;
+  sessionProtocolRules?: string[];
 }) {
   const locale = input.session.locale;
-  const currentTaskText = resolveBracketPlaceholders(
-    resolveStaticPatientMessage(input.promptItem, locale, input.session.runtimeContext)?.patientMessage
+  const taskTextFor = (context: RuntimeSession["runtimeContext"]) => resolveBracketPlaceholders(
+    resolveStaticPatientMessage(input.promptItem, locale, context)?.patientMessage
       ?? resolvePromptLocaleText(input.runtimePromptItem.id, input.runtimePromptItem.fallbackPatientText, locale),
-    input.session.runtimeContext,
+    context,
   );
+  const currentTaskText = taskTextFor(input.session.runtimeContext);
   const moveOnText = `${reflectionText(REFLECTION_MOVE_ON, locale)} ${currentTaskText}`;
   const reply = classifyReflectionCheckReply(input.patientMessage.content);
   const check = input.pendingCheck;
   const agentEnabled = isDialogueAgentEnabled(input.node.sessionId);
-  const askDialogueAgent = (options: { deterministicFallbackText: string; summaryCheckAllowed: boolean; reflectionCheckContext?: { previousSummary: string; attempt: number } }) => resolveDialogueAgentMessage({
-    session: input.session,
+  const askDialogueAgent = (options: { session?: RuntimeSession; taskText?: string; deterministicFallbackText: string; summaryCheckAllowed: boolean; reflectionCheckContext?: { previousSummary: string; attempt: number } }) => resolveDialogueAgentMessage({
+    session: options.session ?? input.session,
     node: input.node,
     sourcePromptItem: input.promptItem,
     runtimePromptItem: input.runtimePromptItem,
@@ -783,25 +789,42 @@ async function deliverReflectionCheckReplyTurn(input: {
     recentMessages: input.recentMessages,
     clarificationAttemptCount: input.session.runtimeContext.clarificationAttemptCount ?? 0,
     turnId: makeId("TURN"),
-    currentTaskTextOverride: currentTaskText,
+    currentTaskTextOverride: options.taskText ?? currentTaskText,
     isFirstPromptOfNode: false,
     isFirstPromptOfSession: false,
     sessionToneGuidance: input.sessionToneGuidance,
-    ...options,
+    sessionProtocolRules: input.sessionProtocolRules,
+    deterministicFallbackText: options.deterministicFallbackText,
+    summaryCheckAllowed: options.summaryCheckAllowed,
+    reflectionCheckContext: options.reflectionCheckContext,
   });
   const leaveAsParticipantWords: ReflectionCheckResolution = { checkId: check.checkId, outcome: "left_as_participant_words", summaries: check.attempt };
   let content = moveOnText;
   let dialogueOutcome: Awaited<ReturnType<typeof resolveDialogueAgentMessage>> | null = null;
   let nextCheck: PendingReflectionCheck | undefined;
   let resolution: ReflectionCheckResolution | undefined;
+  let runtimeContext: RuntimeSession["runtimeContext"] = { ...input.session.runtimeContext, lastPatientMessage: input.patientMessage.content };
+  let runtimeState = input.runtimeState;
+  let recordedFields: Record<string, unknown> | undefined;
   if (reply === "affirm") {
-    dialogueOutcome = agentEnabled ? await askDialogueAgent({ deterministicFallbackText: currentTaskText, summaryCheckAllowed: false }) : null;
-    content = dialogueOutcome?.patientMessage ?? currentTaskText;
-    resolution = { checkId: check.checkId, outcome: "confirmed", summaries: check.attempt };
-  } else if (reply === "deny" && !check.askedWhatDiffers) {
-    content = reflectionText(REFLECTION_ASK_WHAT_DIFFERS, locale);
-    nextCheck = { ...check, askedWhatDiffers: true };
-  } else if (reply === "correction" && check.attempt < MAX_SUMMARIES_PER_CHECK && agentEnabled) {
+    const target = check.summaryTarget;
+    const recorded = target ? applyConfirmedSummaryToFields(input.session.runtimeContext.fields, target, check.summaryText) : undefined;
+    if (target && recorded) {
+      refreshListRatingPointers(recorded);
+      const record = confirmedSummaryRecord(target, check.summaryText, input.patientMessage.id, new Date().toISOString());
+      runtimeContext = { ...runtimeContext, fields: recorded, confirmedSummaries: { ...input.session.runtimeContext.confirmedSummaries, [confirmedSummaryKey(target)]: record } };
+      runtimeState = { ...input.runtimeState, fields: recorded };
+      recordedFields = recorded;
+    }
+    // The held-back task may quote the value that was just replaced.
+    const taskText = recordedFields ? taskTextFor(runtimeContext) : currentTaskText;
+    dialogueOutcome = agentEnabled ? await askDialogueAgent({ session: { ...input.session, runtimeContext }, taskText, deterministicFallbackText: taskText, summaryCheckAllowed: false }) : null;
+    content = dialogueOutcome?.patientMessage ?? taskText;
+    resolution = { checkId: check.checkId, outcome: "confirmed", summaries: check.attempt, ...(target && recordedFields ? { recordedSummary: { key: confirmedSummaryKey(target), writeField: target.writeField, listIndex: target.listIndex } } : {}) };
+  } else if (reply === "deny") {
+    content = reflectionText(REFLECTION_ASK_AGAIN, locale);
+    nextCheck = { ...check, askedAgain: true };
+  } else if (reply === "correction" && agentEnabled) {
     dialogueOutcome = await askDialogueAgent({ deterministicFallbackText: moveOnText, summaryCheckAllowed: true, reflectionCheckContext: { previousSummary: check.summaryText, attempt: check.attempt } });
     // Anything other than an accepted revised summary (a fallback, or Claude
     // choosing a different response type) ends the check with the
@@ -809,7 +832,7 @@ async function deliverReflectionCheckReplyTurn(input: {
     // might neither re-confirm nor ask the task.
     if (dialogueOutcome.summaryCheck) {
       content = dialogueOutcome.patientMessage;
-      nextCheck = { ...check, attempt: check.attempt + 1, summaryText: dialogueOutcome.summaryCheck.summaryText };
+      nextCheck = { ...check, attempt: check.attempt + 1, summaryText: dialogueOutcome.summaryCheck.summaryText, askedAgain: false };
     } else {
       resolution = leaveAsParticipantWords;
     }
@@ -877,17 +900,23 @@ async function deliverReflectionCheckReplyTurn(input: {
       },
     }),
     sessionPatch: {
-      runtimeContext: {
-        ...input.session.runtimeContext,
-        lastPatientMessage: input.patientMessage.content,
-      },
+      runtimeContext,
       currentNodeId: input.node.id,
       currentPromptItemId: input.promptItem.id,
-      runtimeState: input.runtimeState,
+      runtimeState,
       promptProgressionReason: "clarification_sent",
       status: "waiting_for_input",
     },
   });
+  if (recordedFields) {
+    // Same best-effort worksheet mirror as a normal turn (submitPatientInput):
+    // logged, never allowed to fail the turn.
+    try {
+      await projectRuntimeFieldsToWorksheet({ runtimeSessionId: input.session.id, sessionDefinitionId: input.session.sessionDefinitionId, fields: recordedFields, sourceTurnId: input.patientMessage.id, confirmedSummaries: runtimeContext.confirmedSummaries });
+    } catch (error) {
+      console.error("[runtime-execution-api] worksheet projection after a confirmed summary failed", { sessionId: input.session.id, sessionDefinitionId: input.session.sessionDefinitionId, error });
+    }
+  }
   return { assistantMessage, sessionStatus: "waiting_for_input" as RuntimeSessionStatus, reply, resolution };
 }
 
@@ -1608,6 +1637,15 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
     ? await applyS01TurnRules({ extracted: baseExtracted, promptItem: currentPromptItem, rawText: patientMessage.content, locale: turnLocale, sessionId, turnId: clientTurnId })
     : null;
   const extracted = s01Rules ? s01Rules.extracted : baseExtracted;
+  // Open dialogue v1 (.claude/TASK_SCOPE.json note2026_09_14): a long answer to
+  // a free-text worksheet field -- already stored as given, just above -- is
+  // marked on the participant's own message, so the next assistant turn
+  // summarizes it for them to confirm (runtime-orchestrator.ts). Never for a
+  // reply to an open check, or a turn carrying risk signals.
+  const longAnswerSummaryTarget = !pendingReflectionCheck && extracted.riskSignals.length === 0 && patientInput.kind === "text" && typeof patientInput.value === "string"
+    ? resolveLongAnswerSummaryTarget({ sessionDefinitionId: initialSession.sessionDefinitionId, locale: turnLocale, promptItem: currentPromptItem, answerText: patientInput.value, fields: extracted.fields })
+    : undefined;
+  if (longAnswerSummaryTarget) patientMessage.metadata = { ...patientMessage.metadata, longAnswerSummaryTarget };
   // Worksheet projection is a best-effort read-side mirror of the canonical
   // extracted fields (src/shared/worksheet/worksheet-projection.ts) -- never
   // allowed to FAIL a real turn (errors are swallowed below), but it IS
@@ -1623,7 +1661,7 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
   // every server-side projection was failing (see runtime-request-context.ts)
   // and the only symptom was a permanently empty worksheet beside the chat.
   try {
-    await projectRuntimeFieldsToWorksheet({ runtimeSessionId: sessionId, sessionDefinitionId: initialSession.sessionDefinitionId, fields: extracted.fields, sourceTurnId: patientMessage.id });
+    await projectRuntimeFieldsToWorksheet({ runtimeSessionId: sessionId, sessionDefinitionId: initialSession.sessionDefinitionId, fields: extracted.fields, sourceTurnId: patientMessage.id, confirmedSummaries: initialSession.runtimeContext.confirmedSummaries });
   } catch (error) {
     console.error("[runtime-execution-api] worksheet projection failed", { sessionId, sessionDefinitionId: initialSession.sessionDefinitionId, error });
   }
@@ -1723,6 +1761,7 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
       pendingCheck: pendingReflectionCheck,
       recentMessages: [...view.messages, patientMessage],
       sessionToneGuidance: runtimeRelease.policies.sessionPolicies?.[session.sessionDefinitionId]?.toneGuidance,
+      sessionProtocolRules: runtimeRelease.policies.sessionPolicies?.[session.sessionDefinitionId]?.protocolRules,
     });
     void saveRuntimeLog(makeLog(sessionId, "input", "completed", `Participant replied to a summary check (${reflectionReply.reply}${reflectionReply.resolution ? `, ${reflectionReply.resolution.outcome}` : ", still open"})`, { nodeId: currentNode.id })).catch(() => {});
     void createRuntimeCheckpoint(sessionId).catch(() => {});

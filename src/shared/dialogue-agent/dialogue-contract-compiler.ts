@@ -254,6 +254,10 @@ const STEP_GUIDANCE_BY_PROMPT_ID: Record<string, string[]> = {
   "tbct-s08-n17-p02-prosecution-satisfaction": ["If the participant says the prosecution was NOT satisfied, respond with the source's bridge: the prosecution may be requesting an appeal -- which is exactly why an appeal record will be prepared next. Then continue."],
 };
 
+// Open dialogue v1 (.claude/TASK_SCOPE.json note2026_09_14): NOT applied to
+// the contract any more -- a summary is confirmed with the participant
+// wherever it appears. Kept, unchanged, as the first candidate for regulation.
+//
 // Reflect-and-Confirm (.claude/TASK_SCOPE.json note2026_09_11): prompts at
 // which the assistant must NOT offer its own summary/conclusion, even with a
 // confirmation question. Keyed, like STEP_GUIDANCE_BY_PROMPT_ID above, by the
@@ -359,12 +363,20 @@ export function compileDialogueContract(input: {
    * for input and are not in the forbidden set. */
   summaryCheckAllowed?: boolean;
   reflectionCheckContext?: { previousSummary: string; attempt: number };
+  /** release.policies.sessionPolicies[session].protocolRules -- the session
+   * manual's opening rules, procedure and restrictions. */
+  sessionProtocolRules?: string[];
+  /** The participant's last answer was long and is to be summarized for them
+   * to confirm (src/shared/runtime/long-answer.ts). */
+  summarizeLastAnswer?: { field: string; originalValue: string };
 }): DialogueContract {
   const { session, node, sourcePromptItem, runtimePromptItem } = input;
-  // A summary turn holds back this prompt's question until the participant
-  // answers "did I get that right?" -- impossible on a prompt the runtime
-  // doesn't wait on (it would advance straight past the confirmation).
-  const summaryCheckAllowed = Boolean(input.summaryCheckAllowed) && runtimePromptItem.requiresPatientInput && !summaryCheckForbiddenFor(sourcePromptItem);
+  // A confirmation turn holds back this prompt's question until the
+  // participant answers "is that right?" -- impossible on a prompt the runtime
+  // doesn't wait on (it would advance straight past the confirmation). Open
+  // dialogue v1 (note2026_09_14): the forbidden-step list below is no longer
+  // applied here.
+  const summaryCheckAllowed = Boolean(input.summaryCheckAllowed) && runtimePromptItem.requiresPatientInput;
   const targetField = sourcePromptItem.outputFields[0];
   const binding = getWorksheetBindings(session.sessionDefinitionId).find((item) => item.canonicalFieldKey === targetField);
   const expectedInputType = resolveExpectedInputType(binding, sourcePromptItem.validation);
@@ -471,8 +483,10 @@ export function compileDialogueContract(input: {
     // actually written one.
     clinicianGuidance: sourcePromptItem.modelGuidance?.trim() || undefined,
     sessionToneGuidance: input.sessionToneGuidance?.trim() || undefined,
+    sessionProtocolRules: input.sessionProtocolRules?.map((rule) => rule.trim()).filter(Boolean).length ? input.sessionProtocolRules.map((rule) => rule.trim()).filter(Boolean) : undefined,
     summaryCheckAllowed,
     reflectionCheckContext: summaryCheckAllowed ? input.reflectionCheckContext : undefined,
+    summarizeLastAnswer: summaryCheckAllowed ? input.summarizeLastAnswer : undefined,
   };
 
   return dialogueContractSchema.parse(contract);

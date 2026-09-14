@@ -15,7 +15,8 @@ import { resolveRepeatedFallbackText as resolveS01RepeatedFallbackText } from "@
 import { resolveRepeatedFallbackText as resolveS02RepeatedFallbackText } from "@/patient/sessions/s02/messages";
 import { resolveRepeatedFallbackText as resolveS03RepeatedFallbackText } from "@/patient/sessions/s03/messages";
 import { composeDistortionCandidateText, selectDistortionCandidatesDeterministically, type DistortionCandidate } from "@/patient/sessions/s01/distortion-candidates";
-import { summaryCheckAlreadyUsedInNode, type PendingReflectionCheck } from "@/shared/runtime/reflection-check";
+import type { PendingReflectionCheck } from "@/shared/runtime/reflection-check";
+import { readLongAnswerSummaryTarget } from "@/shared/runtime/long-answer";
 
 async function callPatientRenderer(request: PatientRendererRequest, context: { sessionId: string; turnId: string }) {
   if (typeof window === "undefined") { const { renderPatientReflection } = await import("@/shared/patient-renderer/anthropic-patient-renderer"); return renderPatientReflection(request, context); }
@@ -211,6 +212,12 @@ export async function orchestrateRuntimeAssistantTurn(input: RuntimeOrchestrator
     // deterministic node/prompt progression above is completely unaffected.
     const isFirstPromptOfNode = input.activeStep.promptIndex === 0;
     const isFirstPromptOfSession = isFirstPromptOfNode && input.state.completedNodeIds.length === 0;
+    // Open dialogue v1 (.claude/TASK_SCOPE.json note2026_09_14): a long answer
+    // to a free-text worksheet field, marked on the participant's message when
+    // it was submitted (runtime-execution-api.ts), is summarized on the turn
+    // right after it -- never later, once something else has been said.
+    const lastConversationalMessage = [...input.recentMessages].reverse().find((message) => message.role === "patient" || message.role === "assistant");
+    const summaryTarget = lastConversationalMessage?.role === "patient" ? readLongAnswerSummaryTarget(lastConversationalMessage.metadata?.longAnswerSummaryTarget) : undefined;
     const dialogueResult = await resolveDialogueAgentMessage({
       session: input.session,
       node: input.sourceNode,
@@ -227,12 +234,13 @@ export async function orchestrateRuntimeAssistantTurn(input: RuntimeOrchestrator
       isFirstPromptOfNode,
       isFirstPromptOfSession,
       sessionToneGuidance: input.release.policies.sessionPolicies?.[input.session.sessionDefinitionId]?.toneGuidance,
-      // Reflect-and-Confirm (.claude/TASK_SCOPE.json note2026_09_11): only
-      // after the participant has actually said something to summarize, and
-      // at most once per node (summaryCheckAlreadyUsedInNode). The contract
-      // compiler narrows this further (prompts that must wait for input, and
-      // never where the participant forms it themselves).
-      summaryCheckAllowed: Boolean(input.session.runtimeContext.lastPatientMessage?.trim()) && !summaryCheckAlreadyUsedInNode(input.recentMessages, input.activeStep.node.id),
+      sessionProtocolRules: input.release.policies.sessionPolicies?.[input.session.sessionDefinitionId]?.protocolRules,
+      // Open dialogue v1: a confirmation may follow any turn where the
+      // participant has said something -- no per-node limit and no forbidden
+      // steps. The contract compiler still requires a prompt that waits for
+      // input, since the confirmation holds that prompt back.
+      summaryCheckAllowed: Boolean(input.session.runtimeContext.lastPatientMessage?.trim()),
+      summarizeLastAnswer: summaryTarget ? { field: summaryTarget.field, originalValue: summaryTarget.originalValue } : undefined,
     });
     const repeatedFallbackOverride = resolveRepeatedFallbackOverride({
       sessionDefinitionId: input.session.sessionDefinitionId,
@@ -248,7 +256,7 @@ export async function orchestrateRuntimeAssistantTurn(input: RuntimeOrchestrator
     const dialogueResponse = fallbackResponse({ requestId: dynamicRequestId, contract, activeStep: input.activeStep, locale: input.session.locale });
     dialogueResponse.patientMessage = dialogueResult.patientMessage;
     dialogueResponse.providerMetadata = { provider: "mock", model: usedClaude ? "dialogue-agent" : dialogueResult.excludedBySafety ? "safety-excluded" : "deterministic-neutral" };
-    const dialogueValidator: OutputValidationResult = { accepted: true, corrected: false, rejected: false, issues: dialogueResult.usedFallback && dialogueResult.fallbackReason ? [dialogueResult.fallbackReason] : [], finalText: dialogueResult.patientMessage, fallbackRequired: false };
+    const dialogueValidator: OutputValidationResult = { accepted: true, corrected: false, rejected: false, issues: [...(dialogueResult.usedFallback && dialogueResult.fallbackReason ? [dialogueResult.fallbackReason] : []), ...(dialogueResult.guardLogs ?? [])], finalText: dialogueResult.patientMessage, fallbackRequired: false };
     const dialogueReduction = reduceRuntimeState({ release: input.release, currentState: input.state, activeStep: input.activeStep, event: "assistant_delivered" });
     // A summary that shipped as Claude wrote it opens a pending confirmation
     // on this message's metadata (see reflection-check.ts for why not
@@ -258,7 +266,7 @@ export async function orchestrateRuntimeAssistantTurn(input: RuntimeOrchestrator
     const generatedMessageId = makeId("RMSG");
     const lastPatientTurn = [...input.recentMessages].reverse().find((message) => message.role === "patient");
     const reflectionCheck: PendingReflectionCheck | undefined = dialogueResult.summaryCheck && !repeatedFallbackOverride
-      ? { status: "pending", checkId: generatedMessageId, attempt: 1, summaryText: dialogueResult.summaryCheck.summaryText, aboutPromptItemId: lastPatientTurn?.promptItemId }
+      ? { status: "pending", checkId: generatedMessageId, attempt: 1, summaryText: dialogueResult.summaryCheck.summaryText, aboutPromptItemId: lastPatientTurn?.promptItemId, ...(summaryTarget ? { summaryTarget } : {}) }
       : undefined;
     return { contract, response: dialogueResponse, providerResult: { provider: dialogueResult.provider, model: dialogueResult.model ?? dialogueResponse.providerMetadata.model, latencyMs: dialogueResult.latencyMs, text: dialogueResult.patientMessage }, validator: dialogueValidator, fallbackUsed: dialogueResult.usedFallback, repairUsed: false, stateReduction: dialogueReduction, generatedMessage: {
       id: generatedMessageId, runtimeSessionId: input.session.id, role: "assistant", content: dialogueResult.patientMessage, status: dialogueResult.usedFallback ? "replaced_by_fallback" : "validated", nodeId: input.activeStep.node.id, promptItemId: input.activeStep.promptItem.id, sourceEvidenceIds: [], createdAt: new Date().toISOString(), deliveredAt: new Date().toISOString(), metadata: { llmCalled: usedClaude, messageSource: dialogueResult.excludedBySafety ? "deterministic_safety" : "dialogue_agent", contractHash: contract.contractHash, sourcePromptItemId: input.sourcePromptItem.id, dialogueDecision: dialogueResult.decision ?? undefined, reflectionCheck },

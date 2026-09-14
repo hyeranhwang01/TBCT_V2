@@ -14,6 +14,14 @@ import type { WorksheetBinding } from "@/types/worksheet";
 // the feelings given to persons 2 and 3 are written by the system
 // (s01/turn-rules.ts), so they are not participant-owned.
 
+/** Open dialogue v1 (.claude/TASK_SCOPE.json note2026_09_14_open_dialogue_v1):
+ * a long situation or thought answer stays in its own field, and the summary
+ * the participant confirms fills the matching one-line box. */
+export const S01_SUMMARY_WRITE_FIELDS: Readonly<Record<string, string>> = {
+  situationThoughtDistinction: "situationLine",
+  openingInitialThought: "thoughtLine",
+};
+
 function binding(canonicalFieldKey: string, valueType: WorksheetBinding["valueType"], label: string, labelKo: string, sourceSection: string, displayOrder: number, options: { system?: boolean; confirmationRequired?: boolean; displayMode?: WorksheetBinding["displayMode"] } = {}): WorksheetBinding {
   const participantOwned = !options.system;
   return {

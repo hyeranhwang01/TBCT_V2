@@ -134,6 +134,9 @@ export interface WorksheetCollectionItemRecord {
   createdAt: string;
   value: unknown;
   displayValue?: string;
+  /** The participant's original answer when `value` is a summary they confirmed. */
+  participantVerbatim?: string;
+  confirmedAt?: string;
 }
 
 export interface WorksheetFieldRevisionRecord {

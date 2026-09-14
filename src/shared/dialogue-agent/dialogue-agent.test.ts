@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { dialogueDecisionSchema, type DialogueContract, type DialogueDecision } from "@/shared/dialogue-agent/dialogue-agent-contract";
-import { validateDialogueDecision } from "@/shared/dialogue-agent/dialogue-output-validator";
+import { DIALOGUE_GUARDS, validateDialogueDecision } from "@/shared/dialogue-agent/dialogue-output-validator";
 import { hasUnresolvedTemplateVariable } from "@/shared/dialogue-agent/unresolved-template-detector";
 import { fakeDialogueDecision } from "@/test/fakes/dialogue-agent.fake";
 import { isDialogueAgentEnabled } from "@/shared/dialogue-agent/dialogue-agent-orchestrator";
@@ -51,10 +51,8 @@ describe("case 1: participant asks what the current question means", () => {
     expect(decision.responseType).toBe("clarify");
     expect(decision.participantResponseState).toBe("question_not_understood");
     expect(decision.patientFacingMessage).toContain(contract.expectedConstruct);
-    // Every turn is gated since the 2026-09-11 follow-up (note2026_09_11), so
-    // what ships is the server-assembled connector + approved task; a real
-    // construct definition belongs in explain_term, which stays free prose.
-    expect(validateDialogueDecision(decision, contract)).toEqual({ accepted: true, finalText: `Thank you for sharing that. ${contract.currentTaskText}` });
+    // Open dialogue v1 (note2026_09_14): Claude's own clarification ships as written.
+    expect(validateDialogueDecision(decision, contract)).toEqual({ accepted: true, guardLogs: [] });
   });
 });
 
@@ -78,25 +76,24 @@ describe("case 6: participant asks an in-scope task question", () => {
 });
 
 describe("case 10: Claude attempts to provide participant-owned content", () => {
-  // Every session is gated now (.claude/TASK_SCOPE.json note2026_09_11), so
-  // a protected tbct-s03 turn must submit messageParts; the
-  // candidateFieldMention check still applies on top of that.
-  it("rejects an invented value on an assistantMustNotSupply field", () => {
+  // Open dialogue v1 (.claude/TASK_SCOPE.json note2026_09_14): recorded, not
+  // enforced, so later regulation can be based on how often it really happens.
+  it("logs an invented value on an assistantMustNotSupply field without blocking the turn", () => {
     const contract = baseContract({ targetField: "participantSummary", assistantMustNotSupply: true, lastParticipantMessage: "okay" });
-    const invented: DialogueDecision = { responseType: "reflect_and_ask", patientFacingMessage: "(ignored once messageParts governs)", keepCurrentNode: true, participantResponseState: "valid_answer", messageParts: [{ kind: "approved_task" }], candidateFieldMention: { field: "participantSummary", value: "you feel anxious because your partner ignored you" } };
-    expect(validateDialogueDecision(invented, contract)).toEqual({ accepted: false, reason: "assistant_supplied_participant_owned_content" });
+    const invented: DialogueDecision = { responseType: "reflect_and_ask", patientFacingMessage: "How would you put that into a summary in your own words?", keepCurrentNode: true, participantResponseState: "valid_answer", candidateFieldMention: { field: "participantSummary", value: "you feel anxious because your partner ignored you" } };
+    expect(validateDialogueDecision(invented, contract)).toEqual({ accepted: true, guardLogs: ["guard_log:assistant_supplied_participant_owned_content"] });
   });
 
-  it("rejects the same invented summary as free prose -- a protected turn cannot ship free prose at all", () => {
+  it("lets an unflagged free-prose summary through -- the v1 gap live review watches for", () => {
     const contract = baseContract({ targetField: "participantSummary", assistantMustNotSupply: true, lastParticipantMessage: "okay" });
     const invented: DialogueDecision = { responseType: "reflect_and_ask", patientFacingMessage: "Your summary is: you feel anxious because your partner ignored you.", keepCurrentNode: true, participantResponseState: "valid_answer" };
-    expect(validateDialogueDecision(invented, contract)).toEqual({ accepted: false, reason: "missing_message_parts" });
+    expect(validateDialogueDecision(invented, contract)).toEqual({ accepted: true, guardLogs: [] });
   });
 
   it("accepts an honest echo of the participant's own words on the same field", () => {
     const contract = baseContract({ targetField: "participantSummary", assistantMustNotSupply: true, lastParticipantMessage: "I keep avoiding my partner because I think they're mad at me." });
-    const honestEcho: DialogueDecision = { responseType: "acknowledge", patientFacingMessage: "(ignored once messageParts governs)", keepCurrentNode: true, participantResponseState: "valid_answer", messageParts: [{ kind: "connector", id: "acknowledge_neutral" }], candidateFieldMention: { field: "participantSummary", value: "I keep avoiding my partner because I think they're mad at me." } };
-    expect(validateDialogueDecision(honestEcho, contract)).toEqual({ accepted: true, finalText: "Thank you for sharing that." });
+    const honestEcho: DialogueDecision = { responseType: "acknowledge", patientFacingMessage: "Thank you for sharing that.", keepCurrentNode: true, participantResponseState: "valid_answer", candidateFieldMention: { field: "participantSummary", value: "I keep avoiding my partner because I think they're mad at me." } };
+    expect(validateDialogueDecision(honestEcho, contract)).toEqual({ accepted: true, guardLogs: [] });
   });
 });
 
@@ -106,7 +103,7 @@ describe("case 9: unresolved template variable", () => {
     expect(hasUnresolvedTemplateVariable("So your conclusion is: 'things feel manageable now.'")).toBe(false);
     const contract = baseContract();
     const decision = { responseType: "explain_rationale", patientFacingMessage: "And what about [emotion named at Q3a]?", keepCurrentNode: true, participantResponseState: "valid_answer" } as const;
-    expect(validateDialogueDecision(decision, contract)).toEqual({ accepted: false, reason: "unresolved_template_variable" });
+    expect(validateDialogueDecision(decision, contract)).toEqual({ accepted: false, reason: "unresolved_template_variable", guardLogs: [] });
   });
 });
 
@@ -122,37 +119,31 @@ describe("case 11: Claude output schema invalid", () => {
   });
 });
 
-// Free-prose hygiene now only ever applies to the response types that may
-// still carry free prose (explain_* and a summarize_and_confirm body) --
-// every other response type is assembled from parts in all eight sessions
-// (note2026_09_11) -- so these cases use explain_rationale.
-describe("case: banned content categories", () => {
-  it("rejects a readiness question appended to a list task", () => {
+describe("guards: what v1 enforces, logs and ignores", () => {
+  it("enforces only what would ship a broken message", () => {
+    expect(DIALOGUE_GUARDS).toMatchObject({ unresolved_template_variable: "enforce", empty_message: "enforce", message_too_long: "enforce", locale_mismatch: "enforce" });
+  });
+
+  it("still rejects a reply in the wrong language", () => {
+    const contract = baseContract({ locale: "ko-KR", currentTaskText: "그 순간 어떤 생각이 드셨나요?" });
+    const decision = { responseType: "reflect_and_ask", patientFacingMessage: "What went through your mind in that moment?", keepCurrentNode: true, participantResponseState: "valid_answer" } as const;
+    expect(validateDialogueDecision(decision, contract)).toMatchObject({ accepted: false, reason: "locale_mismatch" });
+  });
+
+  it("no longer rejects a readiness question on a list task", () => {
     const contract = baseContract({ expectedInputType: "ordered_list", targetField: "problems", currentTaskText: "첫 번째 문제를 말씀해 주세요.", locale: "ko-KR" });
     const decision = { responseType: "explain_rationale", patientFacingMessage: "앞으로 함께 살펴볼 중요한 문제를 하나씩 말씀해 주세요. 준비되셨나요?", keepCurrentNode: true, participantResponseState: "valid_answer" } as const;
-    expect(validateDialogueDecision(decision, contract)).toEqual({ accepted: false, reason: "readiness_question_instead_of_task" });
-  });
-  it("rejects diagnosis language", () => {
-    const contract = baseContract();
-    const decision = { responseType: "explain_rationale", patientFacingMessage: "This sounds like generalized anxiety disorder.", keepCurrentNode: true, participantResponseState: "valid_answer" } as const;
-    expect(validateDialogueDecision(decision, contract)).toEqual({ accepted: false, reason: "diagnosis_language" });
+    expect(validateDialogueDecision(decision, contract)).toEqual({ accepted: true, guardLogs: [] });
   });
 
-  it("rejects unsolicited treatment advice", () => {
+  it.each([
+    ["diagnosis_language", "This sounds like generalized anxiety disorder."],
+    ["unsolicited_treatment_advice", "I recommend seeing a therapist about medication."],
+    ["protocol_state_language", "Once this node's completion status is met, we'll advance the protocol."],
+    ["ai_self_reference", "As an AI language model, I understand that must be hard."],
+  ])("logs %s instead of rejecting", (guard, patientFacingMessage) => {
     const contract = baseContract();
-    const decision = { responseType: "explain_rationale", patientFacingMessage: "I recommend seeing a therapist about medication.", keepCurrentNode: true, participantResponseState: "valid_answer" } as const;
-    expect(validateDialogueDecision(decision, contract)).toEqual({ accepted: false, reason: "unsolicited_treatment_advice" });
-  });
-
-  it("rejects protocol-state language leaking to the participant", () => {
-    const contract = baseContract();
-    const decision = { responseType: "explain_rationale", patientFacingMessage: "Once this node's completion status is met, we'll advance the protocol.", keepCurrentNode: true, participantResponseState: "valid_answer" } as const;
-    expect(validateDialogueDecision(decision, contract)).toEqual({ accepted: false, reason: "protocol_state_language" });
-  });
-
-  it("rejects AI self-reference", () => {
-    const contract = baseContract();
-    const decision = { responseType: "explain_rationale", patientFacingMessage: "As an AI language model, I understand that must be hard.", keepCurrentNode: true, participantResponseState: "valid_answer" } as const;
-    expect(validateDialogueDecision(decision, contract)).toEqual({ accepted: false, reason: "ai_self_reference" });
+    const decision = { responseType: "explain_rationale", patientFacingMessage, keepCurrentNode: true, participantResponseState: "valid_answer" } as const;
+    expect(validateDialogueDecision(decision, contract)).toEqual({ accepted: true, guardLogs: [`guard_log:${guard}`] });
   });
 });

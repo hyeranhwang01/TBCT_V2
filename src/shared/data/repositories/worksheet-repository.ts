@@ -53,7 +53,7 @@ export async function listWorksheetFieldValues(instanceId: string) {
   return callStore<WorksheetFieldValueRecord[]>({ op: "listFieldValues", instanceId });
 }
 
-export async function replaceWorksheetCollectionItems(fieldValueId: string, items: Array<{ value: unknown; displayValue?: string; status: WorksheetFieldStatus; provenance: WorksheetFieldValueRecord["provenance"]; sourceTurnId?: string }>) {
+export async function replaceWorksheetCollectionItems(fieldValueId: string, items: Array<{ value: unknown; displayValue?: string; status: WorksheetFieldStatus; provenance: WorksheetFieldValueRecord["provenance"]; sourceTurnId?: string; participantVerbatim?: string; confirmedAt?: string }>) {
   await callStore<void>({ op: "replaceCollectionItems", fieldValueId, items });
 }
 

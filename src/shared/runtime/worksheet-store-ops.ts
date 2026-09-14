@@ -23,7 +23,7 @@ export type WorksheetStoreOp =
   | { op: "getInstance"; runtimeSessionId: string }
   | { op: "upsertFieldValue"; instanceId: string; fieldDefinitionId: string; patch: Partial<Omit<WorksheetFieldValueRecord, "id" | "instanceId" | "fieldDefinitionId">> }
   | { op: "listFieldValues"; instanceId: string }
-  | { op: "replaceCollectionItems"; fieldValueId: string; items: Array<{ value: unknown; displayValue?: string; status: WorksheetFieldStatus; provenance: WorksheetFieldValueRecord["provenance"]; sourceTurnId?: string }> }
+  | { op: "replaceCollectionItems"; fieldValueId: string; items: Array<{ value: unknown; displayValue?: string; status: WorksheetFieldStatus; provenance: WorksheetFieldValueRecord["provenance"]; sourceTurnId?: string; participantVerbatim?: string; confirmedAt?: string }> }
   | { op: "listCollectionItems"; fieldValueId: string }
   | { op: "appendFieldRevision"; fieldValueId: string; status: WorksheetFieldStatus; provenance: WorksheetFieldValueRecord["provenance"]; sourceTurnId?: string; snapshot: unknown }
   | { op: "listFieldRevisions"; fieldValueId: string }

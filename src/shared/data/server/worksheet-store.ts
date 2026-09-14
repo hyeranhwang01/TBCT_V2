@@ -170,13 +170,13 @@ async function listFieldValues(instanceId: string): Promise<WorksheetFieldValueR
   return rows.map((row) => row.data);
 }
 
-async function replaceCollectionItems(fieldValueId: string, items: Array<{ value: unknown; displayValue?: string; status: WorksheetFieldValueRecord["status"]; provenance: WorksheetFieldValueRecord["provenance"]; sourceTurnId?: string }>) {
+async function replaceCollectionItems(fieldValueId: string, items: Array<{ value: unknown; displayValue?: string; status: WorksheetFieldValueRecord["status"]; provenance: WorksheetFieldValueRecord["provenance"]; sourceTurnId?: string; participantVerbatim?: string; confirmedAt?: string }>) {
   const pool = getPgPool();
   await pool.query(`DELETE FROM worksheet_collection_items WHERE field_value_id = $1`, [fieldValueId]);
   const now = new Date().toISOString();
   for (const [position, item] of items.entries()) {
     const id = makeId("WKCI");
-    const record: WorksheetCollectionItemRecord = { id, fieldValueId, position, status: item.status, provenance: item.provenance, sourceTurnId: item.sourceTurnId, createdAt: now, value: item.value, displayValue: item.displayValue };
+    const record: WorksheetCollectionItemRecord = { id, fieldValueId, position, status: item.status, provenance: item.provenance, sourceTurnId: item.sourceTurnId, createdAt: now, value: item.value, displayValue: item.displayValue, participantVerbatim: item.participantVerbatim, confirmedAt: item.confirmedAt };
     await pool.query(
       `INSERT INTO worksheet_collection_items (id, field_value_id, position, status, provenance, source_turn_id, created_at, data) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [id, fieldValueId, position, item.status, item.provenance, item.sourceTurnId ?? null, now, JSON.stringify(record)],

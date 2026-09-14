@@ -37,6 +37,20 @@ export type RuntimeMessageStatus =
   | "failed"
   | "replaced_by_fallback";
 
+export interface ConfirmedSummaryRecord {
+  /** Field the participant answered. */
+  sourceField: string;
+  /** Field the confirmed summary was written to (the same field unless a
+   * session keeps the original in its own field). */
+  writeField: string;
+  listIndex?: number;
+  /** The participant's answer exactly as they gave it. */
+  original: string;
+  summary: string;
+  confirmedAt: string;
+  patientMessageId: string;
+}
+
 export interface RuntimeContext {
   fields: Record<string, unknown>;
   responseCategory?: string;
@@ -50,6 +64,10 @@ export interface RuntimeContext {
   lastAssistantMessage?: string;
   clarificationAttemptCount?: number;
   lastClarificationReason?: string;
+  /** Summaries the participant confirmed, keyed by written field (`field#i`
+   * for a list item) -- keeps the original answer next to the value that
+   * replaced it (open dialogue v1, see src/shared/runtime/long-answer.ts). */
+  confirmedSummaries?: Record<string, ConfirmedSummaryRecord>;
   longitudinalMemory?: {
     treatmentGoals: string[];
     patientPreferences: string[];

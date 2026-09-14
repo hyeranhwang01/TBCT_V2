@@ -1,25 +1,24 @@
 import type { RuntimeMessage } from "@/types/runtime-session";
+import type { LongAnswerSummaryTarget } from "@/shared/runtime/long-answer";
 
 /**
- * Reflect-and-Confirm (.claude/TASK_SCOPE.json note2026_09_11).
+ * Reflect-and-Confirm (.claude/TASK_SCOPE.json note2026_09_11), as changed by
+ * open dialogue v1 (note2026_09_14_open_dialogue_v1).
  *
- * When the dialogue agent puts what the participant said into its own words
- * (responseType summarize_and_confirm), that turn ends with a fixed "did I
- * get that right?" and holds back the prompt the runtime is waiting on. The
- * participant's NEXT reply therefore answers that question, not the prompt:
- * runtime-execution-api.ts's deliverReflectionCheckReplyTurn handles it, and
- * extractRuntimeState (runtime-context.ts) writes nothing for it.
+ * When the dialogue agent puts what the participant said into its own words,
+ * that turn ends with "is that right?" and holds back the prompt the runtime
+ * is waiting on. The participant's NEXT reply therefore answers that question,
+ * not the prompt: runtime-execution-api.ts's deliverReflectionCheckReplyTurn
+ * handles it, and extractRuntimeState (runtime-context.ts) writes nothing for
+ * it. A "no" is answered with "could you tell me again?" and the check repeats
+ * until the participant confirms or asks to move on; a confirmed summary of a
+ * long answer is then written to that field (src/shared/runtime/long-answer.ts).
  *
  * The open check lives on the assistant message's own metadata rather than
  * in runtimeContext: executeCurrentNode rewrites runtimeContext from a
  * pre-delivery snapshot right after the delivery commits
  * (runtime-execution-api.ts), which would silently drop a flag set there.
  */
-
-/** At most this many summaries per check -- the first one plus one revision
- * after a correction. After that the participant's own words stand exactly
- * as recorded and the session moves on (user decision, 2026-09-11). */
-export const MAX_SUMMARIES_PER_CHECK = 2;
 
 export type PendingReflectionCheck = {
   status: "pending";
@@ -29,21 +28,25 @@ export type PendingReflectionCheck = {
   /** Number of summaries offered so far in this check (1-based). */
   attempt: number;
   summaryText: string;
-  /** True once the participant said a bare "no" and was asked which part
-   * felt different -- asked at most once per check. */
-  askedWhatDiffers?: boolean;
+  /** True right after a bare "no" was answered with "could you tell me again?". */
+  askedAgain?: boolean;
   /** The prompt whose answer was summarized (the one before the held-back
    * prompt), for the audit trail. */
   aboutPromptItemId?: string;
+  /** Set when the summary is of a long answer: a confirmed summary is written
+   * to this field or list item. */
+  summaryTarget?: LongAnswerSummaryTarget;
 };
 
 export type ReflectionCheckResolution = {
   checkId: string;
   outcome: "confirmed" | "left_as_participant_words";
   summaries: number;
+  /** Set when the confirmed summary was written to the record. */
+  recordedSummary?: { key: string; writeField: string; listIndex?: number };
 };
 
-export type ReflectionCheckReply = "affirm" | "deny" | "correction";
+export type ReflectionCheckReply = "affirm" | "deny" | "correction" | "stop";
 
 function isPendingReflectionCheck(value: unknown): value is PendingReflectionCheck {
   if (!value || typeof value !== "object") return false;
@@ -62,13 +65,11 @@ export function findPendingReflectionCheck(messages: RuntimeMessage[]): PendingR
   return isPendingReflectionCheck(check) ? check : undefined;
 }
 
-/** At most one summary check per protocol node (user decision 2026-09-11,
- * after the mock-Claude audit showed that a model summarizing at every
- * allowed turn nearly doubles the conversation: 239 -> 462 patient turns
- * across S01-S08). A node is one clinical step, so a summary is still
- * possible at every step, but not after each item of a list or after every
- * prompt of the same step. A revised summary inside an open check belongs
- * to that same check and is not limited by this. */
+/** Whether a node already had a summary check. Open dialogue v1 no longer
+ * limits checks per node (the user wants confirmation used actively); kept
+ * for a later regulation step. Background: the 2026-09-11 mock-Claude audit
+ * showed a model summarizing at every allowed turn nearly doubles the
+ * conversation (239 -> 462 patient turns across S01-S08). */
 export function summaryCheckAlreadyUsedInNode(messages: RuntimeMessage[], nodeId: string): boolean {
   return messages.some((message) => message.role === "assistant" && message.nodeId === nodeId && isPendingReflectionCheck(message.metadata?.reflectionCheck));
 }
@@ -81,12 +82,17 @@ const DENY_PATTERN = /^(?:아니요|아니오|아니에요|아니야|아뇨|아�
 // "네, 근데..." / "yes, but..." / "네, 그리고..." carry a correction or an
 // addition the participant wants heard -- never collapse those into a bare yes.
 const QUALIFIER_PATTERN = /(?:근데|그런데|하지만|다만|그렇지만|그치만|그리고|추가로|\bbut\b|\bexcept\b|\bthough\b|\balso\b)/i;
+// The participant wants to leave it and go on -- the one way out of a check
+// that otherwise repeats until they confirm.
+const STOP_PATTERN = /(?:그만\s*(?:할래요|할게요|하고\s*싶어요|하죠|해요|하자)|넘어가(?:요|죠|주세요|자|도\s*돼요|도\s*될까요)|넘어갈게요|다음으로\s*넘어|이대로\s*(?:두고|넘어|진행)|\bskip\b|\bmove on\b|let'?s move on|leave it as it is)/i;
 
-/** "affirm" = a plain yes; "deny" = a bare no with nothing else said;
- * "correction" = anything else, including a yes/no followed by what they
- * actually meant, or a question back ("네?" is confusion, not agreement). */
+/** "stop" = asks to leave it and move on; "affirm" = a plain yes; "deny" = a
+ * bare no with nothing else said; "correction" = anything else, including a
+ * yes/no followed by what they actually meant, or a question back ("네?" is
+ * confusion, not agreement). */
 export function classifyReflectionCheckReply(text: string): ReflectionCheckReply {
   const normalized = text.normalize("NFC").trim().replace(/\s+/g, " ");
+  if (STOP_PATTERN.test(normalized)) return "stop";
   if (/[?？]/.test(normalized)) return "correction";
   const affirm = AFFIRM_PATTERN.exec(normalized);
   if (affirm) return QUALIFIER_PATTERN.test(normalized.slice(affirm[0].length)) ? "correction" : "affirm";
@@ -97,9 +103,10 @@ export function classifyReflectionCheckReply(text: string): ReflectionCheckReply
 
 type LocalizedText = { ko: string; en: string };
 
-export const REFLECTION_ASK_WHAT_DIFFERS: LocalizedText = {
-  ko: "어떤 부분이 다르게 느껴지셨는지 말씀해 주시겠어요?",
-  en: "Which part felt different to you?",
+/** The user's own wording (2026-09-14) for a bare "no". */
+export const REFLECTION_ASK_AGAIN: LocalizedText = {
+  ko: "그럼 다시 말씀해 주시겠어요?",
+  en: "Could you tell me again, in your own words?",
 };
 
 export const REFLECTION_MOVE_ON: LocalizedText = {

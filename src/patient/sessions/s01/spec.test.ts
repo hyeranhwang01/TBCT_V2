@@ -5,6 +5,7 @@ import { getLocalDb } from "@/shared/data/db/tbct-local-db";
 import { S01_COGNITIVE_DISTORTIONS } from "@/patient/sessions/s01/cognitive-distortions";
 import { s01PromptSlug } from "@/patient/sessions/s01/turn-rules";
 import { getWorksheetView } from "@/shared/worksheet/worksheet-projection";
+import { SUMMARY_CHECK_TRIGGER, fakeSummaryText } from "@/test/fakes/dialogue-agent.fake";
 import type { PatientInput } from "@/types/runtime-session";
 
 type RuntimeSessionView = NonNullable<Awaited<ReturnType<typeof getRuntimeSession>>>;
@@ -138,17 +139,19 @@ describe("S01 redesign: real first session replay", () => {
     expect(positions.every((position) => position >= 0)).toBe(true);
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
 
-    // Long situation -> participant writes the line; "감정이요" -> follow-up;
-    // "별일 없었어요" -> outcome meaning; "없어요" ends the extra emotions.
-    expect(visited).toEqual(expect.arrayContaining(["write-situation-line", "emotion-cause-follow-up", "outcome-meaning", "second-emotion-intensity"]));
-    for (const skipped of ["third-emotion-intensity", "situation-examples", "write-thought-line", "suggested-candidates", "behavior-examples", "candidate-two-thought-hint"]) {
+    // "감정이요" -> follow-up; "별일 없었어요" -> outcome meaning; "없어요" ends
+    // the extra emotions. A long situation no longer asks the participant to
+    // write a line (open dialogue v1, note2026_09_14): Claude summarizes it for
+    // them to confirm instead, which the fake does only on its test trigger.
+    expect(visited).toEqual(expect.arrayContaining(["emotion-cause-follow-up", "outcome-meaning", "second-emotion-intensity"]));
+    for (const skipped of ["third-emotion-intensity", "situation-examples", "write-situation-line", "write-thought-line", "suggested-candidates", "behavior-examples", "candidate-two-thought-hint"]) {
       expect(visited).not.toContain(skipped);
     }
 
     const fields = view.session.runtimeContext.fields;
     expect(fields.s01RepresentativeProblem).toBe("걱정이 많아요");
     expect(fields.situationThoughtDistinction).toContain("의견 차이가 있어서");
-    expect(fields.situationLine).toBe("팀원들과 프로젝트 방식에 의견 차이가 있었다");
+    expect(fields.situationLine).toBeUndefined();
     expect(fields.personalEmotion).toBe("배신감");
     expect(fields.personalSecondEmotion).toBe("공포감");
     expect(fields.personalThirdEmotion).toBeUndefined();
@@ -162,15 +165,16 @@ describe("S01 redesign: real first session replay", () => {
       expect(text).not.toMatch(/신념|가정|핵심\s*믿음|Intrapersonal|Intra-?TR|12번|천천히 생각해 보셔도/);
       expect(text).not.toMatch(/\[[a-z][^\]]*\]/i);
     }
-    // The bridge back to the participant's own case uses their own line.
-    expect(texts.some((text) => text.includes("팀원들과 프로젝트 방식에 의견 차이가 있었다"))).toBe(true);
+    // The bridge back to the participant's own case uses their own words.
+    expect(texts.some((text) => text.includes("의견 차이가 있어서"))).toBe(true);
 
     // The two worksheets beside the chat filled as the participant answered:
     // their own words, the gauges, and the scene/given feelings marked as
     // written by the session rather than the participant.
     const worksheet = await getWorksheetView(session.id, "tbct-s01");
     const cell = (key: string) => worksheet?.fields.find((item) => item.definition.worksheetFieldKey === key)?.value;
-    expect(cell("situationLine")?.value).toBe("팀원들과 프로젝트 방식에 의견 차이가 있었다");
+    expect(cell("situationThoughtDistinction")?.value).toContain("의견 차이가 있어서");
+    expect(cell("situationLine")).toBeNull();
     expect(cell("personalEmotion")?.value).toBe("배신감");
     expect(Number(cell("personalEmotionIntensity")?.value)).toBeGreaterThan(0);
     expect(Number(cell("s01ThoughtBeliefPercent")?.value)).toBeGreaterThan(0);
@@ -180,6 +184,27 @@ describe("S01 redesign: real first session replay", () => {
     expect(cell("candidateTwoEmotion")?.provenance).toBe("system_calculated");
     expect(cell("participantSummary")?.value).toBeTruthy();
   }, 90_000);
+
+  it("summarizes a long situation answer, and the summary the participant confirms fills the one-line box beside their own words", async () => {
+    const session = await startSession();
+    await driveUntil(session.id, "recent-moment");
+    const longAnswer = `${REAL_SESSION["recent-moment"]} ${SUMMARY_CHECK_TRIGGER}`;
+    await submitPatientInput(session.id, { kind: "text", value: longAnswer });
+    let view = await currentView(session.id);
+    const summaryTurn = [...view.messages].reverse().find((message) => message.role === "assistant");
+    expect(summaryTurn?.metadata?.reflectionCheck).toMatchObject({ status: "pending", summaryTarget: { field: "situationThoughtDistinction", writeField: "situationLine" } });
+
+    await submitPatientInput(session.id, { kind: "text", value: "네 맞아요" });
+    view = await currentView(session.id);
+    const summary = fakeSummaryText("ko-KR", REAL_SESSION["recent-moment"]);
+    expect(view.session.runtimeContext.fields.situationLine).toBe(summary);
+    expect(view.session.runtimeContext.fields.situationThoughtDistinction).toBe(longAnswer);
+    expect(currentSlug(view)).toBe("first-emotion");
+
+    const worksheet = await getWorksheetView(session.id, "tbct-s01");
+    const line = worksheet?.fields.find((item) => item.definition.worksheetFieldKey === "situationLine")?.value;
+    expect(line).toMatchObject({ value: summary, provenance: "participant_confirmed_summary", participantVerbatim: longAnswer });
+  }, 60_000);
 
   it("stops collecting difficulties on '없어요' and skips the representative question when only one was named", async () => {
     const session = await startSession();

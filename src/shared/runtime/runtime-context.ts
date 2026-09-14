@@ -342,7 +342,7 @@ const LIST_RATING_PAIRS: Array<{ listField: string; ratingsField: string; pointe
 /** After either the source list or the ratings array changes, point
  * `pointerField` at the next unrated item and flag whether every item in
  * the list now has a rating. */
-function refreshListRatingPointers(nextFields: Record<string, unknown>) {
+export function refreshListRatingPointers(nextFields: Record<string, unknown>) {
   for (const pair of LIST_RATING_PAIRS) {
     const list = Array.isArray(nextFields[pair.listField]) ? (nextFields[pair.listField] as string[]) : undefined;
     if (!list) continue;
@@ -866,8 +866,9 @@ export async function extractRuntimeState(input: {
   // Only risk detection runs, by the same rule as the main path below (a
   // current disclosure sets crisisSignal; a negated/historical/third-party
   // mention is flagged ambiguous so the neutral safety clarification still
-  // fires). A "네", a "아니요", or a correction is never stored in the active
-  // prompt's field or projected to the worksheet.
+  // fires). The reply itself is never stored in the active prompt's field; a
+  // summary the participant confirms is written by runtime-execution-api.ts's
+  // deliverReflectionCheckReplyTurn instead (open dialogue v1, note2026_09_14).
   if (input.pendingReflectionCheck) {
     const riskSignals = detectRuntimeRiskSignals(lowered);
     const isAmbiguousRiskMention = riskSignals.length > 0 && isNonCurrentRiskMention(rawText);
