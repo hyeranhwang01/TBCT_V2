@@ -4,6 +4,9 @@ import type { RuntimeMessage, RuntimeSession } from "@/types/runtime-session";
 import { compileDialogueContract } from "@/shared/dialogue-agent/dialogue-contract-compiler";
 import { callDialogueAgent } from "@/shared/dialogue-agent/dialogue-agent-client";
 import { validateDialogueDecision } from "@/shared/dialogue-agent/dialogue-output-validator";
+import { checkSummaryFidelity } from "@/shared/dialogue-agent/summary-fidelity-client";
+import { MAX_EXPLORATION_TURNS_PER_SESSION, MAX_EXPLORATION_TURNS_PER_STEP } from "@/shared/dialogue-agent/counselor-persona";
+import { countExplorationTurns, countReflectionChecks, keepVerbatimThemes, latestPatientThemes } from "@/shared/runtime/conversation-steering";
 import type { DialogueContract, DialogueDecision } from "@/shared/dialogue-agent/dialogue-agent-contract";
 import type { FieldCorrection } from "@/shared/runtime/field-correction";
 
@@ -14,10 +17,10 @@ import type { FieldCorrection } from "@/shared/runtime/field-correction";
 // worksheetEditAvailable-gated response) regardless of this set's size.
 const DIALOGUE_AGENT_ENABLED_SESSIONS = new Set(["tbct-s01", "tbct-s02", "tbct-s03", "tbct-s04", "tbct-s05", "tbct-s06", "tbct-s07", "tbct-s08"]);
 
-// A reply that should have summarized a long answer but did not is asked for
-// once more -- only when the first reply came back fast enough that a second
-// call still fits a patient turn (/api/runtime/turn allows 60s).
-const SUMMARY_RETRY_LATENCY_BUDGET_MS = 15_000;
+// A summary that added meaning is written again once -- only when the first
+// reply came back fast enough that a second call still fits a patient turn
+// (/api/runtime/turn allows 60s).
+const REWRITE_LATENCY_BUDGET_MS = 15_000;
 
 export function isDialogueAgentEnabled(sessionDefinitionId: string) {
   return DIALOGUE_AGENT_ENABLED_SESSIONS.has(sessionDefinitionId);
@@ -53,8 +56,18 @@ export type DialogueAgentTurnResult = {
   latencyMs?: number;
   // Set only when the shipped text ends in a confirmation the runtime must
   // wait for -- the caller opens a pending check from it. Never set on a
-  // fallback.
-  summaryCheck?: { summaryText: string; correction?: FieldCorrection };
+  // fallback. `recordable: false` (summary fidelity, note2026_09_15): the
+  // summary holds a tentative interpretation or could not be verified, so a
+  // "yes" to it must not write it to the record.
+  summaryCheck?: { summaryText: string; correction?: FieldCorrection; recordable?: boolean };
+  // Adaptive dialogue (note2026_09_15_olivia_persona): the shipped text is a
+  // follow-up question about what the participant said, and the task waits --
+  // the caller marks the message with a pending exploration.
+  exploration?: boolean;
+  // The participant's themes as Claude updated them this turn, kept only
+  // where they are the participant's own words. Undefined when Claude gave
+  // none (the caller then leaves the previous ones in place).
+  patientThemes?: string[];
   // `guard_log:<check>` entries from dialogue-output-validator.ts's log-mode
   // checks (open dialogue v1): recorded, not enforced.
   guardLogs?: string[];
@@ -65,11 +78,12 @@ export type DialogueAgentTurnResult = {
  * (runtime-orchestrator.ts) and the "clarification" path
  * (runtime-execution-api.ts) call through, so the compile -> call ->
  * validate -> fall back sequence lives in exactly one place. A turn makes one
- * Claude call, plus at most one repeat request when a long answer was not
- * summarized. deterministicFallbackText is ALWAYS what ships if anything here
- * fails or fails validation -- this function can only ever replace the
- * wording of a turn, never the runtime's own decision about what happens
- * next.
+ * Claude call, plus -- only when it ends in a summary -- a fidelity check and
+ * at most one rewrite. deterministicFallbackText is ALWAYS what ships if
+ * anything here fails or fails validation -- this function can only ever
+ * replace the wording of a turn, or hold the task for a confirmation or an
+ * exploration question the caller supports, never the runtime's own decision
+ * about what happens next.
  */
 export async function resolveDialogueAgentMessage(input: {
   session: RuntimeSession;
@@ -88,11 +102,20 @@ export async function resolveDialogueAgentMessage(input: {
   sessionProtocolRules?: string[];
   summaryCheckAllowed?: boolean;
   reflectionCheckContext?: { previousSummary: string; attempt: number };
-  summarizeLastAnswer?: { field: string; originalValue: string };
+  /** The caller can hold the task for an exploration question -- narrowed
+   * here by the per-task and per-session limits. */
+  explorationAllowed?: boolean;
+  /** Consecutive exploration turns already spent on this task. */
+  explorationTurnsInStep?: number;
 }): Promise<DialogueAgentTurnResult> {
   if (isSafetyCriticalPrompt(input.sourcePromptItem)) {
     return { patientMessage: input.deterministicFallbackText, decision: null, usedFallback: false, excludedBySafety: true, fallbackReason: "safety_critical_prompt_excluded", provider: "deterministic" };
   }
+  const explorationTurns = { step: input.explorationTurnsInStep ?? 0, session: countExplorationTurns(input.recentMessages) };
+  const participantTexts = [
+    ...input.recentMessages.filter((message) => message.role === "patient").map((message) => message.content),
+    ...(input.lastParticipantMessage ? [input.lastParticipantMessage] : []),
+  ];
   const contract = compileDialogueContract({
     session: input.session,
     node: input.node,
@@ -108,7 +131,10 @@ export async function resolveDialogueAgentMessage(input: {
     sessionProtocolRules: input.sessionProtocolRules,
     summaryCheckAllowed: input.summaryCheckAllowed,
     reflectionCheckContext: input.reflectionCheckContext,
-    summarizeLastAnswer: input.summarizeLastAnswer,
+    reflectionsSoFar: countReflectionChecks(input.recentMessages),
+    explorationAllowed: Boolean(input.explorationAllowed) && explorationTurns.step < MAX_EXPLORATION_TURNS_PER_STEP && explorationTurns.session < MAX_EXPLORATION_TURNS_PER_SESSION,
+    explorationTurns,
+    patientThemes: latestPatientThemes(input.recentMessages),
   });
   const context = { sessionId: input.session.id, turnId: input.turnId };
 
@@ -125,22 +151,58 @@ export async function resolveDialogueAgentMessage(input: {
   let decision = result.decision;
   let validation = validateDialogueDecision(decision, contract);
   let { provider, model, latencyMs } = result;
-  if (validation.accepted && validation.missingRequiredSummary && contract.summarizeLastAnswer && result.latencyMs < SUMMARY_RETRY_LATENCY_BUDGET_MS) {
-    const retryContract: DialogueContract = { ...contract, summarizeLastAnswer: { ...contract.summarizeLastAnswer, retry: true } };
-    const retry = await callDialogueAgent(retryContract, context);
-    if (!retry.failed) {
-      const retryValidation = validateDialogueDecision(retry.decision, retryContract);
-      if (retryValidation.accepted && retryValidation.summaryCheck) {
-        decision = retry.decision;
-        validation = retryValidation;
-        provider = retry.provider;
-        model = retry.model;
-        latencyMs = result.latencyMs + retry.latencyMs;
+  const fidelityLogs: string[] = [];
+  let recordable: boolean | undefined;
+
+  // Summary fidelity (note2026_09_15_olivia_persona): a summary is checked
+  // against the participant's words before they see it. Added meaning gets
+  // one rewrite with the reason; if that still adds meaning, the approved
+  // task text ships instead. A record correction is not a summary.
+  const summaryToCheck = () => (validation.accepted && validation.summaryCheck && !validation.summaryCheck.correction ? validation.summaryCheck.summaryText : undefined);
+  const judge = (summary: string) => checkSummaryFidelity({ locale: contract.locale, participantMessages: participantTexts.slice(-6).length ? participantTexts.slice(-6) : [""], summary }, context);
+  let summary = summaryToCheck();
+  if (summary) {
+    let fidelity = await judge(summary);
+    if (fidelity.checked && !fidelity.faithful) {
+      fidelityLogs.push("guard_log:summary_added_meaning");
+      if (latencyMs < REWRITE_LATENCY_BUDGET_MS) {
+        const rewriteContract: DialogueContract = { ...contract, fidelityFeedback: fidelity.addedMeaning ?? "an interpretation they did not state" };
+        const rewrite = await callDialogueAgent(rewriteContract, context);
+        if (!rewrite.failed) {
+          const rewriteValidation = validateDialogueDecision(rewrite.decision, rewriteContract);
+          if (rewriteValidation.accepted) {
+            decision = rewrite.decision;
+            validation = rewriteValidation;
+            provider = rewrite.provider;
+            model = rewrite.model;
+            latencyMs = result.latencyMs + rewrite.latencyMs;
+            summary = summaryToCheck();
+            // A rewrite without a summary has nothing left to check.
+            fidelity = summary ? await judge(summary) : { faithful: true, checked: true };
+          }
+        }
       }
     }
+    if (fidelity.checked && !fidelity.faithful) {
+      return { patientMessage: input.deterministicFallbackText, decision, usedFallback: true, fallbackReason: "summary_added_meaning", provider, model, latencyMs, guardLogs: [...(validation.guardLogs ?? []), ...fidelityLogs] };
+    }
+    if (summary) recordable = fidelity.checked && !fidelity.tentative;
   }
+
   if (!validation.accepted) {
-    return { patientMessage: input.deterministicFallbackText, decision, usedFallback: true, fallbackReason: validation.reason, provider, model, latencyMs, guardLogs: validation.guardLogs };
+    return { patientMessage: input.deterministicFallbackText, decision, usedFallback: true, fallbackReason: validation.reason, provider, model, latencyMs, guardLogs: [...validation.guardLogs, ...fidelityLogs] };
   }
-  return { patientMessage: validation.finalText ?? decision.patientFacingMessage, decision, usedFallback: false, provider, model, latencyMs, summaryCheck: validation.summaryCheck, guardLogs: validation.guardLogs };
+  const summaryCheck = validation.summaryCheck ? { ...validation.summaryCheck, ...(recordable === undefined ? {} : { recordable }) } : undefined;
+  return {
+    patientMessage: validation.finalText ?? decision.patientFacingMessage,
+    decision,
+    usedFallback: false,
+    provider,
+    model,
+    latencyMs,
+    summaryCheck,
+    exploration: validation.exploration,
+    patientThemes: decision.patientThemes ? keepVerbatimThemes(decision.patientThemes, participantTexts) : undefined,
+    guardLogs: [...validation.guardLogs, ...fidelityLogs],
+  };
 }

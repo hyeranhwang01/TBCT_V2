@@ -39,9 +39,9 @@ export type DialogueValidationResult =
   // patientFacingMessage (the server appended a confirmation question).
   // summaryCheck is set when the turn ends in a confirmation the runtime must
   // wait for -- runtime-orchestrator.ts opens a pending check from it.
-  // missingRequiredSummary: the contract asked for a summary of a long answer
-  // and this turn did not give one, so the caller may ask once more.
-  | { accepted: true; finalText?: string; summaryCheck?: { summaryText: string; correction?: FieldCorrection }; guardLogs: string[]; missingRequiredSummary?: boolean }
+  // exploration: the turn is a follow-up question about what the participant
+  // said, and the task waits (note2026_09_15_olivia_persona).
+  | { accepted: true; finalText?: string; summaryCheck?: { summaryText: string; correction?: FieldCorrection }; exploration?: boolean; guardLogs: string[] }
   | { accepted: false; reason: string; guardLogs: string[] };
 
 const DIAGNOSIS_PATTERN = /\b(?:you have|this (?:is|sounds like|indicates)) (?:a |an )?(?:diagnos|disorder|clinical depression|generalized anxiety disorder|bipolar|PTSD|OCD)\b/i;
@@ -96,6 +96,12 @@ export function validateDialogueDecision(decision: DialogueDecision, contract: D
   // defensively in case a future schema change loosens it.
   if (decision.keepCurrentNode !== true) return { accepted: false, reason: "attempted_node_advance", guardLogs };
 
+  // Adaptive dialogue (note2026_09_15_olivia_persona): an exploration question
+  // leaves the task unasked, so it ships only where the caller can hold the
+  // task; anywhere else the next reply would be graded as the task's answer.
+  const explores = decision.conversationMove === "explore";
+  if (explores && !contract.explorationAllowed) return { accepted: false, reason: "exploration_not_held", guardLogs };
+
   // Field corrections (note2026_09_14_field_corrections): a proposed change to
   // the record is applied only after the participant agrees, so it must be a
   // change the program can really make, on a turn that can wait for the
@@ -119,5 +125,5 @@ export function validateDialogueDecision(decision: DialogueDecision, contract: D
     return { accepted: true, ...(finalText ? { finalText } : {}), summaryCheck: { summaryText, ...(correction ? { correction } : {}) }, guardLogs };
   }
   if (confirms) guardLogs.push("guard_log:confirmation_not_held");
-  return contract.summarizeLastAnswer ? { accepted: true, guardLogs, missingRequiredSummary: true } : { accepted: true, guardLogs };
+  return explores ? { accepted: true, exploration: true, guardLogs } : { accepted: true, guardLogs };
 }

@@ -1,6 +1,7 @@
 import { dialogueContractSchema, dialogueDecisionSchema, type DialogueAgentResult, type DialogueContract, type DialogueDecision } from "@/shared/dialogue-agent/dialogue-agent-contract";
 import { redactDirectIdentifiers } from "@/shared/assessment/privacy-redaction";
 import { recordModelUsage } from "@/shared/assessment/model-observability";
+import { MAX_EXPLORATION_TURNS_PER_SESSION, MAX_EXPLORATION_TURNS_PER_STEP, MAX_PATIENT_THEMES, PERSONA_DEFINITION, PREFERRED_REFLECTIONS_PER_SESSION, counselorPersonaPrompt } from "@/shared/dialogue-agent/counselor-persona";
 
 // The rich per-step system prompt below (stepSpecificGuidance, the full
 // responseType/participantResponseState taxonomy, etc.) is what the
@@ -16,10 +17,11 @@ const DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b";
 // full systemPromptBlocks() spells out per-step, so the emergency path stays
 // fast and cheap without re-deriving the rich per-turn contract fields.
 const FAST_SYSTEM_PROMPT = [
-  "You are the conversational voice of a protocol-bounded TBCT program.",
+  PERSONA_DEFINITION,
+  "You are the conversational voice of a protocol-bounded TBCT program. That name is internal: never introduce yourself by name or title.",
   "A deterministic engine owns clinical state, safety, progression, and persistence. You only phrase one patient-facing turn. Protocol adherence always outranks conversational fluency.",
   "Follow the supplied contract exactly. Write patientFacingMessage in contract.locale, keepCurrentNode=true, and use the submit_dialogue_decision tool.",
-  "Never diagnose, invent participant answers, provide treatment outside the current task, mention internals, or claim to be an AI.",
+  "Never diagnose, invent participant answers or meanings they did not express, provide treatment outside the current task, mention internals, or claim to be a human, a doctor or a licensed clinician.",
   "Be concise: normally one short acknowledgement or transition plus the current task. Do not repeat the previous assistant wording.",
   "Never add a readiness or permission question (such as 'Are you ready?' or 'Would that be okay?') after the current task. Ask the actual task directly and end there.",
   "If the answer used the wrong construct, briefly distinguish it and ask only for the required construct. If partial, request only the missing part.",
@@ -64,6 +66,8 @@ const RESPONSE_SCHEMA = {
     keepCurrentNode: { type: "boolean", enum: [true] },
     needsConfirmation: { type: "boolean" },
     reflectionText: { type: "string", maxLength: 700 },
+    conversationMove: { type: "string", enum: ["advance", "explore"] },
+    patientThemes: { type: "array", maxItems: 5, items: { type: "string", maxLength: 120 } },
     proposedCorrection: {
       type: "object",
       additionalProperties: false,
@@ -204,22 +208,19 @@ async function generateGroqDecision(contract: DialogueContract, context: { sessi
 }
 
 /**
- * Open dialogue v1 (.claude/TASK_SCOPE.json note2026_09_14_open_dialogue_v1).
- *
- * `stable` is the same for every turn of a session (role, the session
- * manual's tone, opening rules, procedure and restrictions) and is sent as a
- * cached system block. `turn` carries this turn's step and state. The prompt
- * keeps Claude inside the protocol's steps -- the program still owns
- * progression, completion and safety -- but leaves the wording to Claude, and
- * asks it to confirm any summary, interpretation or conclusion with the
- * participant before the task moves on. The long rule list this replaced
- * (message parts, per-node summary limits, forbidden-summary steps) is
- * suspended by the user's decision, to be regulated back from real
- * transcripts.
+ * `stable` is the same for every turn of a session and is sent as a cached
+ * system block: the counselor persona (counselor-persona.ts,
+ * note2026_09_15_olivia_persona), the program's ownership of the steps, and
+ * the session manual's tone, opening rules, procedure and restrictions.
+ * `turn` carries this turn's step and state. The program still owns
+ * progression, completion and safety; the wording, when to reflect, and
+ * whether to explore what the participant said before the task are Claude's
+ * (open dialogue v1, note2026_09_14, as changed by the persona note).
  */
 export function systemPromptBlocks(contract: DialogueContract): { stable: string; turn: string } {
   const stable = [
-    "You are an experienced TBCT (Trial-Based Cognitive Therapy) counselor having a real, warm conversation with the participant, within the role this session's manual defines for you below. You never diagnose or give clinical advice outside this protocol, and the protocol rules always win over your own judgment.",
+    counselorPersonaPrompt(),
+    "You work within this session's TBCT (Trial-Based Cognitive Therapy) manual, below. You never diagnose or give clinical advice outside this protocol.",
     "A separate program owns the session's steps: which step is current, when it is complete, safety handling, and what gets recorded. Follow the manual's procedure for the CURRENT step given in each turn. Never carry out a later step early and never go back to an earlier one.",
     "Within that procedure the wording is yours: how you acknowledge, empathize, lead in and phrase the question, the way a skilled counselor would -- not a script.",
     contract.sessionToneGuidance ? `This session's manual on role, tone and style:\n${contract.sessionToneGuidance}` : "",
@@ -228,6 +229,7 @@ export function systemPromptBlocks(contract: DialogueContract): { stable: string
       : "",
   ].filter(Boolean).join("\n\n");
 
+  const exploration = contract.explorationTurns ?? { step: 0, session: 0 };
   const turn = [
     localeInstruction(contract.locale),
     `Current step objective: ${contract.therapeuticObjective}`,
@@ -246,13 +248,13 @@ export function systemPromptBlocks(contract: DialogueContract): { stable: string
           ? "The participant is switching roles or perspective here: say so plainly before the task."
           : "You are moving into a new part of the session: lead in naturally, without announcing steps or phases."
         : "",
-    "\nChecking your understanding -- use this actively, this is clinical counseling:",
+    "\nReflecting and confirming -- selectively:",
     contract.summaryCheckAllowed
-      ? "- Whenever you put what the participant said into your own words (a summary, paraphrase, interpretation or conclusion), or you are not sure what they meant, end the turn by asking whether you understood correctly, in your own words (for example '~라는 말씀이 맞으실까요?'). Use responseType summarize_and_confirm, set needsConfirmation=true, and put only your summary or understanding, without the question, in reflectionText. Do not ask the current task in that turn; it is asked after they confirm."
-      : "- This turn cannot wait for a confirmation, so do not summarize or interpret what they said here. Set needsConfirmation=false.",
-    "- Otherwise set needsConfirmation=false and continue with the current task.",
-    contract.summarizeLastAnswer
-      ? `- The participant's last answer was long. In this turn, summarize it in one short sentence that keeps their meaning and key words and adds nothing, and ask whether that is right (for example '~라는 말씀이 맞으실까요?'). Set needsConfirmation=true and reflectionText to that one sentence. Do not ask the current task in this turn.${contract.summarizeLastAnswer.retry ? " Your previous reply did not do this -- do it now." : ""}`
+      ? `- Reflect or confirm only when it clarifies meaning, emotion, belief or the formulation -- not after every answer. Confirmations so far this session: ${contract.reflectionsSoFar ?? 0}; about ${PREFERRED_REFLECTIONS_PER_SESSION} per session on average is preferred (a guide, not a limit). When you do put their words into your own (a summary, paraphrase or tentative interpretation), end the turn by asking whether you understood (for example '~라는 말씀이 맞으실까요?'), use responseType summarize_and_confirm, set needsConfirmation=true, and put only that summary -- in their key words, adding nothing -- in reflectionText. Do not ask the current task in that turn; it is asked after they answer.`
+      : "- This turn cannot wait for a confirmation: do not summarize or interpret what they said. Set needsConfirmation=false.",
+    "- Otherwise set needsConfirmation=false.",
+    contract.fidelityFeedback
+      ? `- Your previous draft of this turn added meaning the participant did not express (${contract.fidelityFeedback}). Write the turn again using only what they said; anything of your own must be a clearly tentative question.`
       : "",
     contract.reflectionCheckContext
       ? `- Your previous understanding was: ${JSON.stringify(contract.reflectionCheckContext.previousSummary)}. Their last message does not simply confirm it -- it corrects or restates it. Summarize again from their words (their words take priority over yours), ask whether that is right, set needsConfirmation=true and reflectionText. Do not ask the current task.`
@@ -260,15 +262,21 @@ export function systemPromptBlocks(contract: DialogueContract): { stable: string
     contract.summaryCheckAllowed
       ? "- Fixing the record: if something already recorded (the \"Confirmed so far\" values) looks wrong -- a typo, a non-answer or a \"nothing more\" word stored as an answer -- or the participant says an earlier answer was wrong or asks to remove it, propose the fix in proposedCorrection: field and currentValue exactly as recorded; action remove_item for a list item, or replace_value with newValue in the participant's own words. Ask them in your own words whether to make that change (for example \"'읎오'는 목록에서 뺄까요?\"), set needsConfirmation=true, and do not ask the current task in that turn. Nothing changes unless they say yes."
       : "",
+    "\nFollowing the participant:",
+    contract.explorationAllowed
+      ? `- If their last message brought up something that matters for this step's objective and is worth understanding better, you may explore it before the current task: ask one open, Socratic question about what they said and set conversationMove="explore". The current task waits for a later turn. Exploration turns used: ${exploration.step} of ${MAX_EXPLORATION_TURNS_PER_STEP} for this task, ${exploration.session} of ${MAX_EXPLORATION_TURNS_PER_SESSION} this session. Explore only when it serves the session, and never in the same turn as a confirmation.`
+      : "- Ask the current task in this turn (conversationMove=\"advance\"); exploring is not available here.",
+    "- When you ask the current task (conversationMove=\"advance\"), connect it to what they have said where it fits, in their words, so the conversation follows them.",
+    `- The participant's themes so far, in their own words: ${JSON.stringify(contract.patientThemes ?? [])}. Let them shape your questions. Return patientThemes: the updated list, at most ${MAX_PATIENT_THEMES}, each copied exactly from something the participant said -- never your paraphrase or interpretation.`,
     "\nConversation basics:",
     "- One question per turn. Never re-ask something already answered in recentContext, even in other words.",
     "- A stop signal in a list task (\"없어요\", \"더 없어요\", \"그만\", \"that's all\", \"I don't know\") is final the first time: acknowledge it and let the program move on.",
     "- If they correct you, assume they are right: acknowledge briefly and continue from the correction.",
     "- If they ask why, or what something means, explain briefly from the objective and rationale, then return to the task.",
-    "- If they raise something outside this exercise, acknowledge it warmly, suggest bringing it to their therapist, and return to the task.",
+    "- If they bring up something personal that bears on this session's goal, treat it as material for the session: explore it or connect the task to it. If it has nothing to do with the counseling, acknowledge it briefly and return to the task.",
     "- If they say they cannot see a list, the options or the worksheet, use responseType show_required_visual with the matching visualAction.",
     "- If they want to change an earlier answer, respond honestly and do not promise a redo the program does not support.",
-    "- Never mention program internals (steps, nodes, runtime) and never claim to be an AI.",
+    "- Never mention program internals (steps, nodes, runtime).",
     "- keepCurrentNode is always true. Classify their last message in participantResponseState and pick the responseType that fits your turn.",
     "Return your decision with the submit_dialogue_decision tool only.",
   ].filter(Boolean).join("\n");

@@ -83,11 +83,6 @@ describe("confirmation turns: a summary always ends in a question the participan
     expect(validateDialogueDecision(decision, baseContract({ summaryCheckAllowed: undefined }))).toEqual({ accepted: true, guardLogs: ["guard_log:confirmation_not_held"] });
   });
 
-  it("reports a long answer that was not summarized, so the caller can ask once more", () => {
-    const plain: DialogueDecision = { responseType: "reflect_and_ask", patientFacingMessage: TASK_KO, keepCurrentNode: true, participantResponseState: "valid_answer" };
-    expect(validateDialogueDecision(plain, baseContract({ summarizeLastAnswer: { field: "automaticThought", originalValue: "긴 답" } }))).toEqual({ accepted: true, guardLogs: [], missingRequiredSummary: true });
-  });
-
   it("still runs the enforced hygiene checks on a confirmation turn, and logs the clinical ones", () => {
     expect(validateDialogueDecision(summaryDecision("It sounds like you felt your boss sees you as useless."), baseContract())).toEqual({ accepted: false, reason: "locale_mismatch", guardLogs: [] });
     const english = baseContract({ locale: "en-US", currentTaskText: "What went through your mind?" });
@@ -164,7 +159,7 @@ function runtimePromptItemFor(nodeId: string, overrides: Partial<RuntimePromptIt
   };
 }
 
-function compileFor(promptItemId: string, options: { summaryCheckAllowed?: boolean; requiresPatientInput?: boolean; summarizeLastAnswer?: { field: string; originalValue: string } } = {}) {
+function compileFor(promptItemId: string, options: { summaryCheckAllowed?: boolean; requiresPatientInput?: boolean } = {}) {
   const promptItem = CANONICAL_PROMPT_ITEMS.find((item) => item.id === promptItemId);
   if (!promptItem) throw new Error(`Missing prompt ${promptItemId}`);
   const node = CANONICAL_STAGE_NODES.find((item) => item.id === promptItem.nodeId);
@@ -179,7 +174,6 @@ function compileFor(promptItemId: string, options: { summaryCheckAllowed?: boole
     isFirstPromptOfNode: false,
     isFirstPromptOfSession: false,
     summaryCheckAllowed: options.summaryCheckAllowed ?? true,
-    summarizeLastAnswer: options.summarizeLastAnswer,
   });
 }
 
@@ -217,12 +211,6 @@ describe("where a confirmation is allowed", () => {
     "tbct-s08-n18-p01-participant-positive-belief",
   ])("is allowed again at formerly forbidden %s (the list is kept for regulation, not applied)", (promptItemId) => {
     expect(compileFor(promptItemId).summaryCheckAllowed).toBe(true);
-  });
-
-  it("passes a summarize-last-answer request through only when a confirmation can be held", () => {
-    const request = { field: "automaticThought", originalValue: "긴 답" };
-    expect(compileFor("tbct-s03-n04-p01-automatic-thought", { summarizeLastAnswer: request }).summarizeLastAnswer).toEqual(request);
-    expect(compileFor("tbct-s03-n04-p01-automatic-thought", { summarizeLastAnswer: request, summaryCheckAllowed: false }).summarizeLastAnswer).toBeUndefined();
   });
 
   it("names only prompts that really exist in the catalog (a typo would silently un-forbid a step)", () => {

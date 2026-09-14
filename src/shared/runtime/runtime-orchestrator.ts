@@ -16,6 +16,7 @@ import { resolveRepeatedFallbackText as resolveS02RepeatedFallbackText } from "@
 import { resolveRepeatedFallbackText as resolveS03RepeatedFallbackText } from "@/patient/sessions/s03/messages";
 import { composeDistortionCandidateText, selectDistortionCandidatesDeterministically, type DistortionCandidate } from "@/patient/sessions/s01/distortion-candidates";
 import type { PendingReflectionCheck } from "@/shared/runtime/reflection-check";
+import type { PendingExploration } from "@/shared/runtime/conversation-steering";
 import { readLongAnswerSummaryTarget } from "@/shared/runtime/long-answer";
 
 async function callPatientRenderer(request: PatientRendererRequest, context: { sessionId: string; turnId: string }) {
@@ -212,10 +213,11 @@ export async function orchestrateRuntimeAssistantTurn(input: RuntimeOrchestrator
     // deterministic node/prompt progression above is completely unaffected.
     const isFirstPromptOfNode = input.activeStep.promptIndex === 0;
     const isFirstPromptOfSession = isFirstPromptOfNode && input.state.completedNodeIds.length === 0;
-    // Open dialogue v1 (.claude/TASK_SCOPE.json note2026_09_14): a long answer
-    // to a free-text worksheet field, marked on the participant's message when
-    // it was submitted (runtime-execution-api.ts), is summarized on the turn
-    // right after it -- never later, once something else has been said.
+    // A long answer to a free-text worksheet field is marked on the
+    // participant's message when it is submitted (runtime-execution-api.ts).
+    // Claude is no longer made to summarize it (note2026_09_15_olivia_persona),
+    // but if this turn does and the participant confirms, the summary is what
+    // gets recorded -- only on the turn right after the answer.
     const lastConversationalMessage = [...input.recentMessages].reverse().find((message) => message.role === "patient" || message.role === "assistant");
     const summaryTarget = lastConversationalMessage?.role === "patient" ? readLongAnswerSummaryTarget(lastConversationalMessage.metadata?.longAnswerSummaryTarget) : undefined;
     const dialogueResult = await resolveDialogueAgentMessage({
@@ -240,7 +242,10 @@ export async function orchestrateRuntimeAssistantTurn(input: RuntimeOrchestrator
       // steps. The contract compiler still requires a prompt that waits for
       // input, since the confirmation holds that prompt back.
       summaryCheckAllowed: Boolean(input.session.runtimeContext.lastPatientMessage?.trim()),
-      summarizeLastAnswer: summaryTarget ? { field: summaryTarget.field, originalValue: summaryTarget.originalValue } : undefined,
+      // Adaptive dialogue (note2026_09_15_olivia_persona): the participant has
+      // just answered, so this turn may explore what they said before the task.
+      explorationAllowed: lastConversationalMessage?.role === "patient",
+      explorationTurnsInStep: 0,
     });
     const repeatedFallbackOverride = resolveRepeatedFallbackOverride({
       sessionDefinitionId: input.session.sessionDefinitionId,
@@ -266,10 +271,16 @@ export async function orchestrateRuntimeAssistantTurn(input: RuntimeOrchestrator
     const generatedMessageId = makeId("RMSG");
     const lastPatientTurn = [...input.recentMessages].reverse().find((message) => message.role === "patient");
     const reflectionCheck: PendingReflectionCheck | undefined = dialogueResult.summaryCheck && !repeatedFallbackOverride
-      ? { status: "pending", checkId: generatedMessageId, attempt: 1, summaryText: dialogueResult.summaryCheck.summaryText, aboutPromptItemId: lastPatientTurn?.promptItemId, ...(dialogueResult.summaryCheck.correction ? { correction: dialogueResult.summaryCheck.correction } : summaryTarget ? { summaryTarget } : {}) }
+      ? { status: "pending", checkId: generatedMessageId, attempt: 1, summaryText: dialogueResult.summaryCheck.summaryText, aboutPromptItemId: lastPatientTurn?.promptItemId, ...(dialogueResult.summaryCheck.correction ? { correction: dialogueResult.summaryCheck.correction } : summaryTarget && dialogueResult.summaryCheck.recordable !== false ? { summaryTarget } : {}) }
+      : undefined;
+    // An exploration question leaves this prompt unasked; the participant's
+    // reply to it is handled by runtime-execution-api.ts's
+    // deliverExplorationReplyTurn.
+    const pendingExploration: PendingExploration | undefined = dialogueResult.exploration && !repeatedFallbackOverride
+      ? { status: "pending", explorationId: generatedMessageId, turn: 1, forPromptItemId: input.sourcePromptItem.id }
       : undefined;
     return { contract, response: dialogueResponse, providerResult: { provider: dialogueResult.provider, model: dialogueResult.model ?? dialogueResponse.providerMetadata.model, latencyMs: dialogueResult.latencyMs, text: dialogueResult.patientMessage }, validator: dialogueValidator, fallbackUsed: dialogueResult.usedFallback, repairUsed: false, stateReduction: dialogueReduction, generatedMessage: {
-      id: generatedMessageId, runtimeSessionId: input.session.id, role: "assistant", content: dialogueResult.patientMessage, status: dialogueResult.usedFallback ? "replaced_by_fallback" : "validated", nodeId: input.activeStep.node.id, promptItemId: input.activeStep.promptItem.id, sourceEvidenceIds: [], createdAt: new Date().toISOString(), deliveredAt: new Date().toISOString(), metadata: { llmCalled: usedClaude, messageSource: dialogueResult.excludedBySafety ? "deterministic_safety" : "dialogue_agent", contractHash: contract.contractHash, sourcePromptItemId: input.sourcePromptItem.id, dialogueDecision: dialogueResult.decision ?? undefined, reflectionCheck },
+      id: generatedMessageId, runtimeSessionId: input.session.id, role: "assistant", content: dialogueResult.patientMessage, status: dialogueResult.usedFallback ? "replaced_by_fallback" : "validated", nodeId: input.activeStep.node.id, promptItemId: input.activeStep.promptItem.id, sourceEvidenceIds: [], createdAt: new Date().toISOString(), deliveredAt: new Date().toISOString(), metadata: { llmCalled: usedClaude, messageSource: dialogueResult.excludedBySafety ? "deterministic_safety" : "dialogue_agent", contractHash: contract.contractHash, sourcePromptItemId: input.sourcePromptItem.id, dialogueDecision: dialogueResult.decision ?? undefined, reflectionCheck, pendingExploration, patientThemes: dialogueResult.patientThemes },
     } };
   }
 

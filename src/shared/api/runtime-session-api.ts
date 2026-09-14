@@ -34,6 +34,7 @@ import { listHomeworkEntries, listHomeworkRecordsByParticipant } from "@/shared/
 import { EMPTY_CONTINUITY_SEED, S01_HOMEWORK_EXAMPLE_ENTRY_TYPE, computeSessionContinuitySeed, latestCompletedSession } from "@/shared/runtime/session-continuity";
 import type { HomeworkRecord } from "@/types/homework";
 import { findPendingReflectionCheck } from "@/shared/runtime/reflection-check";
+import { findPendingExploration } from "@/shared/runtime/conversation-steering";
 import { listMemoryRetrievalRuns, listMemoryUsageLogs } from "@/shared/data/repositories/longitudinal-memory-repository";
 import { getPilotParticipantByRuntimeParticipantId, getPilotStudyArm, listProtocolAssignments } from "@/shared/data/repositories/pilot-repository";
 import { assertRuntimeTransition } from "@/shared/runtime/runtime-state-machine";
@@ -332,7 +333,9 @@ export async function getPatientRuntimeSession(sessionId: string): Promise<Patie
   // gets the ordinary free-text box instead. outputFields are kept, so the
   // worksheet keeps highlighting the same field. Computed here because the
   // metadata that marks the open check is stripped from the messages below.
-  const reflectionCheckOpen = Boolean(findPendingReflectionCheck(storedMessages));
+  // The same holds while an exploration question is open
+  // (note2026_09_15_olivia_persona): it is answered in the participant's own words.
+  const reflectionCheckOpen = Boolean(findPendingReflectionCheck(storedMessages) || findPendingExploration(storedMessages));
   const messages = storedMessages
     .filter((message) => message.role === "patient"
       || (message.role === "assistant" && ["validated", "delivered", "replaced_by_fallback"].includes(message.status))

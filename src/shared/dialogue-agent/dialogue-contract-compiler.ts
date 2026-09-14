@@ -374,9 +374,12 @@ export function compileDialogueContract(input: {
   /** release.policies.sessionPolicies[session].protocolRules -- the session
    * manual's opening rules, procedure and restrictions. */
   sessionProtocolRules?: string[];
-  /** The participant's last answer was long and is to be summarized for them
-   * to confirm (src/shared/runtime/long-answer.ts). */
-  summarizeLastAnswer?: { field: string; originalValue: string };
+  /** Counselor persona (note2026_09_15_olivia_persona): see the matching
+   * contract fields in dialogue-agent-contract.ts. */
+  reflectionsSoFar?: number;
+  explorationAllowed?: boolean;
+  explorationTurns?: { step: number; session: number };
+  patientThemes?: string[];
 }): DialogueContract {
   const { session, node, sourcePromptItem, runtimePromptItem } = input;
   // A confirmation turn holds back this prompt's question until the
@@ -385,6 +388,8 @@ export function compileDialogueContract(input: {
   // dialogue v1 (note2026_09_14): the forbidden-step list below is no longer
   // applied here.
   const summaryCheckAllowed = Boolean(input.summaryCheckAllowed) && runtimePromptItem.requiresPatientInput;
+  // Exploring holds the task back the same way a confirmation does.
+  const explorationAllowed = Boolean(input.explorationAllowed) && runtimePromptItem.requiresPatientInput;
   const targetField = sourcePromptItem.outputFields[0];
   const binding = getWorksheetBindings(session.sessionDefinitionId).find((item) => item.canonicalFieldKey === targetField);
   const expectedInputType = resolveExpectedInputType(binding, sourcePromptItem.validation);
@@ -469,8 +474,10 @@ export function compileDialogueContract(input: {
     lastParticipantMessage: input.lastParticipantMessage,
     recentContext: input.recentMessages
       .filter((message): message is RuntimeMessage & { role: "patient" | "assistant" } => message.role === "patient" || message.role === "assistant")
-      .slice(-4)
-      .map((message) => ({ role: message.role, content: message.content.slice(0, 240) })),
+      // Wide enough that what the participant said a few steps back can still
+      // shape this turn (note2026_09_15_olivia_persona); it was 4 x 240.
+      .slice(-12)
+      .map((message) => ({ role: message.role, content: message.content.slice(0, 500) })),
     safetyStatus: session.status,
     locale: session.locale,
     clarificationAttemptCount: input.clarificationAttemptCount,
@@ -494,7 +501,10 @@ export function compileDialogueContract(input: {
     sessionProtocolRules: input.sessionProtocolRules?.map((rule) => rule.trim()).filter(Boolean).length ? input.sessionProtocolRules.map((rule) => rule.trim()).filter(Boolean) : undefined,
     summaryCheckAllowed,
     reflectionCheckContext: summaryCheckAllowed ? input.reflectionCheckContext : undefined,
-    summarizeLastAnswer: summaryCheckAllowed ? input.summarizeLastAnswer : undefined,
+    reflectionsSoFar: input.reflectionsSoFar,
+    explorationAllowed,
+    explorationTurns: input.explorationTurns,
+    patientThemes: input.patientThemes?.length ? input.patientThemes : undefined,
   };
 
   return dialogueContractSchema.parse(contract);

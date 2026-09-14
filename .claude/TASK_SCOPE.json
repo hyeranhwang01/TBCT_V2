@@ -406,5 +406,38 @@
     "followUp2026_09_14_speed": "Same day, by the user ('ㅇㅇ그렇게 고쳐줘'): a save took seconds because the browser ran editWorksheetField itself -- about 20 separate store requests (the full session view with messages/logs/release, then each worksheet write one after another, then a full session and worksheet reload), each through Vercel, Supabase auth and Postgres, while the old words stayed on screen. Now: (1) one POST /api/worksheets/edit (src/app/api/worksheets/edit/route.ts, same caller/ownership check as /api/runtime/turn) runs editWorksheetField with in-process store calls (runWithRuntimeRequestContext); (2) editWorksheetField reads only the session record and runs independent writes in parallel, and ensureTemplateAndInstance loads the instance and field definitions together; (3) the pane shows the new value at once (optimistic query update via src/shared/worksheet/worksheet-edit-client.ts), puts the old value back if the save is refused, and reloads only the worksheet afterwards. Added paths: src/app/api/worksheets/edit/route.ts (new), src/shared/worksheet/worksheet-edit-client.ts (new), src/shared/worksheet/worksheet-edit-client.test.ts (new), src/test/fakes/install-fake-store-fetch.ts.",
     "knownLimitation": "The edit is a read-modify-write on the session record without a row lock; the UI disables editing while a turn is in flight and the server refuses when the session is processing, which leaves only a millisecond window before a turn claim.",
     "regressionPlan": "npx tsc --noEmit; npx vitest run; live check by the user on production (edit a difficulty, remove a line, change a percentage, then continue the chat)."
+  },
+  "note2026_09_15_olivia_persona": {
+    "task": "Research-team feedback after using open dialogue v1 in S01 (2026-09-15): turns are natural, but what the participant brings up does not change where the conversation goes (it returns to the structured 'difficulties' questions); the counselor re-asks almost every answer (2-3 selective confirmations per ~20 turns would do); summaries sometimes add meaning the participant never expressed (semantic fidelity). Their proposal: define a persona up front -- 'Dr. Olivia is a Socratic TBCT conversational agent...'.",
+    "userDecision": "2026-09-15, by the user: apply the persona to all sessions; confirmations are selective, with 'about 4 per session on average preferred' given as guidance and never enforced as a cap; adaptive dialogue through exploration turns, connecting tasks to the participant's words, and a session-long memory of the participant's own phrases.",
+    "supersedes": "note2026_09_14_open_dialogue_v1's 'confirm actively' instruction and its forced summary of every long answer (summarizeLastAnswer and its retry are removed); the prompt line telling Claude to send outside topics to the therapist and return to the task.",
+    "change": "(1) src/shared/dialogue-agent/counselor-persona.ts: the team's persona definition plus operating rules and an order of authority, first in the cached system block of every turn; the name stays internal (PERSONA_NAME_VISIBLE_TO_PARTICIPANT=false) and 'Dr.' is never used with the participant. (2) Selective confirmation: each turn tells Claude how many confirmations this session has had and that about 4 per session is preferred. (3) Exploration turns: a decision may be conversationMove='explore' -- one Socratic follow-up about what the participant said while the next task waits (pendingExploration on the message; the reply is not graded as that task's answer; at most 2 consecutive per task and 6 per session). The recent context Claude sees grows from 4 messages x 240 chars to 12 x 500. (4) patientThemes: up to 5 of the participant's own phrases, returned by Claude, kept only when they appear verbatim in the participant's messages, carried on message metadata and shown every turn. (5) src/shared/dialogue-agent/summary-fidelity.ts: before a confirmation ships, a Claude check compares the summary with the participant's words; added meaning -> one rewrite with feedback, then the approved task text instead (guard_log:summary_added_meaning); a tentative interpretation passes but is never written to the worksheet, nor is any summary the check could not verify. (6) Clarification turns now carry the session manual and tone too.",
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/shared/dialogue-agent/counselor-persona.ts (new)",
+      "src/shared/dialogue-agent/olivia-persona.test.ts (new)",
+      "src/shared/runtime/conversation-steering.ts (new)",
+      "src/shared/runtime/conversation-steering.test.ts (new)",
+      "src/shared/dialogue-agent/summary-fidelity.ts (new)",
+      "src/shared/dialogue-agent/summary-fidelity-client.ts (new)",
+      "src/shared/dialogue-agent/summary-fidelity.test.ts (new)",
+      "src/app/api/summary-fidelity/route.ts (new)",
+      "src/shared/api/adaptive-dialogue-flow.test.ts (new)",
+      "src/shared/dialogue-agent/anthropic-dialogue-agent.ts",
+      "src/shared/dialogue-agent/dialogue-agent-contract.ts",
+      "src/shared/dialogue-agent/dialogue-contract-compiler.ts",
+      "src/shared/dialogue-agent/dialogue-output-validator.ts",
+      "src/shared/dialogue-agent/dialogue-agent-orchestrator.ts",
+      "src/shared/dialogue-agent/summary-check.test.ts",
+      "src/shared/runtime/runtime-orchestrator.ts",
+      "src/shared/api/runtime-execution-api.ts",
+      "src/shared/api/runtime-session-api.ts (free-text box while an exploration question is open)",
+      "src/shared/api/reflection-check-flow.test.ts",
+      "src/test/fakes/dialogue-agent.fake.ts",
+      "src/test/fakes/install-fake-store-fetch.ts",
+      "src/shared/assessment/model-observability.ts (ModelPurpose summary_fidelity)"
+    ],
+    "blastRadius": "All eight sessions' dialogue-agent turns. Step order, completion, safety routing and what an answer stores are unchanged; exploration only delays the next task by at most 2 turns. Without a dialogue provider (tests' default path, AI_PROVIDER=mock audits) nothing explores or summarizes, so transcripts are unchanged.",
+    "regressionPlan": "npx tsc --noEmit; npx vitest run; live S01 run with a key (confirmation count per session, exploration following the participant, no added meaning in summaries, step order kept); after deploy, per-session counts of reflectionCheck / pendingExploration and guard_log:summary_added_meaning in Supabase."
   }
 }

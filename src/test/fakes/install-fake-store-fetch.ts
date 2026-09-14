@@ -10,9 +10,10 @@ import { dispatchFakeSafetyStoreOp, resetFakeSafetyStore } from "@/test/fakes/sa
 import { dispatchFakeProtocolStudioStoreOp, resetFakeProtocolStudioStore } from "@/test/fakes/protocol-studio-store.fake";
 import { dispatchFakeWorksheetStoreOp, resetFakeWorksheetStore } from "@/test/fakes/worksheet-store.fake";
 import { dispatchFakeHomeworkStoreOp, resetFakeHomeworkStore } from "@/test/fakes/homework-store.fake";
-import { dispatchFakeAnswerRelevance, dispatchFakeDialogueAgent } from "@/test/fakes/dialogue-agent.fake";
+import { dispatchFakeAnswerRelevance, dispatchFakeDialogueAgent, dispatchFakeSummaryFidelity } from "@/test/fakes/dialogue-agent.fake";
 import { dialogueContractSchema } from "@/shared/dialogue-agent/dialogue-agent-contract";
 import { answerRelevanceRequestSchema } from "@/shared/dialogue-agent/answer-relevance";
+import { summaryFidelityRequestSchema } from "@/shared/dialogue-agent/summary-fidelity";
 
 // The runtime conversation store now lives in Postgres in production
 // (src/app/api/runtime/session-store/route.ts), reached via fetch() from
@@ -51,6 +52,8 @@ const DIALOGUE_AGENT_ENDPOINT = "/api/dialogue-agent";
 // The answer-relevance check (answer-relevance-client.ts) takes the same
 // browser path under jsdom and is faked under the same flag.
 const ANSWER_RELEVANCE_ENDPOINT = "/api/answer-relevance";
+// So is the summary fidelity check (summary-fidelity-client.ts).
+const SUMMARY_FIDELITY_ENDPOINT = "/api/summary-fidelity";
 // One-request worksheet edits (worksheet-edit-client.ts) take the browser
 // path under jsdom; the route's work runs here against the fake stores.
 const WORKSHEET_EDIT_ENDPOINT = "/api/worksheets/edit";
@@ -86,6 +89,14 @@ export function installFakeStoreFetch(options?: { interceptDialogueAgent?: boole
         const body = JSON.parse(init!.body as string) as { contract: unknown };
         const contract = dialogueContractSchema.parse(body.contract);
         return jsonResponse({ ok: true, data: dispatchFakeDialogueAgent(contract) }, 200);
+      } catch (error) {
+        return errorResponse(error);
+      }
+    }
+    if (interceptDialogueAgent && init?.method === "POST" && url.endsWith(SUMMARY_FIDELITY_ENDPOINT)) {
+      try {
+        const body = JSON.parse(init!.body as string) as { request: unknown };
+        return jsonResponse({ ok: true, data: dispatchFakeSummaryFidelity(summaryFidelityRequestSchema.parse(body.request)) }, 200);
       } catch (error) {
         return errorResponse(error);
       }

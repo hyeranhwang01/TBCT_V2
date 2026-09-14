@@ -134,10 +134,18 @@ export const dialogueContractSchema = z.object({
   // the previous summary -- carries that summary so Claude revises it against
   // their correction instead of repeating it.
   reflectionCheckContext: z.object({ previousSummary: z.string(), attempt: z.number().int().min(1) }).optional(),
-  // Set when the participant's last answer was long (src/shared/runtime/long-answer.ts):
-  // this turn must summarize it and ask whether that is right. `retry` marks
-  // the one repeat request after a reply that did not summarize.
-  summarizeLastAnswer: z.object({ field: z.string(), originalValue: z.string(), retry: z.boolean().optional() }).optional(),
+  // Counselor persona (.claude/TASK_SCOPE.json note2026_09_15_olivia_persona).
+  // Confirmations opened so far this session -- guidance for selective
+  // reflection, never a limit.
+  reflectionsSoFar: z.number().int().min(0).optional(),
+  // True when this turn may hold the task for one follow-up question about
+  // what the participant said (conversation-steering.ts), within the limits.
+  explorationAllowed: z.boolean().optional(),
+  explorationTurns: z.object({ step: z.number().int().min(0), session: z.number().int().min(0) }).optional(),
+  // The participant's own key phrases so far this session.
+  patientThemes: z.array(z.string()).optional(),
+  // Set on a rewrite after the summary fidelity check found added meaning.
+  fidelityFeedback: z.string().optional(),
 });
 export type DialogueContract = z.infer<typeof dialogueContractSchema>;
 
@@ -232,6 +240,14 @@ export const dialogueDecisionSchema = z.object({
   // change to an already-recorded value this turn asks the participant about;
   // applied only after they say yes (src/shared/runtime/field-correction.ts).
   proposedCorrection: fieldCorrectionSchema.optional(),
+  // Adaptive dialogue (note2026_09_15_olivia_persona), internal only.
+  // "explore": this turn is a follow-up question about what the participant
+  // said and the task waits; "advance" (or absent): the turn asks the task.
+  conversationMove: z.enum(["advance", "explore"]).optional(),
+  // The updated list of the participant's own key phrases; the orchestrator
+  // keeps only words they really said. Lenient bounds here so an overlong
+  // list never discards the whole turn.
+  patientThemes: z.array(z.string().max(300)).max(20).optional(),
 });
 export type DialogueDecision = z.infer<typeof dialogueDecisionSchema>;
 

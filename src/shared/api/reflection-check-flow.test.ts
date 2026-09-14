@@ -3,7 +3,7 @@ import { createCanonicalTestRuntimeSession, getPatientRuntimeSession, getRuntime
 import { startRuntimeSession, submitPatientInput } from "@/shared/api/runtime-execution-api";
 import { getLocalDb } from "@/shared/data/db/tbct-local-db";
 import { getWorksheetView } from "@/shared/worksheet/worksheet-projection";
-import { SUMMARY_CHECK_TRIGGER, fakeSummaryText } from "@/test/fakes/dialogue-agent.fake";
+import { ADDED_MEANING_TRIGGER, SUMMARY_CHECK_TRIGGER, TENTATIVE_TRIGGER, fakeSummaryText } from "@/test/fakes/dialogue-agent.fake";
 import type { RuntimeMessage } from "@/types/runtime-session";
 
 // Confirmation re-asks end to end through the real turn pipeline with the
@@ -154,6 +154,29 @@ describe("Confirmation re-asks: an assistant summary is confirmed before the ses
     const worksheet = await getWorksheetView(sessionId, "tbct-s03");
     const field = worksheet?.fields.find((item) => item.definition.canonicalFieldKey === "automaticThought");
     expect(field?.value).toMatchObject({ value: summary, status: "participant_confirmed", provenance: "participant_confirmed_summary", participantVerbatim: LONG_THOUGHT });
+  }, 20_000);
+
+  // Summary fidelity (note2026_09_15_olivia_persona).
+  it("a summary that adds meaning the participant did not express is never shown: the approved task is asked instead", async () => {
+    const sessionId = await reachSummaryCheck(`${THOUGHT} ${ADDED_MEANING_TRIGGER}`);
+    const turn = lastAssistant((await current(sessionId)).messages);
+    expect(turn.metadata?.reflectionCheck).toBeUndefined();
+    expect(turn.content).not.toContain("정리하면");
+  }, 20_000);
+
+  it("a summary holding a tentative interpretation can be confirmed, but is never written to the record", async () => {
+    const tentative = `${LONG_THOUGHT} ${TENTATIVE_TRIGGER}`;
+    const sessionId = await reachSummaryCheck(tentative);
+    let view = await current(sessionId);
+    const check = lastAssistant(view.messages).metadata?.reflectionCheck as Record<string, unknown> | undefined;
+    expect(check).toMatchObject({ status: "pending" });
+    expect(check?.summaryTarget).toBeUndefined();
+
+    await submitPatientInput(sessionId, { kind: "text", value: "네" });
+    view = await current(sessionId);
+    expect(view.session.runtimeContext.fields.automaticThought).toBe(tentative);
+    expect(lastAssistant(view.messages).metadata?.reflectionCheckResolution).toMatchObject({ outcome: "confirmed" });
+    expect((lastAssistant(view.messages).metadata?.reflectionCheckResolution as Record<string, unknown>).recordedSummary).toBeUndefined();
   }, 20_000);
 
   it("a structured answer to the held-back prompt (a rating) is processed as that prompt's answer, not as a reply to the check", async () => {

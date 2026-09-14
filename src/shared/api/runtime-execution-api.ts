@@ -21,6 +21,7 @@ import { resolveBracketPlaceholders, resolveStaticPatientMessage } from "@/share
 import { REFLECTION_ASK_AGAIN, REFLECTION_MOVE_ON, classifyReflectionCheckReply, findPendingReflectionCheck, reflectionText, type PendingReflectionCheck, type ReflectionCheckResolution } from "@/shared/runtime/reflection-check";
 import { applyConfirmedSummaryToFields, confirmedSummaryKey, confirmedSummaryRecord, resolveLongAnswerSummaryTarget } from "@/shared/runtime/long-answer";
 import { applyFieldCorrection, confirmedSummariesAfterCorrection } from "@/shared/runtime/field-correction";
+import { findPendingExploration, type PendingExploration } from "@/shared/runtime/conversation-steering";
 import { applyS01TurnRules } from "@/patient/sessions/s01/turn-rules";
 import { composeCrpPlanSummary } from "@/patient/sessions/s07/messages";
 import { composeTrialClosingSummary } from "@/patient/sessions/s08/messages";
@@ -348,6 +349,7 @@ async function deliverClarificationTurn(input: {
   // An off-topic message goes through the dialogue agent the same way: it
   // acknowledges the message briefly and asks the same question again.
   if ((input.reason === "insufficient_input" || input.reason === "off_topic" || input.reason === "correction_request") && isDialogueAgentEnabled(input.node.sessionId)) {
+    const sessionPolicy = loadRuntimeRelease(input.release).policies.sessionPolicies?.[input.session.sessionDefinitionId];
     dialogueOutcome = await resolveDialogueAgentMessage({
       session: input.session,
       node: input.node,
@@ -364,6 +366,10 @@ async function deliverClarificationTurn(input: {
       // runtime-orchestrator.ts).
       isFirstPromptOfNode: false,
       isFirstPromptOfSession: false,
+      // The persona is in every prompt; the session manual and tone now come
+      // along on these turns too (note2026_09_15_olivia_persona).
+      sessionToneGuidance: sessionPolicy?.toneGuidance,
+      sessionProtocolRules: sessionPolicy?.protocolRules,
       summaryCheckAllowed: input.allowConfirmation === true,
     });
     content = dialogueOutcome.patientMessage;
@@ -387,7 +393,7 @@ async function deliverClarificationTurn(input: {
     sourceEvidenceIds: [],
     createdAt: new Date().toISOString(),
     deliveredAt: new Date().toISOString(),
-    metadata: { turnId: makeId("TURN"), turnOutcome: "clarification", clarificationReason: input.reason, dialogueDecision: dialogueOutcome?.decision ?? undefined, dialogueFallbackUsed: dialogueOutcome?.usedFallback, reflectionCheck: confirmation },
+    metadata: { turnId: makeId("TURN"), turnOutcome: "clarification", clarificationReason: input.reason, dialogueDecision: dialogueOutcome?.decision ?? undefined, dialogueFallbackUsed: dialogueOutcome?.usedFallback, reflectionCheck: confirmation, patientThemes: dialogueOutcome?.patientThemes },
   };
   const outputValidation = deterministicValidation(content);
   await commitRuntimeAssistantTurn({
@@ -865,7 +871,9 @@ async function deliverReflectionCheckReplyTurn(input: {
     // might neither re-confirm nor ask the task.
     if (dialogueOutcome.summaryCheck) {
       content = dialogueOutcome.patientMessage;
-      nextCheck = { ...check, attempt: check.attempt + 1, summaryText: dialogueOutcome.summaryCheck.summaryText, askedAgain: false };
+      // A revised summary that holds a tentative interpretation, or could
+      // not be verified, is no longer one a "yes" may write to the record.
+      nextCheck = { ...check, attempt: check.attempt + 1, summaryText: dialogueOutcome.summaryCheck.summaryText, askedAgain: false, ...(dialogueOutcome.summaryCheck.recordable === false ? { summaryTarget: undefined } : {}) };
     } else {
       resolution = leaveAsParticipantWords;
     }
@@ -883,7 +891,7 @@ async function deliverReflectionCheckReplyTurn(input: {
     sourceEvidenceIds: [],
     createdAt: new Date().toISOString(),
     deliveredAt: new Date().toISOString(),
-    metadata: { turnId: makeId("TURN"), turnOutcome: "reflection_check", reflectionReply: reply, reflectionCheck: nextCheck, reflectionCheckResolution: resolution, dialogueDecision: dialogueOutcome?.decision ?? undefined, dialogueFallbackUsed: dialogueOutcome?.usedFallback },
+    metadata: { turnId: makeId("TURN"), turnOutcome: "reflection_check", reflectionReply: reply, reflectionCheck: nextCheck, reflectionCheckResolution: resolution, patientThemes: dialogueOutcome?.patientThemes, dialogueDecision: dialogueOutcome?.decision ?? undefined, dialogueFallbackUsed: dialogueOutcome?.usedFallback },
   };
   const outputValidation = deterministicValidation(content);
   const usedDialogueAgent = Boolean(dialogueOutcome && !dialogueOutcome.usedFallback && !dialogueOutcome.excludedBySafety);
@@ -951,6 +959,135 @@ async function deliverReflectionCheckReplyTurn(input: {
     }
   }
   return { assistantMessage, sessionStatus: "waiting_for_input" as RuntimeSessionStatus, reply, resolution };
+}
+
+// Adaptive dialogue (.claude/TASK_SCOPE.json note2026_09_15_olivia_persona):
+// the participant's reply to a follow-up question about what they said, while
+// the task waits. Nothing is extracted into the task's field for it. The
+// dialogue agent either explores once more (within the limits in
+// counselor-persona.ts) or asks the waiting task, connected to what they said.
+// Without the dialogue agent, or on a fallback, the task is asked as approved.
+async function deliverExplorationReplyTurn(input: {
+  session: RuntimeSession;
+  node: ClinicalStageNode;
+  promptItem: PromptItem;
+  runtimePromptItem: import("@/types/protocol-runtime").RuntimePromptItem;
+  runtimeState: NonNullable<RuntimeSession["runtimeState"]>;
+  patientMessage: RuntimeMessage;
+  pending: PendingExploration;
+  recentMessages: RuntimeMessage[];
+  sessionToneGuidance?: string;
+  sessionProtocolRules?: string[];
+}) {
+  const locale = input.session.locale;
+  const taskText = resolveBracketPlaceholders(
+    resolveStaticPatientMessage(input.promptItem, locale, input.session.runtimeContext)?.patientMessage
+      ?? resolvePromptLocaleText(input.runtimePromptItem.id, input.runtimePromptItem.fallbackPatientText, locale),
+    input.session.runtimeContext,
+  );
+  const runtimeContext: RuntimeSession["runtimeContext"] = { ...input.session.runtimeContext, lastPatientMessage: input.patientMessage.content };
+  const dialogueOutcome = isDialogueAgentEnabled(input.node.sessionId)
+    ? await resolveDialogueAgentMessage({
+        session: { ...input.session, runtimeContext },
+        node: input.node,
+        sourcePromptItem: input.promptItem,
+        runtimePromptItem: input.runtimePromptItem,
+        lastParticipantMessage: input.patientMessage.content,
+        recentMessages: input.recentMessages,
+        clarificationAttemptCount: input.session.runtimeContext.clarificationAttemptCount ?? 0,
+        turnId: makeId("TURN"),
+        currentTaskTextOverride: taskText,
+        deterministicFallbackText: taskText,
+        isFirstPromptOfNode: false,
+        isFirstPromptOfSession: false,
+        sessionToneGuidance: input.sessionToneGuidance,
+        sessionProtocolRules: input.sessionProtocolRules,
+        summaryCheckAllowed: true,
+        explorationAllowed: true,
+        explorationTurnsInStep: input.pending.turn,
+      })
+    : null;
+  const content = dialogueOutcome?.patientMessage ?? taskText;
+  const assistantMessageId = makeId("RMSG");
+  const nextExploration: PendingExploration | undefined = dialogueOutcome?.exploration
+    ? { ...input.pending, turn: input.pending.turn + 1 }
+    : undefined;
+  // A summary here is of a reply that fills no field, so nothing is recorded
+  // from it -- the check only confirms understanding.
+  const reflectionCheck: PendingReflectionCheck | undefined = dialogueOutcome?.summaryCheck
+    ? { status: "pending", checkId: assistantMessageId, attempt: 1, summaryText: dialogueOutcome.summaryCheck.summaryText, ...(dialogueOutcome.summaryCheck.correction ? { correction: dialogueOutcome.summaryCheck.correction } : {}) }
+    : undefined;
+  const assistantMessage: RuntimeMessage = {
+    id: assistantMessageId,
+    runtimeSessionId: input.session.id,
+    role: "assistant",
+    content,
+    status: "validated",
+    nodeId: input.node.id,
+    promptItemId: input.promptItem.id,
+    sourceEvidenceIds: [],
+    createdAt: new Date().toISOString(),
+    deliveredAt: new Date().toISOString(),
+    metadata: { turnId: makeId("TURN"), turnOutcome: "exploration", explorationReplyTo: input.pending.explorationId, pendingExploration: nextExploration, reflectionCheck, patientThemes: dialogueOutcome?.patientThemes, dialogueDecision: dialogueOutcome?.decision ?? undefined, dialogueFallbackUsed: dialogueOutcome?.usedFallback },
+  };
+  const outputValidation = deterministicValidation(content);
+  const usedDialogueAgent = Boolean(dialogueOutcome && !dialogueOutcome.usedFallback && !dialogueOutcome.excludedBySafety);
+  await commitRuntimeAssistantTurn({
+    sessionId: input.session.id,
+    assistantMessage,
+    providerEvent: {
+      id: makeId("RPE"),
+      runtimeSessionId: input.session.id,
+      provider: usedDialogueAgent && dialogueOutcome ? dialogueOutcome.provider : "deterministic",
+      model: usedDialogueAgent && dialogueOutcome ? (dialogueOutcome.model ?? "dialogue-agent") : "runtime-exploration",
+      nodeId: input.node.id,
+      promptItemId: input.promptItem.id,
+      inputSummary: `exploration_reply:${input.pending.turn}`,
+      outputText: content,
+      createdAt: new Date().toISOString(),
+      dialogueResponseType: dialogueOutcome?.decision?.responseType,
+      dialogueParticipantResponseState: dialogueOutcome?.decision?.participantResponseState,
+      dialogueFallbackUsed: dialogueOutcome?.usedFallback,
+    },
+    validationEvent: {
+      id: makeId("RVE"),
+      runtimeSessionId: input.session.id,
+      nodeId: input.node.id,
+      promptItemId: input.promptItem.id,
+      ...outputValidation,
+      issues: [...outputValidation.issues, ...(dialogueOutcome?.guardLogs ?? [])],
+      createdAt: new Date().toISOString(),
+    },
+    trace: createRuntimeExecutionTrace({
+      runtimeSessionId: input.session.id,
+      releaseId: input.session.releaseId,
+      nodeId: input.node.id,
+      promptItemId: input.promptItem.id,
+      roleId: input.runtimePromptItem.roleId,
+      provider: "deterministic",
+      model: "runtime-exploration",
+      contractHash: `exploration:${input.session.id}:${input.promptItem.id}`,
+      validation: outputValidation,
+      fallbackUsed: false,
+      transitionDecision: "clarification",
+      stateChanges: { activeNodeId: input.node.id, activePromptItemId: input.promptItem.id },
+      fidelityEvidence: {
+        locale: input.session.locale,
+        patientFacingText: content,
+        activePromptMatches: true,
+        patientInputPresent: true,
+      },
+    }),
+    sessionPatch: {
+      runtimeContext,
+      currentNodeId: input.node.id,
+      currentPromptItemId: input.promptItem.id,
+      runtimeState: input.runtimeState,
+      promptProgressionReason: "clarification_sent",
+      status: "waiting_for_input",
+    },
+  });
+  return { assistantMessage, sessionStatus: "waiting_for_input" as RuntimeSessionStatus, explored: Boolean(nextExploration) };
 }
 
 async function deliverSafetyOverrideTurn(input: {
@@ -1646,6 +1783,12 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
   // (a rating, a choice) is an answer to the held-back prompt itself and is
   // processed as usual.
   const pendingReflectionCheck = patientInput.kind === "text" || patientInput.kind === "boolean" ? findPendingReflectionCheck(initialView.messages) : undefined;
+  // Adaptive dialogue (.claude/TASK_SCOPE.json note2026_09_15_olivia_persona):
+  // the last turn asked a follow-up about what the participant said while the
+  // task waits, so this reply answers that question, not the task
+  // (deliverExplorationReplyTurn) -- handled like a reply to a summary check.
+  const pendingExploration = !pendingReflectionCheck && patientInput.kind === "text" ? findPendingExploration(initialView.messages) : undefined;
+  const repliesToConversation = Boolean(pendingReflectionCheck || pendingExploration);
   const clientTurnId = options.clientTurnId ?? makeId("TURN");
   const patientMessage: RuntimeMessage = {
     id: makeId("RMSG"),
@@ -1657,16 +1800,16 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
     promptItemId: currentPromptItem.id,
     createdAt: new Date().toISOString(),
     deliveredAt: new Date().toISOString(),
-    metadata: { inputKind: patientInput.kind, promptItemId: currentPromptItem.id, clientTurnId },
+    metadata: { inputKind: patientInput.kind, promptItemId: currentPromptItem.id, clientTurnId, ...(pendingExploration ? { explorationReplyTo: pendingExploration.explorationId } : {}) },
   };
-  const baseExtracted = await extractRuntimeState({ patientInput, currentNode, currentPromptItem, currentContext: initialSession.runtimeContext, locale: turnLocale, pendingReflectionCheck: Boolean(pendingReflectionCheck) });
+  const baseExtracted = await extractRuntimeState({ patientInput, currentNode, currentPromptItem, currentContext: initialSession.runtimeContext, locale: turnLocale, pendingReflectionCheck: repliesToConversation });
   // S01 redesign (.claude/TASK_SCOPE.json note2026_09_12_s01_redesign): the
   // only S01-specific hook in the shared turn pipeline -- answer-routing
   // flags, the three-person scene and its hints, written into the extracted
   // fields so this same turn's conditions, worksheet projection and commit
   // all see them. Skipped for a reply to a pending summary check (not an
   // answer to the prompt) and, inside, for any turn carrying risk signals.
-  let s01Rules = initialSession.sessionDefinitionId === "tbct-s01" && !pendingReflectionCheck
+  let s01Rules = initialSession.sessionDefinitionId === "tbct-s01" && !repliesToConversation
     ? await applyS01TurnRules({ extracted: baseExtracted, promptItem: currentPromptItem, rawText: patientMessage.content, locale: turnLocale, sessionId, turnId: clientTurnId })
     : null;
   let extracted = s01Rules ? s01Rules.extracted : baseExtracted;
@@ -1685,7 +1828,7 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
   // A list item can be one short word -- and so can a typo that means
   // "nothing more" ("읎오"), which is why list answers are checked even when short.
   const isListAnswer = answerInputType === "ordered_list" || (Boolean(answeredField) && Array.isArray(extracted.fields[answeredField]));
-  const checksRelevance = !pendingReflectionCheck
+  const checksRelevance = !repliesToConversation
     && answerText.length > (isListAnswer ? 1 : 3)
     && extracted.riskSignals.length === 0
     && Boolean(answeredField) && !extracted.missingFields.includes(answeredField)
@@ -1723,7 +1866,7 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
   // marked on the participant's own message, so the next assistant turn
   // summarizes it for them to confirm (runtime-orchestrator.ts). Never for a
   // reply to an open check, an off-topic message, or a turn carrying risk signals.
-  const longAnswerSummaryTarget = !pendingReflectionCheck && !offTopicAnswer && extracted.riskSignals.length === 0 && patientInput.kind === "text" && typeof patientInput.value === "string"
+  const longAnswerSummaryTarget = !repliesToConversation && !offTopicAnswer && extracted.riskSignals.length === 0 && patientInput.kind === "text" && typeof patientInput.value === "string"
     ? resolveLongAnswerSummaryTarget({ sessionDefinitionId: initialSession.sessionDefinitionId, locale: turnLocale, promptItem: currentPromptItem, answerText: patientInput.value, fields: extracted.fields })
     : undefined;
   if (longAnswerSummaryTarget) patientMessage.metadata = { ...patientMessage.metadata, longAnswerSummaryTarget };
@@ -1848,6 +1991,24 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
     void saveRuntimeLog(makeLog(sessionId, "input", "completed", `Participant replied to a summary check (${reflectionReply.reply}${reflectionReply.resolution ? `, ${reflectionReply.resolution.outcome}` : ", still open"})`, { nodeId: currentNode.id })).catch(() => {});
     void createRuntimeCheckpoint(sessionId).catch(() => {});
     return { sessionId, previousNodeId: session.previousNodeId, currentNodeId: currentNode.id, currentPromptItemId: currentPromptItem.id, stateExtraction: extracted, safetyResult, generatedMessage: reflectionReply.assistantMessage, turnOutcome: "clarification", fallbackUsed: false, sessionStatus: reflectionReply.sessionStatus, logIds: [] };
+  }
+  // Adaptive dialogue: same place and the same precedence as a summary-check reply.
+  if (pendingExploration && !safetyResult.triggered) {
+    const explorationReply = await deliverExplorationReplyTurn({
+      session,
+      node: currentNode,
+      promptItem: currentPromptItem,
+      runtimePromptItem: activeStep.promptItem,
+      runtimeState,
+      patientMessage,
+      pending: pendingExploration,
+      recentMessages: [...view.messages, patientMessage],
+      sessionToneGuidance: runtimeRelease.policies.sessionPolicies?.[session.sessionDefinitionId]?.toneGuidance,
+      sessionProtocolRules: runtimeRelease.policies.sessionPolicies?.[session.sessionDefinitionId]?.protocolRules,
+    });
+    void saveRuntimeLog(makeLog(sessionId, "input", "completed", `Participant replied to an exploration question (${explorationReply.explored ? "explored further" : "task asked"})`, { nodeId: currentNode.id })).catch(() => {});
+    void createRuntimeCheckpoint(sessionId).catch(() => {});
+    return { sessionId, previousNodeId: session.previousNodeId, currentNodeId: currentNode.id, currentPromptItemId: currentPromptItem.id, stateExtraction: extracted, safetyResult, generatedMessage: explorationReply.assistantMessage, turnOutcome: "clarification", fallbackUsed: false, sessionStatus: explorationReply.sessionStatus, logIds: [] };
   }
   // P0-5, checked before the normal missing-fields/clarification branch below
   // for the same reason as the language-switch check above: "뭘요?" / "왜

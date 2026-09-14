@@ -1,5 +1,6 @@
 import type { DialogueAgentResult, DialogueContract, DialogueDecision } from "@/shared/dialogue-agent/dialogue-agent-contract";
 import type { AnswerRelevanceRequest, AnswerRelevanceResult } from "@/shared/dialogue-agent/answer-relevance";
+import type { SummaryFidelityRequest, SummaryFidelityResult } from "@/shared/dialogue-agent/summary-fidelity";
 
 /** Tests put this in a participant message to make the fake answer with a
  * confirmation turn (see fakeDialogueDecision). */
@@ -11,6 +12,22 @@ export const SUMMARY_CHECK_TRIGGER = "#요약확인";
 export const OFF_TOPIC_TRIGGER = "#엉뚱";
 export const STOP_SIGNAL_TRIGGER = "#끝";
 export const CORRECTION_TRIGGER = "#정정";
+
+/** Counselor persona (note2026_09_15_olivia_persona) test triggers:
+ * EXPLORE_TRIGGER makes the fake explore when the turn allows it;
+ * "#주제:<phrase>#" returns <phrase> as a participant theme; a summary that
+ * carries ADDED_MEANING_TRIGGER or TENTATIVE_TRIGGER is judged by the fake
+ * fidelity check as adding meaning or as holding a tentative interpretation. */
+export const EXPLORE_TRIGGER = "#탐색";
+export const ADDED_MEANING_TRIGGER = "#덧붙임";
+export const TENTATIVE_TRIGGER = "#잠정";
+export const FAKE_EXPLORATION_QUESTION = { ko: "그 이야기를 조금 더 들려주시겠어요?", en: "Could you tell me a little more about that?" };
+
+/** Stand-in for the Claude summary fidelity check (summary-fidelity.ts). */
+export function dispatchFakeSummaryFidelity(request: SummaryFidelityRequest): SummaryFidelityResult {
+  if (request.summary.includes(ADDED_MEANING_TRIGGER)) return { faithful: false, checked: true, tentative: false, addedMeaning: "fake: added meaning" };
+  return { faithful: true, checked: true, tentative: request.summary.includes(TENTATIVE_TRIGGER) };
+}
 
 /** Stand-in for the Claude answer-relevance check (answer-relevance.ts):
  * every message is an answer unless a test marks it otherwise. */
@@ -37,12 +54,18 @@ export function fakeSummaryText(locale: string, said: string) {
 // actual state decisions) -- it is not a substitute for judging real
 // dialogue quality, which needs the live model (see the manual S03 QA pass).
 export function fakeDialogueDecision(contract: DialogueContract): DialogueDecision {
+  const decision = baseFakeDecision(contract);
+  const themes = [...(contract.lastParticipantMessage ?? "").matchAll(/#주제:([^#]+)#/g)].map((match) => match[1].trim());
+  return themes.length ? { ...decision, patientThemes: themes } : decision;
+}
+
+function baseFakeDecision(contract: DialogueContract): DialogueDecision {
   const message = (contract.lastParticipantMessage ?? "").trim();
   const lower = message.toLowerCase();
 
-  // Confirmation re-ask (open dialogue v1, note2026_09_14): a real Claude
-  // decides for itself when to confirm, and is asked to summarize every long
-  // answer. This fake only confirms when a test asks it to (SUMMARY_CHECK_TRIGGER
+  // Confirmation re-ask (open dialogue v1, note2026_09_14, made selective by
+  // note2026_09_15_olivia_persona): a real Claude decides for itself when to
+  // confirm. This fake only confirms when a test asks it to (SUMMARY_CHECK_TRIGGER
   // in the participant's message) or when revising a summary the participant
   // corrected -- so every other test's transcript is unchanged.
   // Field corrections (note2026_09_14_field_corrections): on the correction
@@ -71,6 +94,16 @@ export function fakeDialogueDecision(contract: DialogueContract): DialogueDecisi
       patientFacingMessage: contract.locale.toLowerCase().startsWith("ko") ? `${reflectionText}, 이렇게 이해하면 될까요?` : `${reflectionText} -- did I get that right?`,
       reflectionText,
       needsConfirmation: true,
+      keepCurrentNode: true,
+      participantResponseState: "valid_answer",
+    };
+  }
+
+  if (contract.explorationAllowed && message.includes(EXPLORE_TRIGGER)) {
+    return {
+      responseType: "reflect_and_ask",
+      patientFacingMessage: contract.locale.toLowerCase().startsWith("ko") ? FAKE_EXPLORATION_QUESTION.ko : FAKE_EXPLORATION_QUESTION.en,
+      conversationMove: "explore",
       keepCurrentNode: true,
       participantResponseState: "valid_answer",
     };
