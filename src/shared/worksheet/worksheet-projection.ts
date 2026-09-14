@@ -23,7 +23,7 @@
 
 import { getRuntimeSession, listRuntimeSessions, listRuntimeSessionsForParticipant } from "@/shared/api/runtime-session-api";
 import { listRuntimeParticipants } from "@/shared/api/participant-api";
-import { updateRuntimeSessionRecord } from "@/shared/data/repositories/runtime-session-repository";
+import { getRuntimeSessionRecord, updateRuntimeSessionRecord } from "@/shared/data/repositories/runtime-session-repository";
 import { TBCT_SOURCE_TEXT_HASH } from "@/shared/protocol/tbct-source-text.generated";
 import { getWorksheetBindings, hasWorksheetBindings } from "@/shared/worksheet/worksheet-binding-registry";
 import {
@@ -64,8 +64,10 @@ async function ensureTemplateAndInstance(runtimeSessionId: string, sessionDefini
       sourceSection: binding.sourceSection,
     })),
   });
-  const instance = await ensureWorksheetInstance(runtimeSessionId, templateVersion.id);
-  const fieldDefinitions = await listWorksheetFieldDefinitions(templateVersion.id);
+  const [instance, fieldDefinitions] = await Promise.all([
+    ensureWorksheetInstance(runtimeSessionId, templateVersion.id),
+    listWorksheetFieldDefinitions(templateVersion.id),
+  ]);
   return { templateVersion, instance, fieldDefinitions };
 }
 
@@ -444,9 +446,10 @@ export async function editWorksheetField(runtimeSessionId: string, sessionDefini
   if (!binding) throw new Error(`Unknown worksheet field ${worksheetFieldKey} for ${sessionDefinitionId}`);
   if (binding.assistantMustNotSupply === false && binding.participantOwned === false) throw new WorksheetEditError("not_editable");
 
-  const view = await getRuntimeSession(runtimeSessionId);
-  if (!view) throw new Error("Runtime session not found");
-  const { session } = view;
+  // The session record alone -- not getRuntimeSession's full view with its
+  // messages, logs and release (followUp2026_09_14_speed).
+  const session = await getRuntimeSessionRecord(runtimeSessionId);
+  if (!session) throw new Error("Runtime session not found");
   // A turn in flight commits the fields it read before this edit, which
   // would silently undo it.
   if (session.status === "processing" || session.pendingTurnId !== undefined) throw new WorksheetEditError("turn_in_progress");
@@ -465,12 +468,13 @@ export async function editWorksheetField(runtimeSessionId: string, sessionDefini
     if (fields[name] === undefined) delete stateFields[name];
     else stateFields[name] = fields[name];
   }
-  await updateRuntimeSessionRecord(runtimeSessionId, {
-    runtimeContext: { ...session.runtimeContext, fields, confirmedSummaries: confirmedSummariesAfterWorksheetEdit(session.runtimeContext.confirmedSummaries, key, edit.after) },
-    ...(session.runtimeState ? { runtimeState: { ...session.runtimeState, fields: stateFields } } : {}),
-  });
-
-  const { instance, fieldDefinitions } = await ensureTemplateAndInstance(runtimeSessionId, sessionDefinitionId);
+  const [, { instance, fieldDefinitions }] = await Promise.all([
+    updateRuntimeSessionRecord(runtimeSessionId, {
+      runtimeContext: { ...session.runtimeContext, fields, confirmedSummaries: confirmedSummariesAfterWorksheetEdit(session.runtimeContext.confirmedSummaries, key, edit.after) },
+      ...(session.runtimeState ? { runtimeState: { ...session.runtimeState, fields: stateFields } } : {}),
+    }),
+    ensureTemplateAndInstance(runtimeSessionId, sessionDefinitionId),
+  ]);
   const definition = fieldDefinitions.find((item) => item.worksheetFieldKey === worksheetFieldKey)!;
   // An emptied box has no field any more; "" keeps the stored row reading as
   // empty (an undefined value would be dropped from the patch and leave the
@@ -479,10 +483,12 @@ export async function editWorksheetField(runtimeSessionId: string, sessionDefini
   const fieldValue = await upsertWorksheetFieldValue(instance.id, definition.id, {
     status: "participant_edited", provenance: "participant_verbatim", value, displayValue: displayValueFor(value),
   });
-  if (Array.isArray(value)) {
-    await replaceWorksheetCollectionItems(fieldValue.id, value.map((item) => ({ value: item, displayValue: String(item), status: "participant_edited" as WorksheetFieldStatus, provenance: "participant_verbatim" as WorksheetFieldProvenance })));
-  }
-  await appendWorksheetFieldRevision({ fieldValueId: fieldValue.id, status: "participant_edited", provenance: "participant_verbatim", snapshot: value });
-  await appendWorksheetEvent(instance.id, "field_edited", { worksheetFieldKey, before: edit.before ?? null, after: edit.after ?? null });
+  await Promise.all([
+    Array.isArray(value)
+      ? replaceWorksheetCollectionItems(fieldValue.id, value.map((item) => ({ value: item, displayValue: String(item), status: "participant_edited" as WorksheetFieldStatus, provenance: "participant_verbatim" as WorksheetFieldProvenance })))
+      : undefined,
+    appendWorksheetFieldRevision({ fieldValueId: fieldValue.id, status: "participant_edited", provenance: "participant_verbatim", snapshot: value }),
+    appendWorksheetEvent(instance.id, "field_edited", { worksheetFieldKey, before: edit.before ?? null, after: edit.after ?? null }),
+  ]);
   return fieldValue;
 }

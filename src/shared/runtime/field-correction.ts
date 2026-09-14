@@ -97,7 +97,7 @@ export function applyFieldCorrection(fields: Record<string, unknown>, correction
 
 export type WorksheetEditIssue = "invalid_number" | "removes_selected_item";
 
-function normalizeWorksheetEditValue(valueType: string, raw: unknown): { value: unknown } | { issue: WorksheetEditIssue } {
+export function normalizeWorksheetEditValue(valueType: string, raw: unknown): { value: unknown } | { issue: WorksheetEditIssue } {
   if (valueType === "text_list") {
     const items = Array.isArray(raw) ? raw : String(raw ?? "").split("\n");
     return { value: items.map((item) => String(item).trim()).filter(Boolean) };

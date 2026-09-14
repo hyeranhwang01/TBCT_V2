@@ -1,8 +1,10 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createCanonicalTestRuntimeSession, getRuntimeSession } from "@/shared/api/runtime-session-api";
 import { startRuntimeSession, submitPatientInput } from "@/shared/api/runtime-execution-api";
 import { getLocalDb } from "@/shared/data/db/tbct-local-db";
-import { editWorksheetField, getWorksheetView } from "@/shared/worksheet/worksheet-projection";
+import { getWorksheetView } from "@/shared/worksheet/worksheet-projection";
+import { saveWorksheetEdit } from "@/shared/worksheet/worksheet-edit-client";
+import { RUNTIME_STORE_ENDPOINT } from "@/shared/runtime/runtime-store-ops";
 import { updateRuntimeSessionRecord } from "@/shared/data/repositories/runtime-session-repository";
 import { s01PromptSlug } from "@/patient/sessions/s01/turn-rules";
 import { CORRECTION_TRIGGER, STOP_SIGNAL_TRIGGER } from "@/test/fakes/dialogue-agent.fake";
@@ -48,6 +50,10 @@ async function reachOtherDifficulty() {
 }
 
 describe("Field corrections: wrong entries are kept off, or taken back with the participant's agreement", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   beforeEach(async () => {
     const db = getLocalDb();
     await db.transaction("rw", db.tables, async () => {
@@ -108,7 +114,18 @@ describe("Field corrections: wrong entries are kept off, or taken back with the 
   it("a box the participant rewrites on the worksheet changes what the conversation goes on with, and later turns keep it", async () => {
     const sessionId = await reachOtherDifficulty();
     await submitPatientInput(sessionId, { kind: "text", value: "읎오" });
-    await editWorksheetField(sessionId, "tbct-s01", "s01Problems", ["졸리다", "밤에 잠을 못 자요"]);
+    // One request; the session is read as a bare record, never the full view
+    // with its messages and logs (followUp2026_09_14_speed).
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    await saveWorksheetEdit({ runtimeSessionId: sessionId, sessionDefinitionId: "tbct-s01", worksheetFieldKey: "s01Problems", value: ["졸리다", "밤에 잠을 못 자요"] });
+    const calls = fetchSpy.mock.calls.map(([url, init]) => ({ path: new URL(String(url), "http://localhost:3000").pathname, op: init?.body ? (JSON.parse(String(init.body)) as { op?: string }).op : undefined }));
+    fetchSpy.mockRestore();
+    expect(calls[0].path).toBe("/api/worksheets/edit");
+    // The previous turn's checkpoint write can still be finishing here, so
+    // only the edit's own session reads are pinned: the record, never a list.
+    const sessionOps = calls.filter((call) => call.path === RUNTIME_STORE_ENDPOINT).map((call) => call.op ?? "");
+    expect(sessionOps).toEqual(expect.arrayContaining(["getSession", "updateSession"]));
+    expect(sessionOps.filter((op) => op.startsWith("list"))).toEqual([]);
 
     let view = await current(sessionId);
     expect(view.session.runtimeContext.fields.s01Problems).toEqual(["졸리다", "밤에 잠을 못 자요"]);
@@ -130,7 +147,7 @@ describe("Field corrections: wrong entries are kept off, or taken back with the 
   it("a worksheet edit is refused while a reply is being prepared", async () => {
     const sessionId = await reachOtherDifficulty();
     await updateRuntimeSessionRecord(sessionId, { status: "processing" });
-    await expect(editWorksheetField(sessionId, "tbct-s01", "s01Problems", ["바뀐 값"])).rejects.toThrow("worksheet_edit:turn_in_progress");
+    await expect(saveWorksheetEdit({ runtimeSessionId: sessionId, sessionDefinitionId: "tbct-s01", worksheetFieldKey: "s01Problems", value: ["바뀐 값"] })).rejects.toThrow("worksheet_edit:turn_in_progress");
     expect((await current(sessionId)).session.runtimeContext.fields.s01Problems).toEqual(["졸리다"]);
   }, 30_000);
 });

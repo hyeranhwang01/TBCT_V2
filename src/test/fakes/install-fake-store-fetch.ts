@@ -51,6 +51,9 @@ const DIALOGUE_AGENT_ENDPOINT = "/api/dialogue-agent";
 // The answer-relevance check (answer-relevance-client.ts) takes the same
 // browser path under jsdom and is faked under the same flag.
 const ANSWER_RELEVANCE_ENDPOINT = "/api/answer-relevance";
+// One-request worksheet edits (worksheet-edit-client.ts) take the browser
+// path under jsdom; the route's work runs here against the fake stores.
+const WORKSHEET_EDIT_ENDPOINT = "/api/worksheets/edit";
 
 function jsonResponse(body: unknown, status: number) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -109,6 +112,15 @@ export function installFakeStoreFetch(options?: { interceptDialogueAgent?: boole
         return url;
       }
     })();
+    if (init?.method === "POST" && requestPath === WORKSHEET_EDIT_ENDPOINT) {
+      try {
+        const body = JSON.parse(init!.body as string) as { runtimeSessionId: string; sessionDefinitionId: string; worksheetFieldKey: string; value: unknown };
+        const { editWorksheetField } = await import("@/shared/worksheet/worksheet-projection");
+        return jsonResponse({ ok: true, result: await editWorksheetField(body.runtimeSessionId, body.sessionDefinitionId, body.worksheetFieldKey, body.value) }, 200);
+      } catch (error) {
+        return errorResponse(error);
+      }
+    }
     const store = init?.method === "POST" ? FAKE_STORES.find((candidate) => candidate.endpoint === requestPath) : undefined;
     if (store) {
       try {

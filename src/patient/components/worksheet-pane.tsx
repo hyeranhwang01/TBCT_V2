@@ -5,13 +5,14 @@ import { motion } from "framer-motion";
 import { CheckCircle2, Circle } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, Button, Card, SectionHeader } from "@/shared/components/ui/primitives";
-import { confirmWorksheetField, editWorksheetField, getWorksheetView } from "@/shared/worksheet/worksheet-projection";
+import { confirmWorksheetField, getWorksheetView } from "@/shared/worksheet/worksheet-projection";
+import { saveWorksheetEdit, withOptimisticWorksheetEdit } from "@/shared/worksheet/worksheet-edit-client";
 import { PATIENT_COMPOSED_WORKSHEET_SESSIONS, getComposedWorksheet } from "@/shared/worksheet/composed-worksheet-registry";
 import { QuestCompleteBadge, WorksheetSourceProvider, useJustFilled } from "@/patient/components/worksheet-renderers/shared";
 import { useRealtimeInvalidate } from "@/shared/supabase/use-realtime-invalidate";
 import { fadeUp } from "@/shared/motion/motion-variants";
 import { useReducedMotionPreference } from "@/shared/motion/use-reduced-motion-preference";
-import type { WorksheetFieldStatus, WorksheetFieldView } from "@/types/worksheet";
+import type { WorksheetFieldStatus, WorksheetFieldView, WorksheetView } from "@/types/worksheet";
 import type { RuntimeMessage } from "@/types/runtime-session";
 
 // The interactive visual worksheet -- a typed projection of
@@ -133,13 +134,20 @@ export function WorksheetPane({
     mutationFn: (worksheetFieldKey: string) => confirmWorksheetField(runtimeSessionId, sessionDefinitionId, worksheetFieldKey),
     onSuccess: () => queryClient.invalidateQueries({ queryKey }),
   });
+  // One request per edit, and the new words show before it returns
+  // (followUp2026_09_14_speed): a refused save puts the old words back.
   const editMutation = useMutation({
-    mutationFn: ({ worksheetFieldKey, value }: { worksheetFieldKey: string; value: unknown }) => editWorksheetField(runtimeSessionId, sessionDefinitionId, worksheetFieldKey, value),
-    onSuccess: () => Promise.all([
-      queryClient.invalidateQueries({ queryKey }),
-      // The chat page's session view carries the same fields.
-      queryClient.invalidateQueries({ queryKey: ["patient-runtime-session", runtimeSessionId] }),
-    ]),
+    mutationFn: ({ worksheetFieldKey, value }: { worksheetFieldKey: string; value: unknown }) => saveWorksheetEdit({ runtimeSessionId, sessionDefinitionId, worksheetFieldKey, value }),
+    onMutate: async ({ worksheetFieldKey, value }) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<WorksheetView | null>(queryKey);
+      if (previous) queryClient.setQueryData(queryKey, withOptimisticWorksheetEdit(previous, worksheetFieldKey, value));
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(queryKey, context.previous);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey }),
   });
 
   const view = worksheetQuery.data;
