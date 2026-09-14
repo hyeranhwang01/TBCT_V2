@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useReducedMotionPreference } from "@/shared/motion/use-reduced-motion-preference";
 import { WorksheetCell } from "@/patient/components/worksheet-renderers/shared";
 import { DistortionTable } from "@/patient/sessions/s01/distortion-table";
-import { CcdLevel1Diagram, Placeholder, S01Box, fieldText, scrollWithinPanel } from "@/patient/sessions/s01/worksheet-diagram";
+import { CcdLevel1Diagram, EditableListItem, EditableText, Placeholder, S01Box, S01EditContext, fieldText, scrollWithinPanel } from "@/patient/sessions/s01/worksheet-diagram";
 import { S01_LABELS, s01Locale } from "@/patient/sessions/s01/worksheet-labels";
 import type { WorksheetFieldView, WorksheetView } from "@/types/worksheet";
 
@@ -19,8 +19,10 @@ import type { WorksheetFieldView, WorksheetView } from "@/types/worksheet";
 // followed by the participant's summary, the distortions they picked, and
 // (from the distortions step on) the read-only list of 15 distortions.
 //
-// The participant sees this read-only beside the chat (readOnly, in their
-// session locale). The clinician view keeps a review/edit list for every
+// The participant sees this beside the chat (readOnly, in their session
+// locale) and fixes their own values by clicking the words
+// (allowEdit, .claude/TASK_SCOPE.json note2026_09_14_patient_worksheet_edit).
+// The clinician view edits in place too and keeps a review/edit list for every
 // participant-owned field underneath, as the previous S01 worksheet did.
 // Labels say "Person N"; the field names (candidateOneEmotion, ...) are
 // unchanged -- see note2026_08_17b.
@@ -59,12 +61,13 @@ function SectionTitle({ n, children }: { n: string; children: ReactNode }) {
   );
 }
 
-function Row({ label, value, tag, empty }: { label: string; value?: string; tag?: string; empty: string }) {
+function Row({ label, field, tag, empty }: { label: string; field?: WorksheetFieldView; tag?: string; empty: string }) {
+  const value = fieldText(field);
   return (
     <div className="grid grid-cols-[4.5rem_1fr] gap-2">
       <span className="text-xs font-semibold text-text-muted">{label}</span>
       <span className="min-w-0 font-serif">
-        {value ?? <Placeholder text={empty} />}
+        <EditableText field={field} fallback={<Placeholder text={empty} />} />
         {value && tag && <span className="ml-1.5 rounded-full border border-border px-1.5 py-px align-middle font-sans text-[10px] text-text-muted">{tag}</span>}
       </span>
     </div>
@@ -119,7 +122,7 @@ export function S01Worksheet({
   locale?: string;
   readOnly?: boolean;
   /** With readOnly (the participant's panel): they may still fix their own
-   * filled boxes (note2026_09_14_patient_worksheet_edit). */
+   * values by clicking them (note2026_09_14_patient_worksheet_edit). */
   allowEdit?: boolean;
 }) {
   const reducedMotion = Boolean(useReducedMotionPreference());
@@ -139,26 +142,24 @@ export function S01Worksheet({
   const scene = fieldText(get("threePersonScene"));
   const summary = fieldText(get("participantSummary"));
   const chosen = listValue(get("participantSelectedDistortions"));
-  // The participant only sees boxes the conversation has filled: an empty box
-  // is filled by answering in the chat, not ahead of it.
-  const editable = readOnly && !allowEdit
-    ? []
-    : [...view.fields].filter((field) => field.binding.participantOwned && (!readOnly || isFilled(field))).sort((a, b) => a.binding.displayOrder - b.binding.displayOrder);
-  const fieldLabel = (field: WorksheetFieldView) => (s01Locale(locale) === "ko" ? (field.binding.labelKo ?? field.binding.label) : field.binding.label);
+  const editable = readOnly ? [] : [...view.fields].filter((field) => field.binding.participantOwned).sort((a, b) => a.binding.displayOrder - b.binding.displayOrder);
+  // Empty boxes are never editable: they fill by answering in the chat.
+  const editState = !readOnly || allowEdit ? { busy, locale: readOnly ? locale : undefined, onEdit } : null;
 
   return (
+    <S01EditContext.Provider value={editState}>
     <div className="space-y-5" data-testid="s01-worksheet">
       <section className="space-y-2">
         <SectionTitle n="1">{labels.problemsTitle}</SectionTitle>
         <S01Box title={labels.problems} active={isActive(PROBLEM_KEYS)} filled={problems.length > 0} {...box}>
           {problems.length ? (
             <ol className="list-decimal space-y-0.5 pl-5 font-serif">
-              {problems.map((problem, index) => <li key={index}>{problem}</li>)}
+              {problems.map((problem, index) => <li key={index}><EditableListItem field={get("s01Problems")} index={index} text={problem} /></li>)}
             </ol>
           ) : <Placeholder text={labels.empty} />}
-          {representative && <Row label={labels.representative} value={representative} empty={labels.empty} />}
-          {goal && <Row label={labels.goal} value={goal} empty={labels.empty} />}
-          {goalBenefit && <Row label={labels.goalBenefit} value={goalBenefit} empty={labels.empty} />}
+          {representative && <Row label={labels.representative} field={get("s01RepresentativeProblem")} empty={labels.empty} />}
+          {goal && <Row label={labels.goal} field={get("s01Goal")} empty={labels.empty} />}
+          {goalBenefit && <Row label={labels.goalBenefit} field={get("s01GoalBenefit")} empty={labels.empty} />}
         </S01Box>
       </section>
 
@@ -174,32 +175,31 @@ export function S01Worksheet({
         </S01Box>
         <div className="space-y-2">
           {PERSONS.map((person) => {
-            const emotion = fieldText(get(person.emotion));
             const own = [person.thought, person.behavior, person.body, ...(person.givenEmotion ? [] : [person.emotion])];
             return (
               <S01Box key={person.n} title={labels.person(person.n)} active={isActive([person.thought, person.emotion, person.behavior, person.body])} filled={own.some((key) => isFilled(get(key)))} {...box}>
-                <Row label={labels.thought} value={fieldText(get(person.thought))} empty={labels.empty} />
-                <Row label={labels.feeling} value={emotion} tag={person.givenEmotion ? labels.given : undefined} empty={labels.empty} />
-                <Row label={labels.behavior} value={fieldText(get(person.behavior))} empty={labels.empty} />
-                <Row label={labels.body} value={fieldText(get(person.body))} empty={labels.empty} />
+                <Row label={labels.thought} field={get(person.thought)} empty={labels.empty} />
+                <Row label={labels.feeling} field={get(person.emotion)} tag={person.givenEmotion ? labels.given : undefined} empty={labels.empty} />
+                <Row label={labels.behavior} field={get(person.behavior)} empty={labels.empty} />
+                <Row label={labels.body} field={get(person.body)} empty={labels.empty} />
               </S01Box>
             );
           })}
         </div>
         <S01Box title={labels.insight} active={isActive(["threePersonModelInsight"])} filled={isFilled(get("threePersonModelInsight"))} {...box}>
-          <div className="font-serif">{fieldText(get("threePersonModelInsight")) ?? <Placeholder text={labels.empty} />}</div>
+          <div className="font-serif"><EditableText field={get("threePersonModelInsight")} fallback={<Placeholder text={labels.empty} />} /></div>
         </S01Box>
       </section>
 
       <section className="space-y-2">
         <SectionTitle n="4">{labels.summary}</SectionTitle>
         <S01Box title={labels.summary} active={isActive(["participantSummary"])} filled={Boolean(summary)} {...box}>
-          <div className="font-serif">{summary ?? <Placeholder text={labels.empty} />}</div>
+          <div className="font-serif"><EditableText field={get("participantSummary")} fallback={<Placeholder text={labels.empty} />} /></div>
         </S01Box>
         <S01Box title={labels.distortionsChosen} active={isActive(["participantSelectedDistortions"])} filled={chosen.length > 0} {...box}>
           {chosen.length ? (
             <div className="flex flex-wrap gap-1.5">
-              {chosen.map((item, index) => <span key={index} className="rounded-full border border-clinical-blue/40 bg-clinical-blue-light/30 px-2 py-0.5 text-xs font-semibold text-clinical-blue">{item}</span>)}
+              {chosen.map((item, index) => <span key={index} className="rounded-full border border-clinical-blue/40 bg-clinical-blue-light/30 px-2 py-0.5 text-xs font-semibold text-clinical-blue"><EditableListItem field={get("participantSelectedDistortions")} index={index} text={item} /></span>)}
             </div>
           ) : <Placeholder text={labels.empty} />}
         </S01Box>
@@ -210,14 +210,14 @@ export function S01Worksheet({
       {editable.length > 0 && (
         <details className="rounded-panel border border-border bg-surface p-3">
           <summary className="cursor-pointer text-sm font-semibold text-text-primary">{labels.reviewTitle}</summary>
-          {readOnly && <p className="mt-2 text-xs text-text-muted">{labels.reviewHint}</p>}
           <div className="mt-3 space-y-2">
             {editable.map((field) => (
-              <WorksheetCell key={field.definition.id} field={field} q={String(field.binding.displayOrder + 1)} label={fieldLabel(field)} list={field.binding.valueType === "text_list"} active={field.binding.canonicalFieldKey === activeCanonicalFieldKey} onConfirm={onConfirm} onEdit={onEdit} busy={busy} reducedMotion={reducedMotion} locale={readOnly ? locale : undefined} confirmable={!readOnly} />
+              <WorksheetCell key={field.definition.id} field={field} q={String(field.binding.displayOrder + 1)} label={field.binding.label} list={field.binding.valueType === "text_list"} active={field.binding.canonicalFieldKey === activeCanonicalFieldKey} onConfirm={onConfirm} onEdit={onEdit} busy={busy} reducedMotion={reducedMotion} />
             ))}
           </div>
         </details>
       )}
     </div>
+    </S01EditContext.Provider>
   );
 }

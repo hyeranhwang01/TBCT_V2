@@ -402,6 +402,7 @@
       "src/patient/sessions/s01/worksheet.test.tsx"
     ],
     "blastRadius": "S01 participant panel gains editing. The clinician worksheet tab (all sessions) uses the same corrected edit path and WorksheetCell (English unchanged). No session spec, prompt or progression change.",
+    "followUp2026_09_14_inline": "Same day, by the user: no separate edit section -- clicking the words on the worksheet itself turns them into an input like the chat prompt box. The participant panel drops the 'Review / edit each field' list; every filled, participant-owned value on the S01 worksheet (text, list items, percentages) is edited in place through src/patient/components/worksheet-renderers/inline-editor.tsx (Enter saves, Shift+Enter new line, Esc cancels, Korean IME composition never saves; an emptied list item is removed). The clinician S01 view gets the same in-place editing and keeps its review list. Added paths: src/patient/components/worksheet-renderers/inline-editor.tsx (new), src/patient/sessions/s01/worksheet-diagram.tsx.",
     "knownLimitation": "The edit is a read-modify-write on the session record without a row lock; the UI disables editing while a turn is in flight and the server refuses when the session is processing, which leaves only a millisecond window before a turn claim.",
     "regressionPlan": "npx tsc --noEmit; npx vitest run; live check by the user on production (edit a difficulty, remove a line, change a percentage, then continue the chat)."
   }

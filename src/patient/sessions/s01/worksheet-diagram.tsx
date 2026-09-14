@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { QuestCompleteBadge, useJustFilled } from "@/patient/components/worksheet-renderers/shared";
+import { InlineEditor } from "@/patient/components/worksheet-renderers/inline-editor";
 import type { S01Labels } from "@/patient/sessions/s01/worksheet-labels";
 import type { WorksheetFieldView } from "@/types/worksheet";
 
@@ -35,14 +36,75 @@ export function Placeholder({ text }: { text: string }) {
   return <span className="text-text-muted">{text}</span>;
 }
 
-export function PercentBar({ value, label }: { value?: number; label?: string }) {
+/** Editing the participant's own values in place (.claude/TASK_SCOPE.json
+ * note2026_09_14_patient_worksheet_edit): S01Worksheet provides this when
+ * the viewer may edit. Without it every value is plain text. */
+export type S01EditState = { busy: boolean; locale?: string; onEdit: (worksheetFieldKey: string, value: unknown) => void };
+export const S01EditContext = createContext<S01EditState | null>(null);
+
+/** The edit state for a value the viewer may change: a filled field the
+ * participant wrote (never one the session wrote itself). */
+function useFieldEdit(field?: WorksheetFieldView) {
+  const edit = useContext(S01EditContext);
+  return edit && field?.binding.participantOwned ? edit : null;
+}
+
+function editLabel(field: WorksheetFieldView, locale?: string) {
+  return locale?.toLowerCase().startsWith("ko") ? (field.binding.labelKo ?? field.binding.label) : field.binding.label;
+}
+
+/** A field's text, editable in place; `fallback` while it is empty. */
+export function EditableText({ field, fallback }: { field?: WorksheetFieldView; fallback?: ReactNode }) {
+  const edit = useFieldEdit(field);
+  const text = fieldText(field);
+  if (!text) return <>{fallback ?? null}</>;
+  if (!edit || !field) return <>{text}</>;
+  return (
+    <InlineEditor value={text} label={editLabel(field, edit.locale)} locale={edit.locale} busy={edit.busy} onSave={(next) => edit.onEdit(field.definition.worksheetFieldKey, next)}>
+      {text}
+    </InlineEditor>
+  );
+}
+
+/** One item of a list field, editable in place; saving it empty removes the
+ * item from the list. */
+export function EditableListItem({ field, index, text }: { field?: WorksheetFieldView; index: number; text: string }) {
+  const edit = useFieldEdit(field);
+  const raw = field?.value?.value;
+  if (!edit || !field || !Array.isArray(raw)) return <>{text}</>;
+  const items = raw.map(String).filter(Boolean);
+  return (
+    <InlineEditor
+      value={text}
+      label={editLabel(field, edit.locale)}
+      locale={edit.locale}
+      busy={edit.busy}
+      onSave={(next) => {
+        const item = next.replace(/\s*\n\s*/g, " ").trim();
+        edit.onEdit(field.definition.worksheetFieldKey, item ? items.map((value, position) => (position === index ? item : value)) : items.filter((_, position) => position !== index));
+      }}
+    >
+      {text}
+    </InlineEditor>
+  );
+}
+
+export function PercentBar({ value, label, field }: { value?: number; label?: string; field?: WorksheetFieldView }) {
+  const edit = useFieldEdit(field);
   if (value === undefined) return null;
   return (
     <div className="flex items-center gap-2">
       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-subtle">
         <div className="h-full rounded-full bg-clinical-blue" style={{ width: `${value}%` }} />
       </div>
-      <span className="shrink-0 text-xs font-semibold text-text-primary">{label ? `${label} ` : ""}{value}%</span>
+      <span className="shrink-0 text-xs font-semibold text-text-primary">
+        {label ? `${label} ` : ""}
+        {edit && field ? (
+          <InlineEditor numeric value={String(value)} label={editLabel(field, edit.locale)} locale={edit.locale} busy={edit.busy} onSave={(next) => edit.onEdit(field.definition.worksheetFieldKey, next)}>
+            {value}%
+          </InlineEditor>
+        ) : `${value}%`}
+      </span>
     </div>
   );
 }
@@ -136,13 +198,13 @@ function ArrowLabel({ x, y, n }: { x: number; y: number; n: string }) {
   );
 }
 
-function LegendItem({ n, title, value, active, empty }: { n: string; title: string; value?: string; active: boolean; empty: string }) {
+function LegendItem({ n, title, field, active, empty }: { n: string; title: string; field?: WorksheetFieldView; active: boolean; empty: string }) {
   return (
     <li className={`flex gap-2 rounded-panel px-2 py-1 ${active ? "bg-clinical-blue-light/40 ring-1 ring-clinical-blue" : ""}`}>
       <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-clinical-blue text-[10px] font-bold text-clinical-blue">{n}</span>
       <span className="min-w-0">
         <span className="block text-[11px] font-semibold text-text-muted">{title}</span>
-        <span className="block text-sm text-text-primary">{value ?? <Placeholder text={empty} />}</span>
+        <span className="block text-sm text-text-primary"><EditableText field={field} fallback={<Placeholder text={empty} />} /></span>
       </span>
     </li>
   );
@@ -193,8 +255,8 @@ export function CcdLevel1Diagram({ get, isActive, labels, reducedMotion, autoScr
     ["personalEmotion", "personalEmotionIntensity"],
     ["personalSecondEmotion", "personalSecondEmotionIntensity"],
     ["personalThirdEmotion", "personalThirdEmotionIntensity"],
-  ].map(([name, intensity]) => ({ name: fieldText(get(name)), intensity: fieldNumber(get(intensity)) })).filter((emotion) => emotion.name);
-  const behaviors = ["personalBehavior", "personalSecondBehavior"].map((key) => fieldText(get(key))).filter((value): value is string => Boolean(value));
+  ].map(([name, intensity]) => ({ name: get(name), intensity: get(intensity) })).filter((emotion) => fieldText(emotion.name));
+  const behaviors = ["personalBehavior", "personalSecondBehavior"].map((key) => get(key)).filter((field) => fieldText(field));
   const body = fieldText(get("personalBodySensations"));
   const paths = geometry ? arrowPaths(geometry) : null;
 
@@ -203,24 +265,24 @@ export function CcdLevel1Diagram({ get, isActive, labels, reducedMotion, autoScr
       <div ref={containerRef} className="relative pl-8 pr-16" data-testid="s01-ccd-diagram">
         <div className="space-y-7">
           <S01Box boxRef={situationRef} title={labels.situation} active={isActive(["situationThoughtDistinction", "situationLine"])} filled={Boolean(situationLine ?? situationRaw)} reducedMotion={reducedMotion} autoScroll={autoScroll}>
-            <div className="font-serif">{situationLine ?? situationRaw ?? <Placeholder text={labels.empty} />}</div>
-            {situationLine && situationRaw && <div className="text-xs text-text-muted">{labels.firstWords}: {situationRaw}</div>}
+            <div className="font-serif">{situationLine ? <EditableText field={get("situationLine")} /> : <EditableText field={get("situationThoughtDistinction")} fallback={<Placeholder text={labels.empty} />} />}</div>
+            {situationLine && situationRaw && <div className="text-xs text-text-muted">{labels.firstWords}: <EditableText field={get("situationThoughtDistinction")} /></div>}
           </S01Box>
           <S01Box boxRef={thoughtRef} title={labels.thought} active={isActive(["openingInitialThought", "thoughtLine", "s01ThoughtBeliefPercent"])} filled={Boolean(thoughtText)} reducedMotion={reducedMotion} autoScroll={autoScroll}>
-            <div className="font-serif">{thoughtText ?? <Placeholder text={labels.empty} />}</div>
-            <PercentBar value={belief} label={labels.belief} />
+            <div className="font-serif">{fieldText(get("thoughtLine")) ? <EditableText field={get("thoughtLine")} /> : <EditableText field={get("openingInitialThought")} fallback={<Placeholder text={labels.empty} />} />}</div>
+            <PercentBar value={belief} label={labels.belief} field={get("s01ThoughtBeliefPercent")} />
           </S01Box>
           <S01Box boxRef={emotionRef} title={labels.emotions} active={isActive(["personalEmotion", "personalEmotionIntensity", "personalSecondEmotion", "personalSecondEmotionIntensity", "personalThirdEmotion", "personalThirdEmotionIntensity"])} filled={emotions.length > 0} reducedMotion={reducedMotion} autoScroll={autoScroll}>
             {emotions.length ? emotions.map((emotion, index) => (
               <div key={index} className="space-y-0.5">
-                <div className="font-serif">{emotion.name}</div>
-                <PercentBar value={emotion.intensity} />
+                <div className="font-serif"><EditableText field={emotion.name} /></div>
+                <PercentBar value={fieldNumber(emotion.intensity)} field={emotion.intensity} />
               </div>
             )) : <Placeholder text={labels.empty} />}
           </S01Box>
           <S01Box boxRef={behaviorRef} title={labels.behaviorBody} active={isActive(["personalBehavior", "personalSecondBehavior", "personalBodySensations"])} filled={behaviors.length > 0 || Boolean(body)} reducedMotion={reducedMotion} autoScroll={autoScroll}>
-            {behaviors.length ? behaviors.map((behavior, index) => <div key={index} className="font-serif">{behavior}</div>) : <Placeholder text={labels.empty} />}
-            {body && <div className="text-xs text-text-secondary">{labels.body}: {body}</div>}
+            {behaviors.length ? behaviors.map((behavior, index) => <div key={index} className="font-serif"><EditableText field={behavior} /></div>) : <Placeholder text={labels.empty} />}
+            {body && <div className="text-xs text-text-secondary">{labels.body}: <EditableText field={get("personalBodySensations")} /></div>}
           </S01Box>
         </div>
         <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible text-text-muted" aria-hidden>
@@ -249,13 +311,13 @@ export function CcdLevel1Diagram({ get, isActive, labels, reducedMotion, autoScr
       <div className="mt-2 rounded-panel border border-border bg-surface-subtle/60 p-2">
         <div className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-text-muted">{labels.cycleTitle}</div>
         <ol className="space-y-1">
-          <LegendItem n="·" title={labels.friend} value={fieldText(get("friendThought"))} active={isActive(["friendThought"])} empty={labels.empty} />
-          <LegendItem n="1" title={labels.cycleFeeling} value={fieldText(get("cycleAfterBehaviorEmotion"))} active={isActive(["cycleAfterBehaviorEmotion"])} empty={labels.empty} />
-          <LegendItem n="2" title={labels.cycleThought} value={fieldText(get("cycleReinforcedThought"))} active={isActive(["cycleReinforcedThought"])} empty={labels.empty} />
-          <LegendItem n="·" title={labels.cyclePrevention} value={fieldText(get("cycleSafetyStrategy"))} active={isActive(["cycleSafetyStrategy"])} empty={labels.empty} />
-          <LegendItem n="·" title={labels.cycleLink} value={fieldText(get("cycleProblemLink"))} active={isActive(["cycleProblemLink"])} empty={labels.empty} />
-          <LegendItem n="·" title={labels.cycleEffect} value={fieldText(get("cycleShortLongTermEffect"))} active={isActive(["cycleShortLongTermEffect"])} empty={labels.empty} />
-          <LegendItem n="·" title={labels.outcome} value={fieldText(get("ownCaseActualOutcome"))} active={isActive(["ownCaseActualOutcome"])} empty={labels.empty} />
+          <LegendItem n="·" title={labels.friend} field={get("friendThought")} active={isActive(["friendThought"])} empty={labels.empty} />
+          <LegendItem n="1" title={labels.cycleFeeling} field={get("cycleAfterBehaviorEmotion")} active={isActive(["cycleAfterBehaviorEmotion"])} empty={labels.empty} />
+          <LegendItem n="2" title={labels.cycleThought} field={get("cycleReinforcedThought")} active={isActive(["cycleReinforcedThought"])} empty={labels.empty} />
+          <LegendItem n="·" title={labels.cyclePrevention} field={get("cycleSafetyStrategy")} active={isActive(["cycleSafetyStrategy"])} empty={labels.empty} />
+          <LegendItem n="·" title={labels.cycleLink} field={get("cycleProblemLink")} active={isActive(["cycleProblemLink"])} empty={labels.empty} />
+          <LegendItem n="·" title={labels.cycleEffect} field={get("cycleShortLongTermEffect")} active={isActive(["cycleShortLongTermEffect"])} empty={labels.empty} />
+          <LegendItem n="·" title={labels.outcome} field={get("ownCaseActualOutcome")} active={isActive(["ownCaseActualOutcome"])} empty={labels.empty} />
         </ol>
       </div>
     </div>

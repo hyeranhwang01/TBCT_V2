@@ -29,9 +29,10 @@ import type { RuntimeMessage } from "@/types/runtime-session";
 // recorded" as each field fills, as a lightweight progress feed
 // (PatientProgressFeed below). Exception: sessions in
 // PATIENT_COMPOSED_WORKSHEET_SESSIONS (S01) show their own worksheets,
-// read-only, because the real first session filled two paper worksheets
-// together with the participant (.claude/TASK_SCOPE.json
-// note2026_09_12_s01_redesign).
+// because the real first session filled two paper worksheets together with
+// the participant (.claude/TASK_SCOPE.json note2026_09_12_s01_redesign); the
+// participant fixes their own values there by clicking the words
+// (note2026_09_14_patient_worksheet_edit).
 
 const STATUS_TONE: Record<WorksheetFieldStatus, "success" | "primary" | "neutral" | "warning" | "critical"> = {
   empty: "neutral",
@@ -157,7 +158,7 @@ export function WorksheetPane({
         <Card className="overflow-hidden">
           <SectionHeader
             title={isKorean ? "워크시트" : "Worksheet"}
-            description={isKorean ? "대화하면서 자동으로 채워져요. 잘못 들어간 내용은 맨 아래 ‘칸별 확인 · 수정’에서 직접 고칠 수 있어요." : "Fills in automatically as we talk. If something was recorded wrong, fix it under ‘Review / edit each field’ at the bottom."}
+            description={isKorean ? "대화하면서 자동으로 채워져요. 잘못 들어간 내용은 글자를 누르면 바로 고칠 수 있어요." : "Fills in automatically as we talk. If something was recorded wrong, click the words to fix them."}
           />
           <div className="max-h-[calc(100vh-260px)] overflow-auto p-4">
             {editError && <div role="alert" className="mb-3 rounded-panel border border-warning/50 bg-warning-light/20 px-3 py-2 text-sm text-text-primary">{editError}</div>}

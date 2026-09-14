@@ -135,38 +135,56 @@ describe("S01Worksheet (participant, read-only)", () => {
 });
 
 // Participant worksheet edits (.claude/TASK_SCOPE.json
-// note2026_09_14_patient_worksheet_edit).
-describe("S01Worksheet (participant, editing)", () => {
-  it("lets the participant fix their own filled boxes in Korean, a list one item per line", () => {
+// note2026_09_14_patient_worksheet_edit): the words themselves are the control.
+describe("S01Worksheet (participant, editing in place)", () => {
+  function renderEditable(values: Record<string, unknown>, busy = false) {
     const onEdit = vi.fn();
-    render(<S01Worksheet view={view(OWN_CASE)} onConfirm={noop} onEdit={onEdit} busy={false} locale="ko-KR" readOnly allowEdit />);
-    expect(screen.getByText("칸별 확인 · 수정")).toBeInTheDocument();
-    expect(screen.getByText(/여기서 직접 고칠 수 있어요/)).toBeInTheDocument();
-    // Filled, participant-owned boxes only -- never a system box or Confirm.
-    const participantFilled = Object.keys(OWN_CASE).filter((key) => !SYSTEM_FIELDS.includes(key));
-    expect(screen.getAllByRole("button", { name: "수정" })).toHaveLength(participantFilled.length);
-    expect(screen.queryByRole("button", { name: "확인" })).toBeNull();
-    expect(screen.queryByText("두 번째 사람 · 감정")).toBeNull();
+    render(<S01Worksheet view={view(values)} onConfirm={noop} onEdit={onEdit} busy={busy} locale="ko-KR" readOnly allowEdit />);
+    return onEdit;
+  }
 
-    fireEvent.click(screen.getAllByRole("button", { name: "수정" })[0]);
-    const box = screen.getByRole("textbox", { name: "나의 어려움" }) as HTMLTextAreaElement;
-    expect(box.value).toBe("불안이 심해요\n계획대로 안 되면 힘들어요");
-    expect(screen.getByText(/줄을 지우면 목록에서 빠져요/)).toBeInTheDocument();
-    fireEvent.change(box, { target: { value: "불안이 심해요\n" } });
+  it("turns the words into a reply-style box when clicked, and saves on Enter", () => {
+    const onEdit = renderEditable(OWN_CASE);
+    expect(screen.queryByText("칸별 확인 · 수정")).toBeNull();
+    fireEvent.click(screen.getByText("나를 무시하는 거야"));
+    const box = screen.getByRole("textbox", { name: "그때 스친 생각" }) as HTMLTextAreaElement;
+    expect(box.value).toBe("나를 무시하는 거야");
+    fireEvent.change(box, { target: { value: "나를 무시했다고 생각했어" } });
+    // Enter while a Korean syllable is still being composed never saves.
+    fireEvent.keyDown(box, { key: "Enter", isComposing: true, keyCode: 229 });
+    expect(onEdit).not.toHaveBeenCalled();
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(onEdit).toHaveBeenCalledWith("openingInitialThought", "나를 무시했다고 생각했어");
+    expect(screen.queryByRole("textbox")).toBeNull();
+  });
+
+  it("edits one list item at a time, and an emptied item leaves the list", () => {
+    const onEdit = renderEditable(OWN_CASE);
+    fireEvent.click(screen.getByText("계획대로 안 되면 힘들어요"));
+    fireEvent.change(screen.getByRole("textbox", { name: "나의 어려움" }), { target: { value: "  " } });
     fireEvent.click(screen.getByRole("button", { name: "저장" }));
     expect(onEdit).toHaveBeenCalledWith("s01Problems", ["불안이 심해요"]);
   });
 
-  it("edits a percentage in a number box, and cannot edit while busy", () => {
-    const onEdit = vi.fn();
-    const { rerender } = render(<S01Worksheet view={view({ personalEmotionIntensity: 50 })} onConfirm={noop} onEdit={onEdit} busy={false} locale="ko-KR" readOnly allowEdit />);
-    fireEvent.click(screen.getByRole("button", { name: "수정" }));
-    fireEvent.change(screen.getByRole("spinbutton", { name: "감정 강도" }), { target: { value: "70" } });
-    fireEvent.click(screen.getByRole("button", { name: "저장" }));
-    expect(onEdit).toHaveBeenCalledWith("personalEmotionIntensity", "70");
+  it("edits a percentage in a number box, and Esc cancels without saving", () => {
+    const onEdit = renderEditable(OWN_CASE);
+    fireEvent.click(screen.getByText("75%"));
+    fireEvent.change(screen.getByRole("spinbutton", { name: "믿는 정도" }), { target: { value: "90" } });
+    fireEvent.keyDown(screen.getByRole("spinbutton", { name: "믿는 정도" }), { key: "Escape" });
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(screen.getByText("75%")).toBeInTheDocument();
 
-    rerender(<S01Worksheet view={view({ personalEmotionIntensity: 50 })} onConfirm={noop} onEdit={onEdit} busy locale="ko-KR" readOnly allowEdit />);
-    expect(screen.getByRole("button", { name: "수정" })).toBeDisabled();
+    fireEvent.click(screen.getByText("75%"));
+    fireEvent.change(screen.getByRole("spinbutton", { name: "믿는 정도" }), { target: { value: "80" } });
+    fireEvent.keyDown(screen.getByRole("spinbutton", { name: "믿는 정도" }), { key: "Enter" });
+    expect(onEdit).toHaveBeenCalledWith("s01ThoughtBeliefPercent", "80");
+  });
+
+  it("leaves session-written values and empty boxes alone, and locks editing while a reply is on its way", () => {
+    renderEditable(OWN_CASE, true);
+    expect(screen.getByText("의심").closest("button")).toBeNull();
+    expect(screen.getAllByText("대화하면서 채워져요")[0].closest("button")).toBeNull();
+    expect(screen.getByText("빈말이겠지").closest("button")).toBeDisabled();
   });
 });
 
