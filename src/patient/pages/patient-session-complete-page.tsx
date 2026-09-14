@@ -37,7 +37,6 @@ export function PatientSessionCompletePage() {
           </div>
           <div className="mt-5 flex flex-wrap gap-2">
             <Link href="/projects/demo/patient"><Button variant="secondary">{t("patientSessionComplete.sessions")}</Button></Link>
-            <Link href="/projects/demo/patient/memory"><Button variant="secondary">{t("patientSessionComplete.memory")}</Button></Link>
             <Link href={`/runtime/sessions/${session.id}/summary`}><Button variant="secondary">{t("patientSessionComplete.summary")}</Button></Link>
           </div>
         </Card>

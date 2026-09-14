@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { BookOpen, ClipboardList, HelpCircle, History, ListChecks, MessageCircle, Settings, UserRound } from "lucide-react";
+import { ClipboardList, HelpCircle, History, ListChecks, MessageCircle, Settings, UserRound } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -96,7 +96,6 @@ export function PatientShell({
           <PatientNavLink href="/projects/demo/patient/homework" active={pathname.includes("/homework")} icon={<ClipboardList className="h-5 w-5" />} label={t("homeworkList.navLabel")} />
           <PatientNavLink href="/projects/demo/patient/profile" active={pathname.includes("/profile")} icon={<UserRound className="h-5 w-5" />} label={t("patientPortal.profile")} />
           <PatientNavLink href="/projects/demo/patient/messages" active={pathname.includes("/messages")} icon={<MessageCircle className="h-5 w-5" />} label={t("messages.title")} />
-          <PatientNavLink href="/projects/demo/patient/memory" active={pathname.includes("/memory")} icon={<BookOpen className="h-5 w-5" />} label={t("patientPortal.memory")} />
           <div className="my-5 border-t border-border" />
           <PatientNavLink href="/projects/demo/patient/profile" active={false} icon={<Settings className="h-5 w-5" />} label={t("nav.account")} />
         </nav>

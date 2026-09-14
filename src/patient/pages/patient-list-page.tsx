@@ -6,7 +6,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, CircleDot, ClipboardList, History, Play } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { PatientShell } from "@/patient/components/patient-shell";
-import { MoodCheckinWidget } from "@/patient/components/mood-checkin-widget";
 import { UpcomingAppointmentsCard } from "@/patient/components/upcoming-appointments-card";
 import { OnboardingTour } from "@/shared/components/onboarding/onboarding-tour";
 import { Badge, Button, Card, PageSkeleton } from "@/shared/components/ui/primitives";
@@ -112,7 +111,6 @@ export function PatientListPage() {
         title={locale === "ko" ? `안녕하세요, ${participant?.alias ?? "세션"}님! 👋` : `Hello, ${participant?.alias ?? "there"}! 👋`}
       >
         <div className="space-y-5">
-          {(participant || localPreview) && <div data-tour-id="mood-checkin"><MoodCheckinWidget participantId={participant?.id ?? "local-preview"} preview={localPreview} /></div>}
           <PatientJourney journey={journey} participant={participant} localPreview={localPreview} />
           {participant && <div data-tour-id="appointments"><UpcomingAppointmentsCard participantId={participant.id} /></div>}
         </div>

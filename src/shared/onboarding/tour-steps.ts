@@ -16,10 +16,8 @@ export interface TourStep {
 // across the page instead of jumping around.
 export const PATIENT_TOUR_STEPS: TourStep[] = [
   { target: "journey-continue", titleKey: "onboarding.patient.stats.title", bodyKey: "onboarding.patient.stats.body" },
-  { target: "mood-checkin", titleKey: "onboarding.patient.moodCheckin.title", bodyKey: "onboarding.patient.moodCheckin.body" },
   { target: "appointments", titleKey: "onboarding.patient.appointments.title", bodyKey: "onboarding.patient.appointments.body" },
   { target: "profile-link", titleKey: "onboarding.patient.profile.title", bodyKey: "onboarding.patient.profile.body" },
-  { target: "memory-link", titleKey: "onboarding.patient.memory.title", bodyKey: "onboarding.patient.memory.body" },
   { target: "messages-link", titleKey: "onboarding.patient.messages.title", bodyKey: "onboarding.patient.messages.body" },
   { target: "journey-continue", titleKey: "onboarding.patient.newSession.title", bodyKey: "onboarding.patient.newSession.body" },
   { target: "theme-toggle", titleKey: "onboarding.patient.themeToggle.title", bodyKey: "onboarding.patient.themeToggle.body" },
