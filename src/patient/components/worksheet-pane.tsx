@@ -134,7 +134,11 @@ export function WorksheetPane({
   });
   const editMutation = useMutation({
     mutationFn: ({ worksheetFieldKey, value }: { worksheetFieldKey: string; value: unknown }) => editWorksheetField(runtimeSessionId, sessionDefinitionId, worksheetFieldKey, value),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+    onSuccess: () => Promise.all([
+      queryClient.invalidateQueries({ queryKey }),
+      // The chat page's session view carries the same fields.
+      queryClient.invalidateQueries({ queryKey: ["patient-runtime-session", runtimeSessionId] }),
+    ]),
   });
 
   const view = worksheetQuery.data;
@@ -143,17 +147,31 @@ export function WorksheetPane({
   if (variant === "patient") {
     const isKorean = locale.toLowerCase().startsWith("ko");
     // S01 only (PATIENT_COMPOSED_WORKSHEET_SESSIONS): the participant sees
-    // the session's own worksheets filling in beside the chat, read-only.
+    // the session's own worksheets filling in beside the chat, and can fix
+    // their own filled boxes (note2026_09_14_patient_worksheet_edit) --
+    // never while a turn is in flight, which would overwrite the edit.
     const PatientWorksheet = PATIENT_COMPOSED_WORKSHEET_SESSIONS.has(sessionDefinitionId) ? getComposedWorksheet(sessionDefinitionId) : undefined;
     if (PatientWorksheet) {
+      const editError = editMutation.error ? worksheetEditErrorText(editMutation.error, isKorean) : undefined;
       return (
         <Card className="overflow-hidden">
           <SectionHeader
             title={isKorean ? "워크시트" : "Worksheet"}
-            description={isKorean ? "대화하면서 자동으로 채워져요 — 평가하는 게 아니고, 채팅에서 말씀하신 내용이에요." : "Fills in automatically as we talk — nothing here is graded; it is what you said in the chat."}
+            description={isKorean ? "대화하면서 자동으로 채워져요. 잘못 들어간 내용은 맨 아래 ‘칸별 확인 · 수정’에서 직접 고칠 수 있어요." : "Fills in automatically as we talk. If something was recorded wrong, fix it under ‘Review / edit each field’ at the bottom."}
           />
           <div className="max-h-[calc(100vh-260px)] overflow-auto p-4">
-            <PatientWorksheet view={view} activeCanonicalFieldKey={activeCanonicalFieldKey} onConfirm={() => undefined} onEdit={() => undefined} busy={false} runtimeSessionId={runtimeSessionId} locale={locale} readOnly />
+            {editError && <div role="alert" className="mb-3 rounded-panel border border-warning/50 bg-warning-light/20 px-3 py-2 text-sm text-text-primary">{editError}</div>}
+            <PatientWorksheet
+              view={view}
+              activeCanonicalFieldKey={activeCanonicalFieldKey}
+              onConfirm={() => undefined}
+              onEdit={(worksheetFieldKey, value) => editMutation.mutate({ worksheetFieldKey, value })}
+              busy={editMutation.isPending || isConversationUpdating}
+              runtimeSessionId={runtimeSessionId}
+              locale={locale}
+              readOnly
+              allowEdit
+            />
           </div>
         </Card>
       );
@@ -229,6 +247,21 @@ export function WorksheetPane({
       </div>
     </Card>
   );
+}
+
+const WORKSHEET_EDIT_ERROR_TEXT: Record<string, { ko: string; en: string }> = {
+  turn_in_progress: { ko: "상담자가 답하는 중이라 저장하지 못했어요. 답이 끝난 뒤 다시 저장해 주세요.", en: "Not saved while a reply is on its way. Please save again once it arrives." },
+  removes_selected_item: { ko: "‘대표 어려움’으로 고른 항목은 목록에서 지울 수 없어요. 문구는 고칠 수 있어요.", en: "The difficulty chosen as the one underneath can't be removed from the list, but its wording can be changed." },
+  invalid_number: { ko: "0부터 100 사이의 숫자로 적어 주세요.", en: "Please enter a number from 0 to 100." },
+};
+
+/** The message for a worksheet edit that was not saved
+ * (worksheet-projection.ts WorksheetEditError). */
+function worksheetEditErrorText(error: unknown, isKorean: boolean) {
+  const code = /worksheet_edit:(\w+)/.exec(error instanceof Error ? error.message : String(error))?.[1];
+  const text = code ? WORKSHEET_EDIT_ERROR_TEXT[code] : undefined;
+  if (text) return isKorean ? text.ko : text.en;
+  return isKorean ? "저장하지 못했어요. 잠시 뒤 다시 시도해 주세요." : "Could not save. Please try again in a moment.";
 }
 
 /** variant="patient" only -- a full checklist of everything this session

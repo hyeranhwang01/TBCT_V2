@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createCanonicalTestRuntimeSession, getRuntimeSession } from "@/shared/api/runtime-session-api";
 import { startRuntimeSession, submitPatientInput } from "@/shared/api/runtime-execution-api";
 import { getLocalDb } from "@/shared/data/db/tbct-local-db";
-import { getWorksheetView } from "@/shared/worksheet/worksheet-projection";
+import { editWorksheetField, getWorksheetView } from "@/shared/worksheet/worksheet-projection";
+import { updateRuntimeSessionRecord } from "@/shared/data/repositories/runtime-session-repository";
 import { s01PromptSlug } from "@/patient/sessions/s01/turn-rules";
 import { CORRECTION_TRIGGER, STOP_SIGNAL_TRIGGER } from "@/test/fakes/dialogue-agent.fake";
 import type { RuntimeMessage } from "@/types/runtime-session";
@@ -101,5 +102,35 @@ describe("Field corrections: wrong entries are kept off, or taken back with the 
     const turn = last(view.messages, "assistant");
     expect(turn.metadata?.reflectionCheckResolution).toMatchObject({ outcome: "left_as_participant_words" });
     expect(turn.metadata?.reflectionCheck).toBeUndefined();
+  }, 30_000);
+
+  // Participant worksheet edits (note2026_09_14_patient_worksheet_edit).
+  it("a box the participant rewrites on the worksheet changes what the conversation goes on with, and later turns keep it", async () => {
+    const sessionId = await reachOtherDifficulty();
+    await submitPatientInput(sessionId, { kind: "text", value: "읎오" });
+    await editWorksheetField(sessionId, "tbct-s01", "s01Problems", ["졸리다", "밤에 잠을 못 자요"]);
+
+    let view = await current(sessionId);
+    expect(view.session.runtimeContext.fields.s01Problems).toEqual(["졸리다", "밤에 잠을 못 자요"]);
+    expect(view.session.runtimeState?.fields.s01Problems).toEqual(["졸리다", "밤에 잠을 못 자요"]);
+    expect(view.session.runtimeContext.fields.s01ProblemsCount).toBe(2);
+    let worksheet = await getWorksheetView(sessionId, "tbct-s01");
+    const problems = () => worksheet?.fields.find((item) => item.definition.canonicalFieldKey === "s01Problems")?.value;
+    expect(problems()).toMatchObject({ status: "participant_edited", value: ["졸리다", "밤에 잠을 못 자요"] });
+
+    await submitPatientInput(sessionId, { kind: "text", value: "없어요" });
+    view = await current(sessionId);
+    expect(view.session.runtimeContext.fields.s01Problems).toEqual(["졸리다", "밤에 잠을 못 자요"]);
+    expect(view.session.runtimeState?.fields.s01Problems).toEqual(["졸리다", "밤에 잠을 못 자요"]);
+    expect(view.session.runtimeContext.fields.s01ProblemsNoMore).toBe(true);
+    worksheet = await getWorksheetView(sessionId, "tbct-s01");
+    expect(problems()?.value).toEqual(["졸리다", "밤에 잠을 못 자요"]);
+  }, 30_000);
+
+  it("a worksheet edit is refused while a reply is being prepared", async () => {
+    const sessionId = await reachOtherDifficulty();
+    await updateRuntimeSessionRecord(sessionId, { status: "processing" });
+    await expect(editWorksheetField(sessionId, "tbct-s01", "s01Problems", ["바뀐 값"])).rejects.toThrow("worksheet_edit:turn_in_progress");
+    expect((await current(sessionId)).session.runtimeContext.fields.s01Problems).toEqual(["졸리다"]);
   }, 30_000);
 });

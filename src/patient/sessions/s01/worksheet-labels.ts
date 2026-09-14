@@ -43,6 +43,8 @@ export type S01Labels = {
   feeling: string;
   given: string;
   reviewTitle: string;
+  /** Participant panel only: what the review list is for. */
+  reviewHint: string;
   empty: string;
 };
 
@@ -82,6 +84,7 @@ export const S01_LABELS: Record<S01Locale, S01Labels> = {
     feeling: "감정",
     given: "주어진 감정",
     reviewTitle: "칸별 확인 · 수정",
+    reviewHint: "잘못 들어간 내용이 있으면 여기서 직접 고칠 수 있어요. 고친 내용은 다음 대화부터 반영돼요.",
     empty: "대화하면서 채워져요",
   },
   en: {
@@ -119,6 +122,7 @@ export const S01_LABELS: Record<S01Locale, S01Labels> = {
     feeling: "Feeling",
     given: "given",
     reviewTitle: "Review / edit each field",
+    reviewHint: "If something was recorded wrong, you can fix it here yourself. The conversation uses your change from the next turn on.",
     empty: "Fills in as we talk",
   },
 };

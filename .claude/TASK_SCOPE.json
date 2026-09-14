@@ -381,5 +381,28 @@
     ],
     "blastRadius": "All eight sessions: free-text list answers are now checked even when short; any dialogue turn may propose a correction to a worksheet-bound or node-required field, applied only on a yes. No session spec, message or progression change.",
     "regressionPlan": "npx tsc --noEmit; npx vitest run; live check by the user on production (typo stop word, correction request, 'ㅇㅇ')."
+  },
+  "note2026_09_14_patient_worksheet_edit": {
+    "task": "The user asked (2026-09-14) that the worksheet keep filling in automatically and that they can also edit it directly on the participant chat screen.",
+    "userDecision": "2026-09-14, by the user ('ㅇㅇ' to the proposal): S01's participant worksheet gets per-field editing; S02-S08 participant panels stay a checklist for now (their composed worksheets are English-only).",
+    "supersedes": "note2026_09_12_s01_redesign's read-only participant worksheet, for editing only (the worksheet itself is unchanged).",
+    "change": "(1) editWorksheetField (worksheet-projection.ts) wrote only runtimeContext.fields, while normalizeRuntimeSessionState reads runtimeState.fields, so the conversation could keep going on the old value. It now normalizes the value (field-correction.ts applyWorksheetEdit: list lines, 0-100 numbers, empty box removes the field), refuses to drop an item a later step selected, updates both field copies, list counts, paired ratings (runtime-context.ts realignListRatingsAfterEdit) and pointers, keeps confirmedSummaries only where their text is still recorded, refuses while a turn is processing, writes list collection items, and records before/after in the field_edited event. (2) WorksheetCell (shared.tsx) takes a locale and confirmable flag, edits a list one item per line (it used to start from the comma-joined display value) and numbers in a number input. (3) S01Worksheet takes allowEdit; the participant panel shows the review list with Korean labels, filled boxes only, no Confirm buttons, and editing is disabled while a turn is in flight; refused edits show a message.",
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/shared/worksheet/worksheet-projection.ts",
+      "src/shared/runtime/field-correction.ts",
+      "src/shared/runtime/field-correction.test.ts",
+      "src/shared/runtime/runtime-context.ts (export realignListRatingsAfterEdit)",
+      "src/shared/api/field-correction-flow.test.ts",
+      "src/shared/worksheet/composed-worksheet-registry.ts (prop type only)",
+      "src/patient/components/worksheet-pane.tsx",
+      "src/patient/components/worksheet-renderers/shared.tsx",
+      "src/patient/sessions/s01/worksheet.tsx",
+      "src/patient/sessions/s01/worksheet-labels.ts",
+      "src/patient/sessions/s01/worksheet.test.tsx"
+    ],
+    "blastRadius": "S01 participant panel gains editing. The clinician worksheet tab (all sessions) uses the same corrected edit path and WorksheetCell (English unchanged). No session spec, prompt or progression change.",
+    "knownLimitation": "The edit is a read-modify-write on the session record without a row lock; the UI disables editing while a turn is in flight and the server refuses when the session is processing, which leaves only a millisecond window before a turn claim.",
+    "regressionPlan": "npx tsc --noEmit; npx vitest run; live check by the user on production (edit a difficulty, remove a line, change a percentage, then continue the chat)."
   }
 }

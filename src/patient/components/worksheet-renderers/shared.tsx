@@ -253,6 +253,11 @@ export function ChoicePills({ field, options, label, active }: { field?: Workshe
   );
 }
 
+const CELL_TEXT = {
+  ko: { save: "저장", cancel: "취소", edit: "수정", confirm: "확인", confirmed: "확인됨", listHint: "한 줄에 하나씩 적어 주세요. 줄을 지우면 목록에서 빠져요." },
+  en: { save: "Save", cancel: "Cancel", edit: "Edit", confirm: "Confirm", confirmed: "confirmed", listHint: "One item per line. Delete a line to remove that item." },
+};
+
 export function WorksheetCell({
   field,
   q,
@@ -271,6 +276,8 @@ export function WorksheetCell({
   label,
   tone,
   inferred,
+  locale,
+  confirmable = true,
 }: {
   field?: WorksheetFieldView;
   q: string;
@@ -292,6 +299,11 @@ export function WorksheetCell({
    * observed fact -- shows the POSSIBLE/PATIENT-INFERRED badge next to the
    * label (see InferredBadge above). Used by S04's "other person" cells. */
   inferred?: boolean;
+  /** Button and hint language (the participant's panel); English otherwise. */
+  locale?: string;
+  /** Show Confirm on a draft value. The participant's panel hides it -- the
+   * conversation already confirms with them. */
+  confirmable?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(field?.value?.displayValue ?? "");
@@ -300,6 +312,15 @@ export function WorksheetCell({
   if (!field) return null;
   const confirmed = field.value?.status === "participant_confirmed";
   const draftPending = field.value?.status === "draft_extracted";
+  const text = CELL_TEXT[locale?.toLowerCase().startsWith("ko") ? "ko" : "en"];
+  const numeric = field.binding.valueType === "percentage" || field.binding.valueType === "integer";
+  // A list is edited one item per line -- its display value joins items with
+  // commas, which saved back as one line would merge them into one item.
+  const startEditing = () => {
+    const items = Array.isArray(field.value?.value) ? (field.value?.value as unknown[]).map(String) : undefined;
+    setDraft(list && items ? items.join("\n") : (field.value?.displayValue ?? ""));
+    setEditing(true);
+  };
 
   const shell = `relative rounded-panel p-3 transition ${borderless ? "" : `border ${emphasized ? "border-warning/50 bg-warning-light/15" : tone === "neutral" ? "border-border bg-surface" : "border-border bg-surface"}`} ${active ? "ring-2 ring-clinical-blue border-clinical-blue" : justFilled ? "ring-2 ring-success border-success" : ""} ${!filled ? "border-dashed opacity-70" : ""}`;
 
@@ -312,11 +333,16 @@ export function WorksheetCell({
           <span>{label ?? `Q${q}`}</span>
           {inferred && <InferredBadge />}
         </div>
-        {confirmed && <Badge tone="success">confirmed</Badge>}
+        {confirmed && <Badge tone="success">{text.confirmed}</Badge>}
       </div>
       {editing ? (
         <div className="mt-2 space-y-2">
-          <textarea className="w-full rounded-panel border border-border bg-surface px-2 py-1.5 text-sm" rows={list ? 3 : 2} value={draft} onChange={(event) => setDraft(event.target.value)} />
+          {numeric ? (
+            <input type="number" inputMode="numeric" min={0} max={field.binding.valueType === "percentage" ? 100 : undefined} aria-label={label ?? `Q${q}`} className="w-28 rounded-panel border border-border bg-surface px-2 py-1.5 text-sm" value={draft} onChange={(event) => setDraft(event.target.value)} />
+          ) : (
+            <textarea aria-label={label ?? `Q${q}`} className="w-full rounded-panel border border-border bg-surface px-2 py-1.5 text-sm" rows={list ? 3 : 2} value={draft} onChange={(event) => setDraft(event.target.value)} />
+          )}
+          {list && <p className="text-[11px] text-text-muted">{text.listHint}</p>}
           <div className="flex gap-2">
             <Button
               size="sm"
@@ -327,9 +353,9 @@ export function WorksheetCell({
                 setEditing(false);
               }}
             >
-              Save
+              {text.save}
             </Button>
-            <Button size="sm" variant="secondary" onClick={() => setEditing(false)}>Cancel</Button>
+            <Button size="sm" variant="secondary" onClick={() => setEditing(false)}>{text.cancel}</Button>
           </div>
         </div>
       ) : filled ? (
@@ -356,8 +382,8 @@ export function WorksheetCell({
           )}
           <SourceTrace sourceTurnId={field.value?.sourceTurnId} />
           <div className="mt-2 flex gap-2">
-            {draftPending && <Button size="sm" onClick={() => onConfirm(field.definition.worksheetFieldKey)} disabled={busy}>Confirm</Button>}
-            <Button size="sm" variant="ghost" onClick={() => { setDraft(field.value?.displayValue ?? ""); setEditing(true); }} disabled={busy}>Edit</Button>
+            {draftPending && confirmable && <Button size="sm" onClick={() => onConfirm(field.definition.worksheetFieldKey)} disabled={busy}>{text.confirm}</Button>}
+            <Button size="sm" variant="ghost" onClick={startEditing} disabled={busy}>{text.edit}</Button>
           </div>
         </>
       ) : (

@@ -88,6 +88,73 @@ export function applyFieldCorrection(fields: Record<string, unknown>, correction
   return { fields: next, before, after: list };
 }
 
+// Participant worksheet edits (.claude/TASK_SCOPE.json
+// note2026_09_14_patient_worksheet_edit): the participant rewrites a box on
+// their own worksheet instead of asking in the chat. Same rules as a
+// correction -- the value is the participant's own, a choice made from a list
+// cannot lose its item -- but no confirmation question, since they typed the
+// new value themselves.
+
+export type WorksheetEditIssue = "invalid_number" | "removes_selected_item";
+
+function normalizeWorksheetEditValue(valueType: string, raw: unknown): { value: unknown } | { issue: WorksheetEditIssue } {
+  if (valueType === "text_list") {
+    const items = Array.isArray(raw) ? raw : String(raw ?? "").split("\n");
+    return { value: items.map((item) => String(item).trim()).filter(Boolean) };
+  }
+  if (valueType === "percentage" || valueType === "integer") {
+    const text = String(raw ?? "").replace(/%/g, "").trim();
+    if (!text) return { value: undefined };
+    const number = Number(text);
+    if (!Number.isFinite(number) || (valueType === "percentage" && (number < 0 || number > 100))) return { issue: "invalid_number" };
+    return { value: Math.round(number) };
+  }
+  const text = String(raw ?? "").trim();
+  return { value: text ? text : undefined };
+}
+
+/** The fields with one worksheet box rewritten (list count included; an
+ * empty text or number box removes the field). Ratings paired with a list and
+ * pointers derived from it are left to the caller (runtime-context.ts). */
+export function applyWorksheetEdit(fields: Record<string, unknown>, field: string, valueType: string, raw: unknown): { ok: true; fields: Record<string, unknown>; before: unknown; after: unknown } | { ok: false; issue: WorksheetEditIssue } {
+  const normalized = normalizeWorksheetEditValue(valueType, raw);
+  if ("issue" in normalized) return { ok: false, issue: normalized.issue };
+  const after = normalized.value;
+  const before = fields[field];
+  const next = { ...fields };
+  if (after === undefined) delete next[field];
+  else next[field] = after;
+  if (Array.isArray(after)) next[`${field}Count`] = after.length;
+
+  const linked = LINKED_SELECTIONS.find((item) => item.listField === field);
+  const selected = linked ? fields[linked.selectionField] : undefined;
+  if (linked && typeof selected === "string" && Array.isArray(after) && indexOfValue(after, selected) < 0) {
+    // Reworded in place (same length): the choice follows its item.
+    const selectedIndex = Array.isArray(before) && before.length === after.length ? indexOfValue(before, selected) : -1;
+    if (selectedIndex < 0) return { ok: false, issue: "removes_selected_item" };
+    next[linked.selectionField] = after[selectedIndex];
+  }
+  return { ok: true, fields: next, before, after };
+}
+
+/** Confirmed summaries after a worksheet edit: a summary stays confirmed only
+ * where its exact text is still recorded (a list item may have moved). */
+export function confirmedSummariesAfterWorksheetEdit(summaries: Record<string, ConfirmedSummaryRecord> | undefined, field: string, after: unknown): Record<string, ConfirmedSummaryRecord> | undefined {
+  if (!summaries) return summaries;
+  const next: Record<string, ConfirmedSummaryRecord> = {};
+  for (const [key, record] of Object.entries(summaries)) {
+    const match = /^(.*)#(\d+)$/.exec(key);
+    if (!match) {
+      if (key !== field || record.summary === after) next[key] = record;
+      continue;
+    }
+    if (match[1] !== field) { next[key] = record; continue; }
+    const index = Array.isArray(after) ? after.findIndex((item) => item === record.summary) : -1;
+    if (index >= 0) next[`${field}#${index}`] = { ...record, listIndex: index };
+  }
+  return next;
+}
+
 /** Confirmed summaries (runtimeContext.confirmedSummaries) after a
  * correction: a replaced value is no longer the confirmed summary, and list
  * items after a removed one move up by one. */

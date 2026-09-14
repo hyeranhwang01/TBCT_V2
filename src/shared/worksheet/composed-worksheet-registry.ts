@@ -25,6 +25,9 @@ export interface ComposedWorksheetProps {
   // edit/confirm controls) for the participant's own chat page.
   locale?: string;
   readOnly?: boolean;
+  /** With readOnly: the participant may still edit their own filled boxes
+   * (S01, note2026_09_14_patient_worksheet_edit). */
+  allowEdit?: boolean;
 }
 
 // Sessions whose composed worksheet is shown to the PARTICIPANT beside the

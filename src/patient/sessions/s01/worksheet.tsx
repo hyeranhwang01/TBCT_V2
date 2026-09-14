@@ -109,6 +109,7 @@ export function S01Worksheet({
   busy,
   locale,
   readOnly,
+  allowEdit,
 }: {
   view: WorksheetView;
   activeCanonicalFieldKey?: string;
@@ -117,6 +118,9 @@ export function S01Worksheet({
   busy: boolean;
   locale?: string;
   readOnly?: boolean;
+  /** With readOnly (the participant's panel): they may still fix their own
+   * filled boxes (note2026_09_14_patient_worksheet_edit). */
+  allowEdit?: boolean;
 }) {
   const reducedMotion = Boolean(useReducedMotionPreference());
   const labels = S01_LABELS[s01Locale(locale)];
@@ -135,7 +139,12 @@ export function S01Worksheet({
   const scene = fieldText(get("threePersonScene"));
   const summary = fieldText(get("participantSummary"));
   const chosen = listValue(get("participantSelectedDistortions"));
-  const editable = readOnly ? [] : [...view.fields].filter((field) => field.binding.participantOwned).sort((a, b) => a.binding.displayOrder - b.binding.displayOrder);
+  // The participant only sees boxes the conversation has filled: an empty box
+  // is filled by answering in the chat, not ahead of it.
+  const editable = readOnly && !allowEdit
+    ? []
+    : [...view.fields].filter((field) => field.binding.participantOwned && (!readOnly || isFilled(field))).sort((a, b) => a.binding.displayOrder - b.binding.displayOrder);
+  const fieldLabel = (field: WorksheetFieldView) => (s01Locale(locale) === "ko" ? (field.binding.labelKo ?? field.binding.label) : field.binding.label);
 
   return (
     <div className="space-y-5" data-testid="s01-worksheet">
@@ -201,9 +210,10 @@ export function S01Worksheet({
       {editable.length > 0 && (
         <details className="rounded-panel border border-border bg-surface p-3">
           <summary className="cursor-pointer text-sm font-semibold text-text-primary">{labels.reviewTitle}</summary>
+          {readOnly && <p className="mt-2 text-xs text-text-muted">{labels.reviewHint}</p>}
           <div className="mt-3 space-y-2">
             {editable.map((field) => (
-              <WorksheetCell key={field.definition.id} field={field} q={String(field.binding.displayOrder + 1)} label={field.binding.label} list={field.binding.valueType === "text_list"} active={field.binding.canonicalFieldKey === activeCanonicalFieldKey} onConfirm={onConfirm} onEdit={onEdit} busy={busy} reducedMotion={reducedMotion} />
+              <WorksheetCell key={field.definition.id} field={field} q={String(field.binding.displayOrder + 1)} label={fieldLabel(field)} list={field.binding.valueType === "text_list"} active={field.binding.canonicalFieldKey === activeCanonicalFieldKey} onConfirm={onConfirm} onEdit={onEdit} busy={busy} reducedMotion={reducedMotion} locale={readOnly ? locale : undefined} confirmable={!readOnly} />
             ))}
           </div>
         </details>

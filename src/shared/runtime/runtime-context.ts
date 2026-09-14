@@ -339,9 +339,6 @@ const LIST_RATING_PAIRS: Array<{ listField: string; ratingsField: string; pointe
   { listField: "symptomItems", ratingsField: "symptomItemScores", pointerField: "currentSymptomItemText", sufficiencyField: "allSymptomItemsRated" },
 ];
 
-/** After either the source list or the ratings array changes, point
- * `pointerField` at the next unrated item and flag whether every item in
- * the list now has a rating. */
 /** A list item removed by an agreed correction (field corrections,
  * note2026_09_14) takes its rating with it, so every later rating stays on
  * its own item. Call refreshListRatingPointers afterwards. */
@@ -355,6 +352,32 @@ export function removeRatingForRemovedListItem(fields: Record<string, unknown>, 
   fields[`${pair.ratingsField}Count`] = ratings.length;
 }
 
+/** A list rewritten from the worksheet (participant worksheet edits,
+ * note2026_09_14): a renamed or appended item leaves every rating where it
+ * is; when items were only deleted, each surviving item keeps its own
+ * rating. A mix of deleting and rewording cannot be matched item by item,
+ * so ratings simply stop at the new length. Call refreshListRatingPointers
+ * afterwards. */
+export function realignListRatingsAfterEdit(fields: Record<string, unknown>, listField: string, before: unknown, after: unknown) {
+  const pair = LIST_RATING_PAIRS.find((candidate) => candidate.listField === listField);
+  if (!pair || !Array.isArray(fields[pair.ratingsField]) || !Array.isArray(before) || !Array.isArray(after) || after.length >= before.length) return;
+  const ratings = fields[pair.ratingsField] as unknown[];
+  const kept: unknown[] = [];
+  let matched = 0;
+  before.forEach((item, index) => {
+    if (matched < after.length && item === after[matched]) {
+      if (index < ratings.length) kept.push(ratings[index]);
+      matched += 1;
+    }
+  });
+  const next = matched === after.length ? kept : ratings.slice(0, after.length);
+  fields[pair.ratingsField] = next;
+  fields[`${pair.ratingsField}Count`] = next.length;
+}
+
+/** After either the source list or the ratings array changes, point
+ * `pointerField` at the next unrated item and flag whether every item in
+ * the list now has a rating. */
 export function refreshListRatingPointers(nextFields: Record<string, unknown>) {
   for (const pair of LIST_RATING_PAIRS) {
     const list = Array.isArray(nextFields[pair.listField]) ? (nextFields[pair.listField] as string[]) : undefined;

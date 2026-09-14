@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { S01Worksheet } from "@/patient/sessions/s01/worksheet";
 import { TBCT_S01_BINDINGS } from "@/patient/sessions/s01/worksheet-binding";
 import { S01_COGNITIVE_DISTORTIONS } from "@/patient/sessions/s01/cognitive-distortions";
@@ -131,6 +131,42 @@ describe("S01Worksheet (participant, read-only)", () => {
     expect((screen.getByTestId("s01-distortion-drawer") as HTMLDetailsElement).open).toBe(true);
     // The list is also the homework sheet, which only exists after the session.
     expect(screen.getByText(/숙제 화면에서/)).toBeInTheDocument();
+  });
+});
+
+// Participant worksheet edits (.claude/TASK_SCOPE.json
+// note2026_09_14_patient_worksheet_edit).
+describe("S01Worksheet (participant, editing)", () => {
+  it("lets the participant fix their own filled boxes in Korean, a list one item per line", () => {
+    const onEdit = vi.fn();
+    render(<S01Worksheet view={view(OWN_CASE)} onConfirm={noop} onEdit={onEdit} busy={false} locale="ko-KR" readOnly allowEdit />);
+    expect(screen.getByText("칸별 확인 · 수정")).toBeInTheDocument();
+    expect(screen.getByText(/여기서 직접 고칠 수 있어요/)).toBeInTheDocument();
+    // Filled, participant-owned boxes only -- never a system box or Confirm.
+    const participantFilled = Object.keys(OWN_CASE).filter((key) => !SYSTEM_FIELDS.includes(key));
+    expect(screen.getAllByRole("button", { name: "수정" })).toHaveLength(participantFilled.length);
+    expect(screen.queryByRole("button", { name: "확인" })).toBeNull();
+    expect(screen.queryByText("두 번째 사람 · 감정")).toBeNull();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "수정" })[0]);
+    const box = screen.getByRole("textbox", { name: "나의 어려움" }) as HTMLTextAreaElement;
+    expect(box.value).toBe("불안이 심해요\n계획대로 안 되면 힘들어요");
+    expect(screen.getByText(/줄을 지우면 목록에서 빠져요/)).toBeInTheDocument();
+    fireEvent.change(box, { target: { value: "불안이 심해요\n" } });
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+    expect(onEdit).toHaveBeenCalledWith("s01Problems", ["불안이 심해요"]);
+  });
+
+  it("edits a percentage in a number box, and cannot edit while busy", () => {
+    const onEdit = vi.fn();
+    const { rerender } = render(<S01Worksheet view={view({ personalEmotionIntensity: 50 })} onConfirm={noop} onEdit={onEdit} busy={false} locale="ko-KR" readOnly allowEdit />);
+    fireEvent.click(screen.getByRole("button", { name: "수정" }));
+    fireEvent.change(screen.getByRole("spinbutton", { name: "감정 강도" }), { target: { value: "70" } });
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+    expect(onEdit).toHaveBeenCalledWith("personalEmotionIntensity", "70");
+
+    rerender(<S01Worksheet view={view({ personalEmotionIntensity: 50 })} onConfirm={noop} onEdit={onEdit} busy locale="ko-KR" readOnly allowEdit />);
+    expect(screen.getByRole("button", { name: "수정" })).toBeDisabled();
   });
 });
 
