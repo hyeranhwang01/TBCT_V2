@@ -10,8 +10,9 @@ import { dispatchFakeSafetyStoreOp, resetFakeSafetyStore } from "@/test/fakes/sa
 import { dispatchFakeProtocolStudioStoreOp, resetFakeProtocolStudioStore } from "@/test/fakes/protocol-studio-store.fake";
 import { dispatchFakeWorksheetStoreOp, resetFakeWorksheetStore } from "@/test/fakes/worksheet-store.fake";
 import { dispatchFakeHomeworkStoreOp, resetFakeHomeworkStore } from "@/test/fakes/homework-store.fake";
-import { dispatchFakeDialogueAgent } from "@/test/fakes/dialogue-agent.fake";
+import { dispatchFakeAnswerRelevance, dispatchFakeDialogueAgent } from "@/test/fakes/dialogue-agent.fake";
 import { dialogueContractSchema } from "@/shared/dialogue-agent/dialogue-agent-contract";
+import { answerRelevanceRequestSchema } from "@/shared/dialogue-agent/answer-relevance";
 
 // The runtime conversation store now lives in Postgres in production
 // (src/app/api/runtime/session-store/route.ts), reached via fetch() from
@@ -47,6 +48,9 @@ const FAKE_STORES: Array<{ endpoint: string; dispatch: (op: unknown) => Promise<
 // would only ever see the "provider unavailable" deterministic fallback
 // instead of a realistic classification to assert against.
 const DIALOGUE_AGENT_ENDPOINT = "/api/dialogue-agent";
+// The answer-relevance check (answer-relevance-client.ts) takes the same
+// browser path under jsdom and is faked under the same flag.
+const ANSWER_RELEVANCE_ENDPOINT = "/api/answer-relevance";
 
 function jsonResponse(body: unknown, status: number) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -79,6 +83,14 @@ export function installFakeStoreFetch(options?: { interceptDialogueAgent?: boole
         const body = JSON.parse(init!.body as string) as { contract: unknown };
         const contract = dialogueContractSchema.parse(body.contract);
         return jsonResponse({ ok: true, data: dispatchFakeDialogueAgent(contract) }, 200);
+      } catch (error) {
+        return errorResponse(error);
+      }
+    }
+    if (interceptDialogueAgent && init?.method === "POST" && url.endsWith(ANSWER_RELEVANCE_ENDPOINT)) {
+      try {
+        const body = JSON.parse(init!.body as string) as { request: unknown };
+        return jsonResponse({ ok: true, data: dispatchFakeAnswerRelevance(answerRelevanceRequestSchema.parse(body.request)) }, 200);
       } catch (error) {
         return errorResponse(error);
       }

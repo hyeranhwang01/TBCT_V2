@@ -1,8 +1,21 @@
 import type { DialogueAgentResult, DialogueContract, DialogueDecision } from "@/shared/dialogue-agent/dialogue-agent-contract";
+import type { AnswerRelevanceRequest, AnswerRelevanceResult } from "@/shared/dialogue-agent/answer-relevance";
 
 /** Tests put this in a participant message to make the fake answer with a
  * confirmation turn (see fakeDialogueDecision). */
 export const SUMMARY_CHECK_TRIGGER = "#요약확인";
+
+/** Tests put this in a participant message to make the fake answer-relevance
+ * check call it off topic (see dispatchFakeAnswerRelevance). */
+export const OFF_TOPIC_TRIGGER = "#엉뚱";
+
+/** Stand-in for the Claude answer-relevance check (answer-relevance.ts):
+ * every message is an answer unless a test marks it off topic. */
+export function dispatchFakeAnswerRelevance(request: AnswerRelevanceRequest): AnswerRelevanceResult {
+  return request.answer.includes(OFF_TOPIC_TRIGGER)
+    ? { isAnswer: false, checked: true, reason: "fake: marked off topic" }
+    : { isAnswer: true, checked: true };
+}
 
 /** The summary the fake gives for `said` -- exported so tests can assert the
  * value a confirmed summary writes to the record. */

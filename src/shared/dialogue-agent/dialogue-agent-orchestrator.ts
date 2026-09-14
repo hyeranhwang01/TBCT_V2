@@ -28,7 +28,7 @@ export function isDialogueAgentEnabled(sessionDefinitionId: string) {
  * regardless of session enablement -- this is checked independently of
  * isDialogueAgentEnabled so it also protects S04-S08 if those are ever
  * added to the set above without someone re-deriving this rule. */
-function isSafetyCriticalPrompt(promptItem: PromptItem) {
+export function isSafetyCriticalPrompt(promptItem: PromptItem) {
   if ((promptItem.safetyRuleIds?.length ?? 0) > 0) return true;
   const validation = promptItem.validation as { kind?: unknown } | null;
   return validation?.kind === "safety_check";

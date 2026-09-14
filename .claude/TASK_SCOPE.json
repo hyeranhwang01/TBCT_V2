@@ -335,5 +335,25 @@
     "doNotTouch": ["src/shared/protocol/tbct-source-text.generated.ts", "sql/**"],
     "blastRadius": "All eight sessions' dialogue-agent turns (prompt, tool schema, validation, confirmation flow) and worksheet projection provenance. Session specs, messages and progression are unchanged. S01's write-situation-line / write-thought-line prompts are no longer activated (their flags are not set); a confirmed summary fills situationLine / thoughtLine instead.",
     "regressionPlan": "npm run type-check; npx vitest run; live (needs ANTHROPIC_API_KEY in .env.local): npm run audit:sessions:constrained and npx tsx scripts/run-local-session.ts tbct-s01 reviewed by a person before any push."
+  },
+  "note2026_09_14_off_topic_answers": {
+    "task": "Follow-up to open dialogue v1, after the user's live S01 test on production (commit 667aec2): off-topic messages were stored as answers ('근데 1더하기 1은 뭐야?' as the situation, a message about lunch as the second emotion). The engine then moved to the 0-100 rating while Claude asked for the emotion again, so the conversation asked for a word while the input control asked for a number.",
+    "userDecision": "2026-09-14, by the user: before a free-text answer is stored, Claude judges whether it responds to the question; an off-topic message is not stored, the prompt stays, and the dialogue agent acknowledges it and asks the same question again. One extra Claude call per free-text turn is accepted.",
+    "change": "New src/shared/dialogue-agent/answer-relevance.ts (+ client and /api/answer-relevance route, same server/browser split as the dialogue agent). submitPatientInput runs it after extraction and before worksheet projection, only for a typed answer to a free-text prompt that extraction accepted, never for a reply to an open confirmation, a turn with risk signals, or a safety-critical prompt. An off-topic verdict skips projection and routes to deliverClarificationTurn with reason 'off_topic', which goes through the dialogue agent and does not count toward MAX_CLARIFICATION_ATTEMPTS. The check fails open (no key, AI_PROVIDER=mock, timeout, unusable reply = store as before).",
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/shared/dialogue-agent/answer-relevance.ts (new)",
+      "src/shared/dialogue-agent/answer-relevance-client.ts (new)",
+      "src/shared/dialogue-agent/answer-relevance.test.ts (new)",
+      "src/app/api/answer-relevance/route.ts (new)",
+      "src/shared/api/off-topic-answer-flow.test.ts (new)",
+      "src/shared/api/runtime-execution-api.ts",
+      "src/shared/dialogue-agent/dialogue-agent-orchestrator.ts (export isSafetyCriticalPrompt)",
+      "src/shared/dialogue-agent/dialogue-contract-compiler.ts (export expectedInputTypeForPrompt)",
+      "src/test/fakes/dialogue-agent.fake.ts",
+      "src/test/fakes/install-fake-store-fetch.ts"
+    ],
+    "blastRadius": "Every free-text patient turn in all eight sessions gains one Claude call (timeout 6s, fail-open) before the answer is stored. Ratings, choices, yes/no, confirmation replies and safety prompts are unchanged.",
+    "regressionPlan": "npx tsc --noEmit; npx vitest run; live check by the user replaying the S01 test on production."
   }
 }

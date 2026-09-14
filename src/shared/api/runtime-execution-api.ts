@@ -14,7 +14,9 @@ import { createRuntimeExecutionTrace } from "@/shared/runtime/runtime-execution-
 import { isPatientFacingLocaleConsistent } from "@/shared/runtime/runtime-output-validator";
 import { injectLongitudinalMemory } from "@/shared/memory/memory-context-injector";
 import { projectRuntimeFieldsToWorksheet } from "@/shared/worksheet/worksheet-projection";
-import { isDialogueAgentEnabled, resolveDialogueAgentMessage } from "@/shared/dialogue-agent/dialogue-agent-orchestrator";
+import { isDialogueAgentEnabled, isSafetyCriticalPrompt, resolveDialogueAgentMessage } from "@/shared/dialogue-agent/dialogue-agent-orchestrator";
+import { checkAnswerRelevance } from "@/shared/dialogue-agent/answer-relevance-client";
+import { expectedInputTypeForPrompt } from "@/shared/dialogue-agent/dialogue-contract-compiler";
 import { resolveBracketPlaceholders, resolveStaticPatientMessage } from "@/shared/runtime/runtime-static-message";
 import { REFLECTION_ASK_AGAIN, REFLECTION_MOVE_ON, classifyReflectionCheckReply, findPendingReflectionCheck, reflectionText, type PendingReflectionCheck, type ReflectionCheckResolution } from "@/shared/runtime/reflection-check";
 import { applyConfirmedSummaryToFields, confirmedSummaryKey, confirmedSummaryRecord, resolveLongAnswerSummaryTarget } from "@/shared/runtime/long-answer";
@@ -170,7 +172,10 @@ async function deliverClarificationTurn(input: {
   recentAssistantMessages?: string[];
   recentMessages?: RuntimeMessage[];
 }) {
-  const clarificationAttemptCount = (input.session.runtimeContext.clarificationAttemptCount ?? 0) + 1;
+  // An off-topic message (note2026_09_14_off_topic_answers) is not a failed
+  // attempt at the question, so it never counts toward
+  // MAX_CLARIFICATION_ATTEMPTS or pauses the session.
+  const clarificationAttemptCount = (input.session.runtimeContext.clarificationAttemptCount ?? 0) + (input.reason === "off_topic" ? 0 : 1);
   const missing = new Set(input.missingFields ?? []);
   const isKorean = (input.session.locale ?? "").toLowerCase().startsWith("ko");
   const tr = (en: string, ko: string) => (isKorean ? ko : en);
@@ -336,7 +341,9 @@ async function deliverClarificationTurn(input: {
   // the dialogue-agent spec targets; deliverClarificationTurn's own
   // deterministic `content` above is what ships if the agent call fails or
   // fails validation.
-  if (input.reason === "insufficient_input" && isDialogueAgentEnabled(input.node.sessionId)) {
+  // An off-topic message goes through the dialogue agent the same way: it
+  // acknowledges the message briefly and asks the same question again.
+  if ((input.reason === "insufficient_input" || input.reason === "off_topic") && isDialogueAgentEnabled(input.node.sessionId)) {
     dialogueOutcome = await resolveDialogueAgentMessage({
       session: input.session,
       node: input.node,
@@ -1637,12 +1644,42 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
     ? await applyS01TurnRules({ extracted: baseExtracted, promptItem: currentPromptItem, rawText: patientMessage.content, locale: turnLocale, sessionId, turnId: clientTurnId })
     : null;
   const extracted = s01Rules ? s01Rules.extracted : baseExtracted;
+  // Off-topic answers (.claude/TASK_SCOPE.json note2026_09_14_off_topic_answers):
+  // before a typed answer to a free-text question is stored (worksheet
+  // projection just below, the commit further down), Claude checks that it
+  // responds to the question at all. Small talk or an unrelated question is
+  // not stored and does not move the prompt -- the dialogue agent
+  // acknowledges it and asks the same question again (the "off_topic"
+  // clarification below). Fails open: a missing key or a timeout stores the
+  // answer exactly as before. Only for an answer extraction already accepted;
+  // never for a reply to an open confirmation, a risk turn, or a safety prompt.
+  const answeredField = currentPromptItem.outputFields[0];
+  const answerText = patientInput.kind === "text" && typeof patientInput.value === "string" ? patientInput.value.trim() : "";
+  const checksRelevance = !pendingReflectionCheck
+    && answerText.length > 3
+    && extracted.riskSignals.length === 0
+    && Boolean(answeredField) && !extracted.missingFields.includes(answeredField)
+    && isDialogueAgentEnabled(initialSession.sessionDefinitionId)
+    && !isSafetyCriticalPrompt(currentPromptItem)
+    && ["free_text", "ordered_list"].includes(expectedInputTypeForPrompt(initialSession.sessionDefinitionId, currentPromptItem));
+  const answerRelevance = checksRelevance
+    ? await checkAnswerRelevance({
+        locale: turnLocale,
+        question: [...initialView.messages].reverse().find((message) => message.role === "assistant")?.content ?? "",
+        approvedTask: resolveStaticPatientMessage(currentPromptItem, turnLocale, initialSession.runtimeContext)?.patientMessage
+          ?? resolvePromptLocaleText(activeStep.promptItem.id, activeStep.promptItem.fallbackPatientText, turnLocale),
+        answer: answerText,
+        stepObjective: currentNode.objective || currentNode.clinicalPurpose,
+      }, { sessionId, turnId: clientTurnId })
+    : undefined;
+  const offTopicAnswer = answerRelevance?.checked === true && !answerRelevance.isAnswer;
+  if (answerRelevance?.checked) patientMessage.metadata = { ...patientMessage.metadata, answerRelevance: { isAnswer: answerRelevance.isAnswer, reason: answerRelevance.reason } };
   // Open dialogue v1 (.claude/TASK_SCOPE.json note2026_09_14): a long answer to
   // a free-text worksheet field -- already stored as given, just above -- is
   // marked on the participant's own message, so the next assistant turn
   // summarizes it for them to confirm (runtime-orchestrator.ts). Never for a
-  // reply to an open check, or a turn carrying risk signals.
-  const longAnswerSummaryTarget = !pendingReflectionCheck && extracted.riskSignals.length === 0 && patientInput.kind === "text" && typeof patientInput.value === "string"
+  // reply to an open check, an off-topic message, or a turn carrying risk signals.
+  const longAnswerSummaryTarget = !pendingReflectionCheck && !offTopicAnswer && extracted.riskSignals.length === 0 && patientInput.kind === "text" && typeof patientInput.value === "string"
     ? resolveLongAnswerSummaryTarget({ sessionDefinitionId: initialSession.sessionDefinitionId, locale: turnLocale, promptItem: currentPromptItem, answerText: patientInput.value, fields: extracted.fields })
     : undefined;
   if (longAnswerSummaryTarget) patientMessage.metadata = { ...patientMessage.metadata, longAnswerSummaryTarget };
@@ -1661,7 +1698,8 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
   // every server-side projection was failing (see runtime-request-context.ts)
   // and the only symptom was a permanently empty worksheet beside the chat.
   try {
-    await projectRuntimeFieldsToWorksheet({ runtimeSessionId: sessionId, sessionDefinitionId: initialSession.sessionDefinitionId, fields: extracted.fields, sourceTurnId: patientMessage.id, confirmedSummaries: initialSession.runtimeContext.confirmedSummaries });
+    // An off-topic message is not stored, so it is not projected either.
+    if (!offTopicAnswer) await projectRuntimeFieldsToWorksheet({ runtimeSessionId: sessionId, sessionDefinitionId: initialSession.sessionDefinitionId, fields: extracted.fields, sourceTurnId: patientMessage.id, confirmedSummaries: initialSession.runtimeContext.confirmedSummaries });
   } catch (error) {
     console.error("[runtime-execution-api] worksheet projection failed", { sessionId, sessionDefinitionId: initialSession.sessionDefinitionId, error });
   }
@@ -1780,6 +1818,27 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
     void saveRuntimeLog(makeLog(sessionId, "input", "completed", `Patient asked for a process clarification (${processClarificationKind})`, { nodeId: currentNode.id })).catch(() => {});
     void createRuntimeCheckpoint(sessionId).catch(() => {});
     return { sessionId, previousNodeId: session.previousNodeId, currentNodeId: currentNode.id, currentPromptItemId: currentPromptItem.id, stateExtraction: extracted, safetyResult, generatedMessage: processClarification.assistantMessage, turnOutcome: "clarification", fallbackUsed: false, sessionStatus: processClarification.sessionStatus, logIds: [] };
+  }
+  // Off-topic answers (note2026_09_14_off_topic_answers): the message did not
+  // respond to the question, so nothing is stored and the prompt stays; the
+  // dialogue agent acknowledges it and asks the same question again, without
+  // counting a clarification attempt.
+  if (offTopicAnswer && !safetyResult.triggered) {
+    const offTopic = await deliverClarificationTurn({
+      session,
+      node: currentNode,
+      promptItem: currentPromptItem,
+      runtimePromptItem: activeStep.promptItem,
+      release: view.release,
+      runtimeState,
+      patientMessage,
+      reason: "off_topic",
+      recentAssistantMessages: view.messages.filter((message) => message.role === "assistant").map((message) => message.content),
+      recentMessages: [...view.messages, patientMessage],
+    });
+    void saveRuntimeLog(makeLog(sessionId, "input", "completed", `Participant message did not answer the question and was not stored (${answerRelevance?.reason ?? "off topic"})`, { nodeId: currentNode.id })).catch(() => {});
+    void createRuntimeCheckpoint(sessionId).catch(() => {});
+    return { sessionId, previousNodeId: session.previousNodeId, currentNodeId: currentNode.id, currentPromptItemId: currentPromptItem.id, stateExtraction: extracted, safetyResult, generatedMessage: offTopic.assistantMessage, turnOutcome: "clarification", fallbackUsed: false, sessionStatus: offTopic.sessionStatus, logIds: [] };
   }
   if (extracted.missingFields.length && !safetyResult.triggered) {
     const clarification = await deliverClarificationTurn({

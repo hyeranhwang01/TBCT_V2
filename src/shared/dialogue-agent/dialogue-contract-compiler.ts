@@ -330,6 +330,14 @@ export function stepSpecificGuidanceFor(sourcePromptItem: PromptItem): string[] 
   return all.length ? all : undefined;
 }
 
+/** The kind of answer a prompt expects -- the same resolution
+ * compileDialogueContract uses (worksheet binding, then validation kind). */
+export function expectedInputTypeForPrompt(sessionDefinitionId: string, promptItem: PromptItem): ExpectedInputType {
+  const targetField = promptItem.outputFields[0];
+  const binding = getWorksheetBindings(sessionDefinitionId).find((item) => item.canonicalFieldKey === targetField);
+  return resolveExpectedInputType(binding, promptItem.validation);
+}
+
 export function compileDialogueContract(input: {
   session: RuntimeSession;
   node: ClinicalStageNode;
