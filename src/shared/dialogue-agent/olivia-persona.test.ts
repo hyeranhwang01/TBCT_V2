@@ -43,10 +43,13 @@ function contract(overrides: Partial<DialogueContract> = {}): DialogueContract {
 const decision = (extra: Partial<DialogueDecision> = {}): DialogueDecision => ({ responseType: "reflect_and_ask", patientFacingMessage: "그 원칙이 부질없게 느껴지기 시작한 건 언제였나요?", keepCurrentNode: true, participantResponseState: "valid_answer", ...extra });
 
 describe("the prompt every turn carries", () => {
-  it("opens the cached block with the team's persona, keeping its name internal, and says what outranks what", () => {
+  it("opens the cached block with the team's persona -- a nameless counseling assistant in TBCT's creator's way -- and says what outranks what", () => {
     const { stable } = systemPromptBlocks(contract({ sessionToneGuidance: "Ask, do not tell.", sessionProtocolRules: ["Never summarize or describe the cycle."] }));
     expect(stable.startsWith(`Who you are:\n${PERSONA_DEFINITION}`)).toBe(true);
-    expect(stable).toContain("do not introduce yourself by name or title");
+    expect(PERSONA_DEFINITION).toContain("counseling assistant who works in the way of Irismar Reis de Oliveira");
+    expect(stable).toContain("say you are a counseling assistant ('상담 도우미' in Korean)");
+    expect(stable).toContain("Never claim to be Irismar Reis de Oliveira or any real person");
+    expect(stable).not.toMatch(/Irismar is|Dr\. Olivia/);
     expect(stable).toContain("Order of authority");
     expect(stable.indexOf(PERSONA_DEFINITION)).toBeLessThan(stable.indexOf("Never summarize or describe the cycle."));
     expect(stable).not.toContain("experienced TBCT");
