@@ -5,6 +5,7 @@ import { compileDialogueContract } from "@/shared/dialogue-agent/dialogue-contra
 import { callDialogueAgent } from "@/shared/dialogue-agent/dialogue-agent-client";
 import { validateDialogueDecision } from "@/shared/dialogue-agent/dialogue-output-validator";
 import type { DialogueContract, DialogueDecision } from "@/shared/dialogue-agent/dialogue-agent-contract";
+import type { FieldCorrection } from "@/shared/runtime/field-correction";
 
 // Expanded from the S01-S03 rollout to all eight sessions. The
 // branching/revision system is still intentionally NOT built -- see
@@ -53,7 +54,7 @@ export type DialogueAgentTurnResult = {
   // Set only when the shipped text ends in a confirmation the runtime must
   // wait for -- the caller opens a pending check from it. Never set on a
   // fallback.
-  summaryCheck?: { summaryText: string };
+  summaryCheck?: { summaryText: string; correction?: FieldCorrection };
   // `guard_log:<check>` entries from dialogue-output-validator.ts's log-mode
   // checks (open dialogue v1): recorded, not enforced.
   guardLogs?: string[];

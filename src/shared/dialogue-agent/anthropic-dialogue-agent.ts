@@ -64,6 +64,18 @@ const RESPONSE_SCHEMA = {
     keepCurrentNode: { type: "boolean", enum: [true] },
     needsConfirmation: { type: "boolean" },
     reflectionText: { type: "string", maxLength: 700 },
+    proposedCorrection: {
+      type: "object",
+      additionalProperties: false,
+      required: ["field", "action", "currentValue"],
+      properties: {
+        field: { type: "string" },
+        action: { type: "string", enum: ["remove_item", "replace_value"] },
+        currentValue: { type: "string" },
+        newValue: { type: "string" },
+        reason: { type: "string" },
+      },
+    },
     targetField: { type: "string" },
     participantResponseState: { type: "string", enum: ["valid_answer", "partial_answer", "wrong_construct", "question_not_understood", "missing_visual", "missing_context", "participant_question", "duplicate_answer", "revision_request", "declines", "pause_request", "off_topic"] },
     visualAction: { type: "string", enum: ["none", "focus_field", "show_options", "restore_worksheet", "show_scale"] },
@@ -244,6 +256,9 @@ export function systemPromptBlocks(contract: DialogueContract): { stable: string
       : "",
     contract.reflectionCheckContext
       ? `- Your previous understanding was: ${JSON.stringify(contract.reflectionCheckContext.previousSummary)}. Their last message does not simply confirm it -- it corrects or restates it. Summarize again from their words (their words take priority over yours), ask whether that is right, set needsConfirmation=true and reflectionText. Do not ask the current task.`
+      : "",
+    contract.summaryCheckAllowed
+      ? "- Fixing the record: if something already recorded (the \"Confirmed so far\" values) looks wrong -- a typo, a non-answer or a \"nothing more\" word stored as an answer -- or the participant says an earlier answer was wrong or asks to remove it, propose the fix in proposedCorrection: field and currentValue exactly as recorded; action remove_item for a list item, or replace_value with newValue in the participant's own words. Ask them in your own words whether to make that change (for example \"'읎오'는 목록에서 뺄까요?\"), set needsConfirmation=true, and do not ask the current task in that turn. Nothing changes unless they say yes."
       : "",
     "\nConversation basics:",
     "- One question per turn. Never re-ask something already answered in recentContext, even in other words.",

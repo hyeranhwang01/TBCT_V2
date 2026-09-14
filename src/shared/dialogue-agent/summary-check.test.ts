@@ -255,6 +255,11 @@ describe("classifyReflectionCheckReply", () => {
     ["그만할래요", "stop"],
     ["네, 이대로 넘어가 주세요", "stop"],
     ["let's move on", "stop"],
+    ["ㅇㅇ", "affirm"],
+    ["넹", "affirm"],
+    ["ㅇㅋ!", "affirm"],
+    ["ㄴㄴ", "deny"],
+    ["아닌데요", "deny"],
   ])("%s -> %s", (reply, expected) => {
     expect(classifyReflectionCheckReply(reply)).toBe(expected);
   });

@@ -355,5 +355,31 @@
     ],
     "blastRadius": "Every free-text patient turn in all eight sessions gains one Claude call (timeout 6s, fail-open) before the answer is stored. Ratings, choices, yes/no, confirmation replies and safety prompts are unchanged.",
     "regressionPlan": "npx tsc --noEmit; npx vitest run; live check by the user replaying the S01 test on production."
+  },
+  "note2026_09_14_field_corrections": {
+    "task": "Follow-up after the user's live S01 test on production (commit 6bf4597): the typo '읎오' (meant as '없어요') was stored as a second difficulty and nothing could take it off the worksheet, and 'ㅇㅇ' was not recognized as yes to a confirmation.",
+    "userDecision": "2026-09-14, by the user: the AI catches wrong entries, but a recorded value is removed or changed only after the participant confirms (not silently).",
+    "change": "(1) answer-relevance.ts returns a verdict: answer | stop | off_topic | correction_request. On a list prompt, stop re-extracts the turn as the stop word '없어요'/'none' so the existing list-closing rules apply; correction_request is not stored and routes to deliverClarificationTurn with allowConfirmation. (2) The dialogue decision gains proposedCorrection (remove_item | replace_value); dialogue-output-validator.ts accepts it only when src/shared/runtime/field-correction.ts can apply it to confirmedState on a turn that can hold a confirmation, and opens a pending check carrying it. (3) On yes, deliverReflectionCheckReplyTurn applies it to runtimeContext.fields and runtimeState.fields, removes a paired rating, refreshes list pointers, shifts or drops confirmedSummaries, re-projects the worksheet and records appliedCorrection; on no, the record stays. (4) reflection-check.ts recognizes chat shorthand (ㅇㅇ, ㅇㅋ, 넹, 넵, 웅, ㄴㄴ, 아닌데요).",
+    "limitation": "Removing a list item that a later step already selected (S01's representative difficulty) is refused, because the program cannot re-ask a completed step; replacing its wording carries the selection along.",
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/shared/runtime/field-correction.ts (new)",
+      "src/shared/runtime/field-correction.test.ts (new)",
+      "src/shared/api/field-correction-flow.test.ts (new)",
+      "src/shared/dialogue-agent/answer-relevance.ts",
+      "src/shared/dialogue-agent/answer-relevance.test.ts",
+      "src/shared/dialogue-agent/dialogue-agent-contract.ts",
+      "src/shared/dialogue-agent/anthropic-dialogue-agent.ts",
+      "src/shared/dialogue-agent/dialogue-output-validator.ts",
+      "src/shared/dialogue-agent/dialogue-agent-orchestrator.ts",
+      "src/shared/dialogue-agent/summary-check.test.ts",
+      "src/shared/runtime/reflection-check.ts",
+      "src/shared/runtime/runtime-orchestrator.ts",
+      "src/shared/runtime/runtime-context.ts (export removeRatingForRemovedListItem)",
+      "src/shared/api/runtime-execution-api.ts",
+      "src/test/fakes/dialogue-agent.fake.ts"
+    ],
+    "blastRadius": "All eight sessions: free-text list answers are now checked even when short; any dialogue turn may propose a correction to a worksheet-bound or node-required field, applied only on a yes. No session spec, message or progression change.",
+    "regressionPlan": "npx tsc --noEmit; npx vitest run; live check by the user on production (typo stop word, correction request, 'ㅇㅇ')."
   }
 }

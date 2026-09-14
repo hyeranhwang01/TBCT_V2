@@ -2,6 +2,7 @@ import type { DialogueContract, DialogueDecision } from "@/shared/dialogue-agent
 import { hasUnresolvedTemplateVariable } from "@/shared/dialogue-agent/unresolved-template-detector";
 import { isPatientFacingLocaleConsistent } from "@/shared/runtime/runtime-output-validator";
 import { SUMMARY_CHECK_QUESTION } from "@/shared/dialogue-agent/message-composition";
+import { fieldCorrectionIssue, type FieldCorrection } from "@/shared/runtime/field-correction";
 
 /**
  * Pre-display gate for a dialogue-agent turn.
@@ -40,7 +41,7 @@ export type DialogueValidationResult =
   // wait for -- runtime-orchestrator.ts opens a pending check from it.
   // missingRequiredSummary: the contract asked for a summary of a long answer
   // and this turn did not give one, so the caller may ask once more.
-  | { accepted: true; finalText?: string; summaryCheck?: { summaryText: string }; guardLogs: string[]; missingRequiredSummary?: boolean }
+  | { accepted: true; finalText?: string; summaryCheck?: { summaryText: string; correction?: FieldCorrection }; guardLogs: string[]; missingRequiredSummary?: boolean }
   | { accepted: false; reason: string; guardLogs: string[] };
 
 const DIAGNOSIS_PATTERN = /\b(?:you have|this (?:is|sounds like|indicates)) (?:a |an )?(?:diagnos|disorder|clinical depression|generalized anxiety disorder|bipolar|PTSD|OCD)\b/i;
@@ -95,16 +96,27 @@ export function validateDialogueDecision(decision: DialogueDecision, contract: D
   // defensively in case a future schema change loosens it.
   if (decision.keepCurrentNode !== true) return { accepted: false, reason: "attempted_node_advance", guardLogs };
 
-  // Confirmation re-ask: Claude put the participant's words into its own and
-  // asks whether that is right. When this turn can wait for the answer, the
-  // task is held until they reply (runtime-orchestrator.ts). If Claude forgot
-  // the question itself, the server adds one.
-  const confirms = decision.needsConfirmation === true || decision.responseType === "summarize_and_confirm";
+  // Field corrections (note2026_09_14_field_corrections): a proposed change to
+  // the record is applied only after the participant agrees, so it must be a
+  // change the program can really make, on a turn that can wait for the
+  // answer -- otherwise the turn would ask a question nothing will honor.
+  const correction = decision.proposedCorrection;
+  if (correction) {
+    const issue = fieldCorrectionIssue(correction, contract.confirmedState) ?? (contract.summaryCheckAllowed ? undefined : "correction_not_held");
+    if (issue) return { accepted: false, reason: issue, guardLogs };
+  }
+
+  // Confirmation re-ask: Claude put the participant's words into its own (or
+  // proposes a correction) and asks whether that is right. When this turn can
+  // wait for the answer, the task is held until they reply
+  // (runtime-orchestrator.ts). If Claude forgot the question itself, the
+  // server adds one.
+  const confirms = Boolean(correction) || decision.needsConfirmation === true || decision.responseType === "summarize_and_confirm";
   if (confirms && contract.summaryCheckAllowed) {
     const trimmed = text.trim();
     const finalText = QUESTION_ENDING.test(trimmed) ? undefined : `${trimmed} ${SUMMARY_CHECK_QUESTION[contract.locale.toLowerCase().startsWith("ko") ? "ko" : "en"]}`;
     const summaryText = decision.reflectionText?.trim() || trimmed;
-    return { accepted: true, ...(finalText ? { finalText } : {}), summaryCheck: { summaryText }, guardLogs };
+    return { accepted: true, ...(finalText ? { finalText } : {}), summaryCheck: { summaryText, ...(correction ? { correction } : {}) }, guardLogs };
   }
   if (confirms) guardLogs.push("guard_log:confirmation_not_held");
   return contract.summarizeLastAnswer ? { accepted: true, guardLogs, missingRequiredSummary: true } : { accepted: true, guardLogs };

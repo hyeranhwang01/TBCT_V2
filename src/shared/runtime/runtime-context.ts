@@ -342,6 +342,19 @@ const LIST_RATING_PAIRS: Array<{ listField: string; ratingsField: string; pointe
 /** After either the source list or the ratings array changes, point
  * `pointerField` at the next unrated item and flag whether every item in
  * the list now has a rating. */
+/** A list item removed by an agreed correction (field corrections,
+ * note2026_09_14) takes its rating with it, so every later rating stays on
+ * its own item. Call refreshListRatingPointers afterwards. */
+export function removeRatingForRemovedListItem(fields: Record<string, unknown>, listField: string, removedIndex: number) {
+  const pair = LIST_RATING_PAIRS.find((candidate) => candidate.listField === listField);
+  if (!pair || !Array.isArray(fields[pair.ratingsField])) return;
+  const ratings = [...(fields[pair.ratingsField] as unknown[])];
+  if (removedIndex >= ratings.length) return;
+  ratings.splice(removedIndex, 1);
+  fields[pair.ratingsField] = ratings;
+  fields[`${pair.ratingsField}Count`] = ratings.length;
+}
+
 export function refreshListRatingPointers(nextFields: Record<string, unknown>) {
   for (const pair of LIST_RATING_PAIRS) {
     const list = Array.isArray(nextFields[pair.listField]) ? (nextFields[pair.listField] as string[]) : undefined;

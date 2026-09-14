@@ -1,5 +1,6 @@
 import type { RuntimeMessage } from "@/types/runtime-session";
 import type { LongAnswerSummaryTarget } from "@/shared/runtime/long-answer";
+import type { FieldCorrection } from "@/shared/runtime/field-correction";
 
 /**
  * Reflect-and-Confirm (.claude/TASK_SCOPE.json note2026_09_11), as changed by
@@ -36,6 +37,9 @@ export type PendingReflectionCheck = {
   /** Set when the summary is of a long answer: a confirmed summary is written
    * to this field or list item. */
   summaryTarget?: LongAnswerSummaryTarget;
+  /** Set when the question asks to change the record (field corrections,
+   * note2026_09_14_field_corrections): applied on a yes, dropped on a no. */
+  correction?: FieldCorrection;
 };
 
 export type ReflectionCheckResolution = {
@@ -44,6 +48,8 @@ export type ReflectionCheckResolution = {
   summaries: number;
   /** Set when the confirmed summary was written to the record. */
   recordedSummary?: { key: string; writeField: string; listIndex?: number };
+  /** Set when an agreed correction changed the record. */
+  appliedCorrection?: { field: string; action: FieldCorrection["action"]; before: unknown; after: unknown };
 };
 
 export type ReflectionCheckReply = "affirm" | "deny" | "correction" | "stop";
@@ -77,8 +83,11 @@ export function summaryCheckAlreadyUsedInNode(messages: RuntimeMessage[], nodeId
 // Leading token only, and only as a whole word, so "네가" or "아니면" never
 // read as an answer. Longer alternatives come first so "아니요" is not cut to
 // "아니".
-const AFFIRM_PATTERN = /^(?:네\s*맞아요|네\s*맞습니다|맞아요|맞습니다|맞아|맞네요|그렇죠|그래요|그렇습니다|정확해요|정확합니다|네|예|응|yes|yeah|yep|right|correct|exactly|that's right|that is right)(?=$|[\s.,!~])/i;
-const DENY_PATTERN = /^(?:아니요|아니오|아니에요|아니야|아뇨|아니|틀렸어요|틀려요|그게\s*아니라|그건\s*아니고|no|nope|not really|not quite|that's not right)(?=$|[\s.,!~])/i;
+// Chat shorthand a participant actually types ("ㅇㅇ", "넹", "ㄴㄴ") counts
+// too: a live test on 2026-09-14 answered a summary with "ㅇㅇ" and got "I'll
+// leave it as you put it" instead of a confirmation.
+const AFFIRM_PATTERN = /^(?:네\s*맞아요|네\s*맞습니다|맞아요|맞습니다|맞아|맞네요|그렇죠|그래요|그렇습니다|정확해요|정확합니다|네네|응응|ㅇㅇ|ㅇㅋ|넹|넵|옙|웅|네|예|응|ㅇ|yes|yeah|yep|yup|okay|ok|right|correct|exactly|that's right|that is right)(?=$|[\s.,!~])/i;
+const DENY_PATTERN = /^(?:아니요|아니오|아니에요|아닌데요|아닌데|아니야|아뇨|아니|ㄴㄴ|노노|틀렸어요|틀려요|그게\s*아니라|그건\s*아니고|no|nope|not really|not quite|that's not right)(?=$|[\s.,!~])/i;
 // "네, 근데..." / "yes, but..." / "네, 그리고..." carry a correction or an
 // addition the participant wants heard -- never collapse those into a bare yes.
 const QUALIFIER_PATTERN = /(?:근데|그런데|하지만|다만|그렇지만|그치만|그리고|추가로|\bbut\b|\bexcept\b|\bthough\b|\balso\b)/i;

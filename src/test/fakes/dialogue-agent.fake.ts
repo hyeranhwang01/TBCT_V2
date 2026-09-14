@@ -5,16 +5,20 @@ import type { AnswerRelevanceRequest, AnswerRelevanceResult } from "@/shared/dia
  * confirmation turn (see fakeDialogueDecision). */
 export const SUMMARY_CHECK_TRIGGER = "#요약확인";
 
-/** Tests put this in a participant message to make the fake answer-relevance
- * check call it off topic (see dispatchFakeAnswerRelevance). */
+/** Tests put these in a participant message to steer the fake answer-relevance
+ * check (see dispatchFakeAnswerRelevance) and, for a correction, the fake
+ * dialogue agent. */
 export const OFF_TOPIC_TRIGGER = "#엉뚱";
+export const STOP_SIGNAL_TRIGGER = "#끝";
+export const CORRECTION_TRIGGER = "#정정";
 
 /** Stand-in for the Claude answer-relevance check (answer-relevance.ts):
- * every message is an answer unless a test marks it off topic. */
+ * every message is an answer unless a test marks it otherwise. */
 export function dispatchFakeAnswerRelevance(request: AnswerRelevanceRequest): AnswerRelevanceResult {
-  return request.answer.includes(OFF_TOPIC_TRIGGER)
-    ? { isAnswer: false, checked: true, reason: "fake: marked off topic" }
-    : { isAnswer: true, checked: true };
+  if (request.answer.includes(OFF_TOPIC_TRIGGER)) return { isAnswer: false, checked: true, verdict: "off_topic", reason: "fake: marked off topic" };
+  if (request.answer.includes(CORRECTION_TRIGGER)) return { isAnswer: false, checked: true, verdict: "correction_request", reason: "fake: marked as a correction" };
+  if (request.answer.includes(STOP_SIGNAL_TRIGGER)) return { isAnswer: true, checked: true, verdict: "stop", reason: "fake: marked as nothing more" };
+  return { isAnswer: true, checked: true, verdict: "answer" };
 }
 
 /** The summary the fake gives for `said` -- exported so tests can assert the
@@ -41,6 +45,24 @@ export function fakeDialogueDecision(contract: DialogueContract): DialogueDecisi
   // answer. This fake only confirms when a test asks it to (SUMMARY_CHECK_TRIGGER
   // in the participant's message) or when revising a summary the participant
   // corrected -- so every other test's transcript is unchanged.
+  // Field corrections (note2026_09_14_field_corrections): on the correction
+  // trigger, propose removing the recorded list item the message names.
+  if (contract.summaryCheckAllowed && message.includes(CORRECTION_TRIGGER)) {
+    const target = Object.entries(contract.confirmedState)
+      .flatMap(([field, value]) => (Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && message.includes(item)).map((item) => ({ field, item })) : []))
+      .at(-1);
+    if (target) {
+      return {
+        responseType: "clarify",
+        patientFacingMessage: contract.locale.toLowerCase().startsWith("ko") ? `'${target.item}'은(는) 기록에서 뺄까요?` : `Shall I remove '${target.item}' from the record?`,
+        proposedCorrection: { field: target.field, action: "remove_item", currentValue: target.item },
+        needsConfirmation: true,
+        keepCurrentNode: true,
+        participantResponseState: "revision_request",
+      };
+    }
+  }
+
   if (contract.summaryCheckAllowed && (contract.reflectionCheckContext || message.includes(SUMMARY_CHECK_TRIGGER))) {
     const said = message.replace(SUMMARY_CHECK_TRIGGER, "").trim();
     const reflectionText = fakeSummaryText(contract.locale, said);

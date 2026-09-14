@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { messagePartSchema } from "@/shared/dialogue-agent/message-composition";
+import { fieldCorrectionSchema } from "@/shared/runtime/field-correction";
 
 // The node-scoped contract sent TO the dialogue agent every turn. Compact by
 // design (see compileDialogueContract) -- never the whole protocol, never
@@ -227,6 +228,10 @@ export const dialogueDecisionSchema = z.object({
   // worksheet (src/shared/runtime/long-answer.ts).
   needsConfirmation: z.boolean().optional(),
   reflectionText: z.string().max(700).optional(),
+  // Field corrections (note2026_09_14_field_corrections): internal only. A
+  // change to an already-recorded value this turn asks the participant about;
+  // applied only after they say yes (src/shared/runtime/field-correction.ts).
+  proposedCorrection: fieldCorrectionSchema.optional(),
 });
 export type DialogueDecision = z.infer<typeof dialogueDecisionSchema>;
 

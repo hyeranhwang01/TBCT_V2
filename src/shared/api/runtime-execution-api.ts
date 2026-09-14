@@ -5,7 +5,7 @@ import { runMemoryRetrieval } from "@/shared/api/longitudinal-memory-api";
 import { extractMemoryCandidates, generateSessionSummary } from "@/shared/api/session-summary-api";
 import { createSafetyEvent, findOpenSafetyEventByTriggerKey, patchSafetyEvent, placeSessionOnSafetyHold } from "@/shared/api/safety-operations-api";
 import { getRuntimeParticipant } from "@/shared/api/participant-api";
-import { mergeExtractedRuntimeContext, extractRuntimeState, refreshListRatingPointers, isExplicitPatientRefusal, violatesThirdPersonRequirement, normalizeText, looksLikeMetaQuestionAboutTheProcess, looksLikeMeaningClarificationRequest, looksLikeS02ExplanationRequest } from "@/shared/runtime/runtime-context";
+import { mergeExtractedRuntimeContext, extractRuntimeState, refreshListRatingPointers, removeRatingForRemovedListItem, isExplicitPatientRefusal, violatesThirdPersonRequirement, normalizeText, looksLikeMetaQuestionAboutTheProcess, looksLikeMeaningClarificationRequest, looksLikeS02ExplanationRequest } from "@/shared/runtime/runtime-context";
 import { detectLanguageSwitchRequest } from "@/shared/runtime/language-switch-detector";
 import { describePatientInputForDisplay } from "@/shared/runtime/patient-input-display";
 import { executeRuntimeNodeMessage } from "@/shared/runtime/runtime-node-executor";
@@ -20,6 +20,7 @@ import { expectedInputTypeForPrompt } from "@/shared/dialogue-agent/dialogue-con
 import { resolveBracketPlaceholders, resolveStaticPatientMessage } from "@/shared/runtime/runtime-static-message";
 import { REFLECTION_ASK_AGAIN, REFLECTION_MOVE_ON, classifyReflectionCheckReply, findPendingReflectionCheck, reflectionText, type PendingReflectionCheck, type ReflectionCheckResolution } from "@/shared/runtime/reflection-check";
 import { applyConfirmedSummaryToFields, confirmedSummaryKey, confirmedSummaryRecord, resolveLongAnswerSummaryTarget } from "@/shared/runtime/long-answer";
+import { applyFieldCorrection, confirmedSummariesAfterCorrection } from "@/shared/runtime/field-correction";
 import { applyS01TurnRules } from "@/patient/sessions/s01/turn-rules";
 import { composeCrpPlanSummary } from "@/patient/sessions/s07/messages";
 import { composeTrialClosingSummary } from "@/patient/sessions/s08/messages";
@@ -171,11 +172,14 @@ async function deliverClarificationTurn(input: {
   missingFields?: string[];
   recentAssistantMessages?: string[];
   recentMessages?: RuntimeMessage[];
+  /** Let the dialogue agent end this turn in a confirmation (a proposed
+   * field correction) that the next reply answers. */
+  allowConfirmation?: boolean;
 }) {
-  // An off-topic message (note2026_09_14_off_topic_answers) is not a failed
-  // attempt at the question, so it never counts toward
+  // An off-topic message or a correction request (note2026_09_14) is not a
+  // failed attempt at the question, so it never counts toward
   // MAX_CLARIFICATION_ATTEMPTS or pauses the session.
-  const clarificationAttemptCount = (input.session.runtimeContext.clarificationAttemptCount ?? 0) + (input.reason === "off_topic" ? 0 : 1);
+  const clarificationAttemptCount = (input.session.runtimeContext.clarificationAttemptCount ?? 0) + (input.reason === "off_topic" || input.reason === "correction_request" ? 0 : 1);
   const missing = new Set(input.missingFields ?? []);
   const isKorean = (input.session.locale ?? "").toLowerCase().startsWith("ko");
   const tr = (en: string, ko: string) => (isKorean ? ko : en);
@@ -343,7 +347,7 @@ async function deliverClarificationTurn(input: {
   // fails validation.
   // An off-topic message goes through the dialogue agent the same way: it
   // acknowledges the message briefly and asks the same question again.
-  if ((input.reason === "insufficient_input" || input.reason === "off_topic") && isDialogueAgentEnabled(input.node.sessionId)) {
+  if ((input.reason === "insufficient_input" || input.reason === "off_topic" || input.reason === "correction_request") && isDialogueAgentEnabled(input.node.sessionId)) {
     dialogueOutcome = await resolveDialogueAgentMessage({
       session: input.session,
       node: input.node,
@@ -360,12 +364,20 @@ async function deliverClarificationTurn(input: {
       // runtime-orchestrator.ts).
       isFirstPromptOfNode: false,
       isFirstPromptOfSession: false,
+      summaryCheckAllowed: input.allowConfirmation === true,
     });
     content = dialogueOutcome.patientMessage;
   }
   const sessionStatus: RuntimeSessionStatus = input.reason === "patient_refusal" || clarificationAttemptCount >= MAX_CLARIFICATION_ATTEMPTS ? "paused" : "waiting_for_input";
+  const assistantMessageId = makeId("RMSG");
+  // A correction request can end in a confirmation ("'읎오'는 목록에서
+  // 뺄까요?"); the open check lives on this message like any other
+  // (reflection-check.ts), so the next reply answers it.
+  const confirmation: PendingReflectionCheck | undefined = dialogueOutcome?.summaryCheck
+    ? { status: "pending", checkId: assistantMessageId, attempt: 1, summaryText: dialogueOutcome.summaryCheck.summaryText, ...(dialogueOutcome.summaryCheck.correction ? { correction: dialogueOutcome.summaryCheck.correction } : {}) }
+    : undefined;
   const assistantMessage: RuntimeMessage = {
-    id: makeId("RMSG"),
+    id: assistantMessageId,
     runtimeSessionId: input.session.id,
     role: "assistant",
     content,
@@ -375,7 +387,7 @@ async function deliverClarificationTurn(input: {
     sourceEvidenceIds: [],
     createdAt: new Date().toISOString(),
     deliveredAt: new Date().toISOString(),
-    metadata: { turnId: makeId("TURN"), turnOutcome: "clarification", clarificationReason: input.reason, dialogueDecision: dialogueOutcome?.decision ?? undefined, dialogueFallbackUsed: dialogueOutcome?.usedFallback },
+    metadata: { turnId: makeId("TURN"), turnOutcome: "clarification", clarificationReason: input.reason, dialogueDecision: dialogueOutcome?.decision ?? undefined, dialogueFallbackUsed: dialogueOutcome?.usedFallback, reflectionCheck: confirmation },
   };
   const outputValidation = deterministicValidation(content);
   await commitRuntimeAssistantTurn({
@@ -813,9 +825,21 @@ async function deliverReflectionCheckReplyTurn(input: {
   let runtimeContext: RuntimeSession["runtimeContext"] = { ...input.session.runtimeContext, lastPatientMessage: input.patientMessage.content };
   let runtimeState = input.runtimeState;
   let recordedFields: Record<string, unknown> | undefined;
+  let appliedCorrection: ReflectionCheckResolution["appliedCorrection"];
   if (reply === "affirm") {
     const target = check.summaryTarget;
-    const recorded = target ? applyConfirmedSummaryToFields(input.session.runtimeContext.fields, target, check.summaryText) : undefined;
+    // Field corrections (note2026_09_14_field_corrections): the participant
+    // agreed to change or remove a recorded value.
+    const corrected = check.correction ? applyFieldCorrection(input.session.runtimeContext.fields, check.correction) : undefined;
+    if (check.correction && corrected) {
+      if (corrected.removedIndex !== undefined) removeRatingForRemovedListItem(corrected.fields, check.correction.field, corrected.removedIndex);
+      refreshListRatingPointers(corrected.fields);
+      runtimeContext = { ...runtimeContext, fields: corrected.fields, confirmedSummaries: confirmedSummariesAfterCorrection(input.session.runtimeContext.confirmedSummaries, check.correction, corrected.before, corrected.removedIndex) };
+      runtimeState = { ...input.runtimeState, fields: corrected.fields };
+      recordedFields = corrected.fields;
+      appliedCorrection = { field: check.correction.field, action: check.correction.action, before: corrected.before, after: corrected.after };
+    }
+    const recorded = target && !check.correction ? applyConfirmedSummaryToFields(input.session.runtimeContext.fields, target, check.summaryText) : undefined;
     if (target && recorded) {
       refreshListRatingPointers(recorded);
       const record = confirmedSummaryRecord(target, check.summaryText, input.patientMessage.id, new Date().toISOString());
@@ -827,8 +851,10 @@ async function deliverReflectionCheckReplyTurn(input: {
     const taskText = recordedFields ? taskTextFor(runtimeContext) : currentTaskText;
     dialogueOutcome = agentEnabled ? await askDialogueAgent({ session: { ...input.session, runtimeContext }, taskText, deterministicFallbackText: taskText, summaryCheckAllowed: false }) : null;
     content = dialogueOutcome?.patientMessage ?? taskText;
-    resolution = { checkId: check.checkId, outcome: "confirmed", summaries: check.attempt, ...(target && recordedFields ? { recordedSummary: { key: confirmedSummaryKey(target), writeField: target.writeField, listIndex: target.listIndex } } : {}) };
-  } else if (reply === "deny") {
+    resolution = { checkId: check.checkId, outcome: "confirmed", summaries: check.attempt, ...(target && recorded ? { recordedSummary: { key: confirmedSummaryKey(target), writeField: target.writeField, listIndex: target.listIndex } } : {}), ...(appliedCorrection ? { appliedCorrection } : {}) };
+  } else if (reply === "deny" && !check.correction) {
+    // A "no" to a proposed correction needs no re-ask: the record stays as it
+    // is (the final branch below).
     content = reflectionText(REFLECTION_ASK_AGAIN, locale);
     nextCheck = { ...check, askedAgain: true };
   } else if (reply === "correction" && agentEnabled) {
@@ -1640,10 +1666,10 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
   // fields so this same turn's conditions, worksheet projection and commit
   // all see them. Skipped for a reply to a pending summary check (not an
   // answer to the prompt) and, inside, for any turn carrying risk signals.
-  const s01Rules = initialSession.sessionDefinitionId === "tbct-s01" && !pendingReflectionCheck
+  let s01Rules = initialSession.sessionDefinitionId === "tbct-s01" && !pendingReflectionCheck
     ? await applyS01TurnRules({ extracted: baseExtracted, promptItem: currentPromptItem, rawText: patientMessage.content, locale: turnLocale, sessionId, turnId: clientTurnId })
     : null;
-  const extracted = s01Rules ? s01Rules.extracted : baseExtracted;
+  let extracted = s01Rules ? s01Rules.extracted : baseExtracted;
   // Off-topic answers (.claude/TASK_SCOPE.json note2026_09_14_off_topic_answers):
   // before a typed answer to a free-text question is stored (worksheet
   // projection just below, the commit further down), Claude checks that it
@@ -1655,13 +1681,17 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
   // never for a reply to an open confirmation, a risk turn, or a safety prompt.
   const answeredField = currentPromptItem.outputFields[0];
   const answerText = patientInput.kind === "text" && typeof patientInput.value === "string" ? patientInput.value.trim() : "";
+  const answerInputType = answeredField ? expectedInputTypeForPrompt(initialSession.sessionDefinitionId, currentPromptItem) : undefined;
+  // A list item can be one short word -- and so can a typo that means
+  // "nothing more" ("읎오"), which is why list answers are checked even when short.
+  const isListAnswer = answerInputType === "ordered_list" || (Boolean(answeredField) && Array.isArray(extracted.fields[answeredField]));
   const checksRelevance = !pendingReflectionCheck
-    && answerText.length > 3
+    && answerText.length > (isListAnswer ? 1 : 3)
     && extracted.riskSignals.length === 0
     && Boolean(answeredField) && !extracted.missingFields.includes(answeredField)
     && isDialogueAgentEnabled(initialSession.sessionDefinitionId)
     && !isSafetyCriticalPrompt(currentPromptItem)
-    && ["free_text", "ordered_list"].includes(expectedInputTypeForPrompt(initialSession.sessionDefinitionId, currentPromptItem));
+    && (answerInputType === "free_text" || answerInputType === "ordered_list");
   const answerRelevance = checksRelevance
     ? await checkAnswerRelevance({
         locale: turnLocale,
@@ -1672,8 +1702,22 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
         stepObjective: currentNode.objective || currentNode.clinicalPurpose,
       }, { sessionId, turnId: clientTurnId })
     : undefined;
-  const offTopicAnswer = answerRelevance?.checked === true && !answerRelevance.isAnswer;
-  if (answerRelevance?.checked) patientMessage.metadata = { ...patientMessage.metadata, answerRelevance: { isAnswer: answerRelevance.isAnswer, reason: answerRelevance.reason } };
+  // Field corrections (note2026_09_14_field_corrections): a list answer that
+  // means "nothing more" -- even a typo such as "읎오" -- closes the list
+  // exactly as a recognized stop word would, by extracting it again as one.
+  if (answerRelevance?.checked && answerRelevance.verdict === "stop" && isListAnswer) {
+    const stopText = turnLocale.toLowerCase().startsWith("ko") ? "없어요" : "none";
+    const stopExtracted = await extractRuntimeState({ patientInput: { kind: "text", value: stopText }, currentNode, currentPromptItem, currentContext: initialSession.runtimeContext, locale: turnLocale, pendingReflectionCheck: false });
+    s01Rules = initialSession.sessionDefinitionId === "tbct-s01"
+      ? await applyS01TurnRules({ extracted: stopExtracted, promptItem: currentPromptItem, rawText: stopText, locale: turnLocale, sessionId, turnId: clientTurnId })
+      : null;
+    extracted = s01Rules ? s01Rules.extracted : stopExtracted;
+  }
+  // Not an answer at all: small talk (off_topic) or a request to change an
+  // earlier answer (correction_request). Neither is stored.
+  const unansweredVerdict = answerRelevance?.checked && (answerRelevance.verdict === "off_topic" || answerRelevance.verdict === "correction_request") ? answerRelevance.verdict : undefined;
+  const offTopicAnswer = unansweredVerdict !== undefined;
+  if (answerRelevance?.checked) patientMessage.metadata = { ...patientMessage.metadata, answerRelevance: { isAnswer: answerRelevance.isAnswer, verdict: answerRelevance.verdict, reason: answerRelevance.reason } };
   // Open dialogue v1 (.claude/TASK_SCOPE.json note2026_09_14): a long answer to
   // a free-text worksheet field -- already stored as given, just above -- is
   // marked on the participant's own message, so the next assistant turn
@@ -1832,11 +1876,14 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
       release: view.release,
       runtimeState,
       patientMessage,
-      reason: "off_topic",
+      reason: unansweredVerdict ?? "off_topic",
+      // A correction request is answered with a proposed change and a
+      // question before anything changes (field corrections).
+      allowConfirmation: unansweredVerdict === "correction_request",
       recentAssistantMessages: view.messages.filter((message) => message.role === "assistant").map((message) => message.content),
       recentMessages: [...view.messages, patientMessage],
     });
-    void saveRuntimeLog(makeLog(sessionId, "input", "completed", `Participant message did not answer the question and was not stored (${answerRelevance?.reason ?? "off topic"})`, { nodeId: currentNode.id })).catch(() => {});
+    void saveRuntimeLog(makeLog(sessionId, "input", "completed", `Participant message was not stored as an answer (${unansweredVerdict}: ${answerRelevance?.reason ?? "no reason given"})`, { nodeId: currentNode.id })).catch(() => {});
     void createRuntimeCheckpoint(sessionId).catch(() => {});
     return { sessionId, previousNodeId: session.previousNodeId, currentNodeId: currentNode.id, currentPromptItemId: currentPromptItem.id, stateExtraction: extracted, safetyResult, generatedMessage: offTopic.assistantMessage, turnOutcome: "clarification", fallbackUsed: false, sessionStatus: offTopic.sessionStatus, logIds: [] };
   }
