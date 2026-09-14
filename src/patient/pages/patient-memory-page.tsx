@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PatientShell } from "@/patient/components/patient-shell";
@@ -9,22 +10,75 @@ import { getOrCreateParticipantForUiLocale, getParticipantConsentHistory, update
 import { getParticipantMemories } from "@/shared/api/longitudinal-memory-api";
 import { useT } from "@/shared/i18n/context";
 import { useAuth } from "@/shared/auth/auth-context";
+import type { LongitudinalMemory, ParticipantConsentEvent, RuntimeParticipant } from "@/types/longitudinal-memory";
+
+const LOCAL_PREVIEW_PARTICIPANT: RuntimeParticipant = {
+  id: "local-preview-participant",
+  projectId: "TBCT-BR-001",
+  alias: "Preview participant",
+  locale: "en-US",
+  status: "active",
+  runtimeSessionIds: ["local-preview-s01", "local-preview-s02"],
+  longitudinalRecordId: "local-preview-record",
+  consent: { memoryStorageAllowed: true, crossSessionUseAllowed: true, sensitiveMemoryAllowed: false, updatedAt: "2026-09-14T09:30:00.000Z" },
+  createdAt: "2026-09-14T09:30:00.000Z",
+  updatedAt: "2026-09-14T09:30:00.000Z",
+};
+
+const LOCAL_PREVIEW_MEMORIES: LongitudinalMemory[] = [
+  {
+    id: "local-preview-memory-1",
+    participantId: LOCAL_PREVIEW_PARTICIPANT.id,
+    projectId: LOCAL_PREVIEW_PARTICIPANT.projectId,
+    memoryType: "session_goal",
+    title: "What matters to me",
+    content: "Taking small steps toward daily routines feels important.",
+    status: "approved",
+    sensitivity: "standard",
+    sourceType: "session_summary",
+    sourceSessionId: "local-preview-s01",
+    sourceMessageIds: [],
+    sourceNodeIds: [],
+    sourceExecutionLogIds: [],
+    isDirectlyReported: true,
+    isSystemDerived: false,
+    validFrom: "2026-09-14T09:30:00.000Z",
+    retentionPolicyId: "local-preview",
+    createdAt: "2026-09-14T09:30:00.000Z",
+    updatedAt: "2026-09-14T09:30:00.000Z",
+    createdBy: "local-preview",
+  },
+];
+
+const LOCAL_PREVIEW_CONSENT_HISTORY: ParticipantConsentEvent[] = [
+  {
+    id: "local-preview-consent-1",
+    participantId: LOCAL_PREVIEW_PARTICIPANT.id,
+    memoryStorageAllowed: true,
+    crossSessionUseAllowed: true,
+    sensitiveMemoryAllowed: false,
+    effectiveAt: "2026-09-14T09:30:00.000Z",
+    reason: "Initial preferences",
+  },
+];
 
 export function PatientMemoryPage() {
   const { t, locale } = useT();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const preview = process.env.NODE_ENV === "development" && searchParams.get("preview") === "1";
   const userId = user?.id ?? "";
-  const participantQuery = useQuery({ queryKey: ["runtime-participant", userId], queryFn: () => getOrCreateParticipantForUiLocale(userId, locale), enabled: Boolean(userId) });
+  const participantQuery = useQuery({ queryKey: ["runtime-participant", userId], queryFn: () => getOrCreateParticipantForUiLocale(userId, locale), enabled: Boolean(userId) && !preview });
   const memoryQuery = useQuery({
     queryKey: ["patient-memories", participantQuery.data?.id],
     queryFn: () => getParticipantMemories(participantQuery.data!.id),
-    enabled: Boolean(participantQuery.data?.id),
+    enabled: Boolean(participantQuery.data?.id) && !preview,
   });
   const consentHistoryQuery = useQuery({
     queryKey: ["patient-consent-history", participantQuery.data?.id],
     queryFn: () => getParticipantConsentHistory(participantQuery.data!.id),
-    enabled: Boolean(participantQuery.data?.id),
+    enabled: Boolean(participantQuery.data?.id) && !preview,
   });
   const consentMutation = useMutation({
     mutationFn: () =>
@@ -49,18 +103,24 @@ export function PatientMemoryPage() {
   const [sensitiveMemoryAllowed, setSensitiveMemoryAllowed] = useState(false);
 
   useEffect(() => {
+    if (preview) {
+      setMemoryStorageAllowed(true);
+      setCrossSessionUseAllowed(true);
+      setSensitiveMemoryAllowed(false);
+      return;
+    }
     if (!participantQuery.data) return;
     setMemoryStorageAllowed(participantQuery.data.consent.memoryStorageAllowed);
     setCrossSessionUseAllowed(participantQuery.data.consent.crossSessionUseAllowed);
     setSensitiveMemoryAllowed(participantQuery.data.consent.sensitiveMemoryAllowed);
-  }, [participantQuery.data]);
-  if (participantQuery.isLoading || memoryQuery.isLoading || consentHistoryQuery.isLoading) return <PatientShell title={t("patientMemory.title")}><PageSkeleton /></PatientShell>;
-  const participant = participantQuery.data;
-  const consentHistory = consentHistoryQuery.data ?? [];
-  const visible = (memoryQuery.data ?? []).filter((memory) => memory.status === "approved" && !memory.isSystemDerived && memory.sensitivity !== "safety_restricted" && memory.memoryType !== "clinician_note");
+  }, [participantQuery.data, preview]);
+  if (!preview && (participantQuery.isLoading || memoryQuery.isLoading || consentHistoryQuery.isLoading)) return <PatientShell title={t("patientMemory.title")}><PageSkeleton /></PatientShell>;
+  const participant = preview ? LOCAL_PREVIEW_PARTICIPANT : participantQuery.data;
+  const consentHistory = preview ? LOCAL_PREVIEW_CONSENT_HISTORY : consentHistoryQuery.data ?? [];
+  const visible = (preview ? LOCAL_PREVIEW_MEMORIES : memoryQuery.data ?? []).filter((memory) => memory.status === "approved" && !memory.isSystemDerived && memory.sensitivity !== "safety_restricted" && memory.memoryType !== "clinician_note");
   if (!participant) return <PatientShell title={t("patientMemory.title")}><Card><EmptyState title={t("patientMemory.notFound")} /></Card></PatientShell>;
   return (
-    <PatientShell title={t("patientMemory.title")} sessionLabel={participant.alias} progressLabel={participant.status} actions={<Button variant="secondary" onClick={() => consentMutation.mutate()}>{t("patientMemory.saveSettings")}</Button>}>
+    <PatientShell title={t("patientMemory.title")} sessionLabel={participant.alias} progressLabel={participant.status} actions={<Button variant="secondary" onClick={() => preview ? undefined : consentMutation.mutate()} disabled={preview}>{t("patientMemory.saveSettings")}</Button>}>
       <div className="space-y-4">
         <Card className="p-4">
           <div className="text-sm font-semibold text-text-primary">{t("patientMemory.controls.title")}</div>

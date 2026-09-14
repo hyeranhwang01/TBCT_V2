@@ -1,11 +1,13 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Badge, Card } from "@/shared/components/ui/primitives";
 import { submitMoodCheckin, listMoodCheckins } from "@/shared/api/mood-checkin-api";
 import { computeStreak, todayInSeoul } from "@/shared/mood-checkins/streak";
 import { useT } from "@/shared/i18n/context";
 import { cn } from "@/shared/utils";
+import type { MoodCheckin } from "@/types/mood-checkin";
 
 const MOOD_EMOJI: Record<1 | 2 | 3 | 4 | 5, string> = { 1: "😞", 2: "😕", 3: "😐", 4: "🙂", 5: "😄" };
 const MOOD_VALUES = [1, 2, 3, 4, 5] as const;
@@ -14,19 +16,22 @@ const MOOD_VALUES = [1, 2, 3, 4, 5] as const;
  * habit-loop pattern, deliberately separate from the heavier PHQ-9/GAD-7
  * periodic screenings (see standardized-assessment-api.ts). Lives on the
  * patient's session-list home page (patient-list-page.tsx). */
-export function MoodCheckinWidget({ participantId }: { participantId: string }) {
+export function MoodCheckinWidget({ participantId, preview = false }: { participantId: string; preview?: boolean }) {
   const { t } = useT();
   const queryClient = useQueryClient();
+  const [previewMood, setPreviewMood] = useState<1 | 2 | 3 | 4 | 5 | null>(null);
   const checkinsQuery = useQuery({
     queryKey: ["mood-checkins", participantId],
     queryFn: () => listMoodCheckins(participantId),
-    enabled: Boolean(participantId),
+    enabled: Boolean(participantId) && !preview,
   });
 
   const today = todayInSeoul();
-  const checkins = checkinsQuery.data ?? [];
+  const checkins: MoodCheckin[] = preview && previewMood
+    ? [{ id: "local-preview-mood", participantId, checkinDate: today, mood: previewMood, createdAt: `${today}T00:00:00.000Z`, updatedAt: `${today}T00:00:00.000Z` }]
+    : checkinsQuery.data ?? [];
   const todaysCheckin = checkins.find((checkin) => checkin.checkinDate === today);
-  const streak = computeStreak(checkins, today);
+  const streak = preview ? 3 : computeStreak(checkins, today);
 
   const submitMutation = useMutation({
     mutationFn: (mood: 1 | 2 | 3 | 4 | 5) => submitMoodCheckin(participantId, mood),
@@ -47,7 +52,7 @@ export function MoodCheckinWidget({ participantId }: { participantId: string }) 
             key={value}
             type="button"
             disabled={submitMutation.isPending}
-            onClick={() => submitMutation.mutate(value)}
+            onClick={() => preview ? setPreviewMood(value) : submitMutation.mutate(value)}
             aria-label={t(`moodCheckin.mood.${value}`)}
             className={cn(
               "flex h-12 w-12 items-center justify-center rounded-full border text-2xl transition disabled:opacity-50",
