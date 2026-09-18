@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { BookOpen, ClipboardList, HelpCircle, ListChecks, MessageCircle, Settings, UserRound } from "lucide-react";
+import { ClipboardList, HelpCircle, History, ListChecks, MessageCircle, Settings, UserRound } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -88,22 +88,22 @@ export function PatientShell({
       <aside className="hidden w-[260px] shrink-0 flex-col border-r border-border bg-surface lg:flex">
         <Link href="/projects/demo/patient" className="flex h-[112px] items-center gap-3 border-b border-border px-7">
           <Logo className="h-12 w-12" />
-          <div><div className="text-xl font-black tracking-[-0.04em]">TBCT</div><div className="text-xs text-text-secondary">프로그램</div></div>
+          <div><div className="text-xl font-black tracking-[-0.04em]">TBCT</div><div className="text-xs text-text-secondary">{t("patientShell.logoSubtitle")}</div></div>
         </Link>
         <nav className="flex-1 space-y-2 p-5">
-          <PatientNavLink href="/projects/demo/patient" active={pathname === "/projects/demo/patient"} icon={<ListChecks className="h-5 w-5" />} label={t("patientShell.sessionList")} />
+          <PatientNavLink href="/projects/demo/patient" active={pathname === "/projects/demo/patient"} icon={<ListChecks className="h-5 w-5" />} label={t("patientShell.home")} />
+          <PatientNavLink href="/projects/demo/patient/history" active={pathname.includes("/patient/history")} icon={<History className="h-5 w-5" />} label={t("patientShell.history")} />
           <PatientNavLink href="/projects/demo/patient/homework" active={pathname.includes("/homework")} icon={<ClipboardList className="h-5 w-5" />} label={t("homeworkList.navLabel")} />
           <PatientNavLink href="/projects/demo/patient/profile" active={pathname.includes("/profile")} icon={<UserRound className="h-5 w-5" />} label={t("patientPortal.profile")} />
           <PatientNavLink href="/projects/demo/patient/messages" active={pathname.includes("/messages")} icon={<MessageCircle className="h-5 w-5" />} label={t("messages.title")} />
-          <PatientNavLink href="/projects/demo/patient/memory" active={pathname.includes("/memory")} icon={<BookOpen className="h-5 w-5" />} label={t("patientPortal.memory")} />
           <div className="my-5 border-t border-border" />
           <PatientNavLink href="/projects/demo/patient/profile" active={false} icon={<Settings className="h-5 w-5" />} label={t("nav.account")} />
         </nav>
         <div className="m-5 rounded-[24px] border border-clinical-blue-light bg-clinical-blue-light/30 p-5 text-center">
           <div className="text-3xl">🫶</div>
           <div className="mt-3 text-sm font-bold">{t("patientShell.crisisHelp")}</div>
-          <div className="mt-1 text-xs leading-5 text-text-secondary">언제든지 도움을 드릴게요.</div>
-          <Link href="/crisis" target="_blank"><Button variant="secondary" className="mt-4 w-full"><HelpCircle className="h-4 w-4" />도움말 보기</Button></Link>
+          <div className="mt-1 text-xs leading-5 text-text-secondary">{t("patientShell.helpDescription")}</div>
+          <Link href="/crisis" target="_blank"><Button variant="secondary" className="mt-4 w-full"><HelpCircle className="h-4 w-4" />{t("patientShell.helpButton")}</Button></Link>
         </div>
       </aside>
       <div className="min-w-0 flex-1">
@@ -130,7 +130,6 @@ export function PatientShell({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {user?.email && <span className="hidden max-w-[160px] truncate text-xs text-text-secondary sm:inline">{user.email}</span>}
             <LocaleToggle onChange={(next) => void handleLocaleChange(next)} />
             <span data-tour-id="theme-toggle" className="hidden sm:inline-flex"><ThemeToggle /></span>
             {/* Replays the onboarding tour -- it only ever mounts on the
@@ -147,7 +146,7 @@ export function PatientShell({
                 <Button variant="secondary" className="border-critical text-critical hover:bg-critical-light">{t("patientShell.crisisHelp")}</Button>
               </Link>
             </span>
-            <Link href="/projects/demo/patient"><Button variant="secondary">{t("patientShell.sessionList")}</Button></Link>
+            {pathname !== "/projects/demo/patient" && <Link href="/projects/demo/patient"><Button variant="secondary">{t("patientShell.home")}</Button></Link>}
             {actions}
             <Button variant="ghost" onClick={() => setLogoutConfirmOpen(true)}>{t("auth.logout")}</Button>
           </div>
