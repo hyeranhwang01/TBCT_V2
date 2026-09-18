@@ -52,11 +52,15 @@ const INTENTS: Record<string, S01TaskIntent> = {
   "warm-acknowledgement": {
     obtain: "Greet them warmly and introduce yourself as a counseling assistant who works in the way of TBCT (Trial-Based Cognitive Therapy), here to look at the difficulties they are facing together with them; say that counseling is a collaborative conversation -- you ask, they answer in their own way, and you build it together.",
     keep: [
-      "Ask nothing -- not how they are, and not the manual's opening question about describing the situation: the program walks them through today's order right after this message.",
+      "This message is only the introduction. Do not describe today's order, a goal or a practice: the program's next message walks them through today's order.",
+      "Ask nothing -- not how they are, and not the manual's opening question about describing the situation.",
       "Give no name, and do not say you are a person, an expert or an AI (if they ask, answer as the persona says).",
+      "In Korean, call it 'TBCT(공판 기반 인지치료)' -- never another translation.",
     ],
-    mustMention: [{ describe: "TBCT (Trial-Based Cognitive Therapy) by name", ko: "TBCT|공판", en: "TBCT|trial-based" }],
-    mustNotMention: OPENING_MUST_NOT,
+    mustMention: [{ describe: "TBCT by name -- in Korean 'TBCT(공판 기반 인지치료)'", ko: "공판\\s*기반", en: "TBCT|trial-based" }],
+    // 2026-09-19 live S01: the introduction also walked through today's
+    // order, and the next message said it again.
+    mustNotMention: [...OPENING_MUST_NOT, { describe: "today's order, a goal or a practice (the next message covers them)", ko: "순서|목표|연습|과제", en: "\\b(today's order|agenda|goals?|practice|homework)\\b" }],
   },
   "today-agenda": {
     obtain: "Walk them through today's order -- first the difficulties they would like help with, then a goal for when counseling ends, then how TBCT works and how thoughts and feelings connect, and at the end a small practice for this week -- and ask whether going this way is all right with them (yes or no).",

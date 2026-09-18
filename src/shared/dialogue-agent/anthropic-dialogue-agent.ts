@@ -257,7 +257,12 @@ export function systemPromptBlocks(contract: DialogueContract): { stable: string
     `Expected answer for this turn: ${contract.expectedInputType}${contract.choiceOptions?.length ? ` (options: ${contract.choiceOptions.join(" / ")})` : ""}. Only ask for a number or mention a scale when this turn expects a rating.`,
     `Confirmed so far (refer to it naturally, never recite it): ${JSON.stringify(contract.confirmedState)}`,
     contract.isFirstPromptOfSession
-      ? "This is the first message of the session: open the way the manual's opening rules describe, then move naturally into the current task."
+      // With a task intent the opening itself is the task (S01's
+      // introduction); the manual's opening rules led Claude to its old
+      // Step 1 question there (2026-09-19).
+      ? contract.taskIntent
+        ? "This is the first message of the session."
+        : "This is the first message of the session: open the way the manual's opening rules describe, then move naturally into the current task."
       : contract.isFirstPromptOfNode
         ? contract.isRoleTransitionPrompt
           ? "The participant is switching roles or perspective here: say so plainly before the task."
