@@ -1810,7 +1810,7 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
   // all see them. Skipped for a reply to a pending summary check (not an
   // answer to the prompt) and, inside, for any turn carrying risk signals.
   let s01Rules = initialSession.sessionDefinitionId === "tbct-s01" && !repliesToConversation
-    ? await applyS01TurnRules({ extracted: baseExtracted, promptItem: currentPromptItem, rawText: patientMessage.content, locale: turnLocale, sessionId, turnId: clientTurnId })
+    ? await applyS01TurnRules({ extracted: baseExtracted, promptItem: currentPromptItem, rawText: patientMessage.content, locale: turnLocale, sessionId, turnId: clientTurnId, clarificationAttemptCount: initialSession.runtimeContext.clarificationAttemptCount ?? 0 })
     : null;
   let extracted = s01Rules ? s01Rules.extracted : baseExtracted;
   // Off-topic answers (.claude/TASK_SCOPE.json note2026_09_14_off_topic_answers):

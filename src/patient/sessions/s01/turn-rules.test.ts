@@ -12,8 +12,8 @@ function extraction(fields: Record<string, unknown>, missingFields: string[] = [
   return { fields, missingFields, riskLevel: riskSignals.length ? "high" : "low", riskSignals };
 }
 
-function run(slug: string, field: string, rawText: string, fields: Record<string, unknown> = {}, missing: string[] = [], options: { riskSignals?: string[]; sessionId?: string; locale?: string } = {}) {
-  return applyS01TurnRules({ extracted: extraction(fields, missing, options.riskSignals), promptItem: prompt(slug, field, options.sessionId), rawText, locale: options.locale ?? "ko-KR", sessionId: "SESSION", turnId: "TURN" });
+function run(slug: string, field: string, rawText: string, fields: Record<string, unknown> = {}, missing: string[] = [], options: { riskSignals?: string[]; sessionId?: string; locale?: string; clarificationAttemptCount?: number } = {}) {
+  return applyS01TurnRules({ extracted: extraction(fields, missing, options.riskSignals), promptItem: prompt(slug, field, options.sessionId), rawText, locale: options.locale ?? "ko-KR", clarificationAttemptCount: options.clarificationAttemptCount, sessionId: "SESSION", turnId: "TURN" });
 }
 
 describe("s01PromptSlug", () => {
@@ -143,6 +143,25 @@ describe("applyS01TurnRules", () => {
     expect(none.extracted.fields.s01RepresentativeProblemSource).toBeUndefined();
     const both = await run("representative-difficulty", "s01RepresentativeProblem", "걱정이랑 계획이요", { s01Problems: problems, s01RepresentativeProblem: "걱정이랑 계획이요" });
     expect(both.extracted.fields.s01RepresentativeProblem).toBe("걱정이랑 계획이요");
+  });
+
+  // 2026-09-19 live S01: "없어" was stored as the representative difficulty.
+  it("never stores 'none' as the representative difficulty: asks again once, then keeps all of them", async () => {
+    const problems = ["너무 졸려", "피곤해"];
+    const first = await run("representative-difficulty", "s01RepresentativeProblem", "없어", { s01Problems: problems, s01RepresentativeProblem: "없어" });
+    expect(first.extracted.fields.s01RepresentativeProblem).toBeUndefined();
+    expect(first.extracted.missingFields).toContain("s01RepresentativeProblem");
+    const second = await run("representative-difficulty", "s01RepresentativeProblem", "둘 다요", { s01Problems: problems, s01RepresentativeProblem: "둘 다요" }, [], { clarificationAttemptCount: 1 });
+    expect(second.extracted.fields.s01RepresentativeProblem).toBe("너무 졸려, 피곤해");
+    expect(second.extracted.fields.s01RepresentativeProblemSource).toBe("all_items");
+    expect(second.extracted.missingFields).not.toContain("s01RepresentativeProblem");
+  });
+
+  it("still takes a named pick that also says the others are hard", async () => {
+    const problems = ["너무 졸려", "피곤해"];
+    const result = await run("representative-difficulty", "s01RepresentativeProblem", "둘 다 힘든데 졸린 게 더 커요", { s01Problems: problems, s01RepresentativeProblem: "둘 다 힘든데 졸린 게 더 커요" });
+    expect(result.extracted.fields.s01RepresentativeProblem).toBe("너무 졸려");
+    expect(result.extracted.fields.s01RepresentativeProblemSource).toBe("named");
   });
 
   it("matches in English, ignoring words every difficulty shares", () => {

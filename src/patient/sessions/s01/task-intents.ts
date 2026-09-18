@@ -60,6 +60,7 @@ const INTENTS: Record<string, S01TaskIntent> = {
     keep: [
       "You may name their difficulties briefly, in their key words, so they can choose.",
       "Never ask for a number or a position in a list, and never choose for them.",
+      "If they say none stands out or they cannot choose, say that is fine and invite them to pick the one to look at first today, even if they feel alike.",
     ],
   },
   "goal-at-end": {

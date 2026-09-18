@@ -20,6 +20,11 @@ export type S01TurnRulesInput = {
   locale: string;
   sessionId: string;
   turnId: string;
+  /** How many times the engine has already re-asked the current prompt
+   * (runtimeContext.clarificationAttemptCount, reset when an answer is
+   * accepted). A re-ask turn does not commit its fields, so this is how a
+   * rule knows it already asked once. */
+  clarificationAttemptCount?: number;
 };
 export type S01TurnRulesLog = { summary: string; output: Record<string, unknown> };
 export type S01TurnRulesOutput = { extracted: StateExtractionResult; logs: S01TurnRulesLog[] };
@@ -121,6 +126,21 @@ export function parseOrdinal(text: string): number | null {
   return cleaned in ORDINALS ? ORDINALS[cleaned] : null;
 }
 
+const NO_PICK_CONTAINS = ["다 비슷", "둘 다", "셋 다", "다 똑같", "다 같아", "고르기 어려", "고르기 힘들", "못 고르", "모르겠", "both", "all of them", "equally", "can't choose", "cannot choose", "can't pick", "not sure", "don't know"];
+const NO_PICK_EXACT = new Set(["다", "다요", "전부", "전부요", "전부 다", "모두", "모두요", "비슷해요", "똑같아요", "같아요", "all", "all of them", "same"]);
+
+/** A whole answer that picks none: "없어요", "모르겠어요", "아니요". */
+function isNoPickWholeAnswer(text: string) {
+  return isStopAnswer(text) || isUncertainAnswer(text) || isBareNo(text) || NO_PICK_EXACT.has(normalize(text));
+}
+
+/** "다 비슷해요", "둘 다요", "고르기 어려워요" -- checked only after the
+ * answer's words failed to point to one item. */
+function soundsLikeNoPick(text: string) {
+  const normalized = normalize(text);
+  return NO_PICK_CONTAINS.some((phrase) => normalized.includes(phrase));
+}
+
 // Words that say nothing about WHICH difficulty: every item is a difficulty,
 // and "the biggest one" is what the question asked.
 const PICK_FILLER = new Set([
@@ -147,9 +167,16 @@ export function matchListItemByWords(text: string, items: string[]): number | nu
   if (!stems.length || !items.length) return null;
   const scores = items.map((item) => {
     const haystack = normalize(item);
-    // Korean endings vary ("예민해서" / "예민해져요"), so a Korean word also
-    // matches on its stem; English words are already stemmed above.
-    return stems.filter((stem) => haystack.includes(stem) || (!/^[a-z]+$/.test(stem) && stem.length >= 3 && haystack.includes(stem.slice(0, Math.max(2, stem.length - 2))))).length;
+    const haystackJamo = haystack.normalize("NFD");
+    // Korean endings vary ("졸린" / "졸려", "예민해서" / "예민해져요"), so a
+    // Korean word also matches on its stem, compared letter by letter (NFD
+    // jamo); English words are already stemmed above.
+    return stems.filter((stem) => {
+      if (haystack.includes(stem)) return true;
+      if (/^[a-z]+$/.test(stem)) return false;
+      const jamo = stem.normalize("NFD");
+      return jamo.length >= 4 && haystackJamo.includes(jamo.slice(0, Math.max(4, jamo.length - 2)));
+    }).length;
   });
   const best = Math.max(...scores);
   if (best < 1 || scores.filter((score) => score === best).length > 1) return null;
@@ -265,18 +292,30 @@ export async function applyS01TurnRules(input: S01TurnRulesInput): Promise<S01Tu
   if (slug === "representative-difficulty") {
     const list = Array.isArray(fields.s01Problems) ? fields.s01Problems.filter((item): item is string => typeof item === "string") : [];
     const index = parseOrdinal(text);
+    const named = index === null && !isNoPickWholeAnswer(text) && !isBareYesNo(text) ? matchListItemByWords(text, list) : null;
     if (index !== null && index < list.length) {
       accept(list[index]);
       fields.s01RepresentativeProblemSource = "ordinal";
     } else if (list.length === 1 && isBareYesNo(text) && !isBareNo(text)) {
       accept(list[0]);
       fields.s01RepresentativeProblemSource = "only_item";
-    } else if (!isBareYesNo(text)) {
-      const named = matchListItemByWords(text, list);
-      if (named !== null) {
-        accept(list[named]);
-        fields.s01RepresentativeProblemSource = "named";
+    } else if (named !== null) {
+      accept(list[named]);
+      fields.s01RepresentativeProblemSource = "named";
+    } else if (list.length > 1 && (isNoPickWholeAnswer(text) || soundsLikeNoPick(text))) {
+      // 2026-09-19 live S01: "없어" was stored as the representative
+      // difficulty, and the worksheet, the next questions and S02 carried it.
+      // Not picking is never stored: the question is asked once more, and if
+      // they still don't pick, all of their difficulties stand together --
+      // the program never picks one for them.
+      delete fields[target];
+      if ((input.clarificationAttemptCount ?? 0) > 0) {
+        accept(list.join(", "));
+        fields.s01RepresentativeProblemSource = "all_items";
+      } else if (!missing.includes(target)) {
+        missing = [...missing, target];
       }
+      logs.push({ summary: `representative-difficulty: no pick (${fields.s01RepresentativeProblemSource === "all_items" ? "kept all items" : "asked again"})`, output: { slug, answer: text } });
     }
   }
 

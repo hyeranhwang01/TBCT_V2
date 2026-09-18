@@ -459,9 +459,12 @@
       "src/shared/dialogue-agent/dialogue-contract-compiler.ts",
       "src/shared/dialogue-agent/anthropic-dialogue-agent.ts",
       "src/shared/dialogue-agent/dialogue-agent-orchestrator.ts",
-        "src/shared/dialogue-agent/task-intent.test.ts (new)",
-      "src/test/fakes/dialogue-agent.fake.ts"
+      "src/shared/dialogue-agent/task-intent.test.ts (new)",
+      "src/test/fakes/dialogue-agent.fake.ts",
+      "src/patient/sessions/s01/spec.test.ts (no-pick representative flow)",
+      "src/shared/api/runtime-execution-api.ts (pass clarificationAttemptCount to applyS01TurnRules only; added 2026-09-19 for the no-pick follow-up: a re-ask turn does not commit its fields, so the S01 rules need the engine's own re-ask count)"
     ],
+    "followUp2026_09_19_no_pick": "Live S01 after fd1a140: '없어' at the representative question was stored as the representative difficulty. By the user (option A): a no-pick answer is never stored; the question is asked once more, and a second no-pick keeps all listed difficulties together (s01RepresentativeProblemSource all_items) -- the program never picks one for them.",
     "doNotTouch": ["src/shared/protocol/tbct-source-text.generated.ts", "sql/**", "src/patient/sessions/s02/**", "src/patient/sessions/s03/**"],
     "blastRadius": "S01 dialogue-agent turns only (taskIntent is undefined for every other session, and with S01_TASK_INTENTS=off). Step order, completion, what an answer stores, safety routing and the deterministic fallback text path are unchanged; without a dialogue provider nothing changes. One extra Claude call at most on a turn that misses must-include content.",
     "regressionPlan": "npm run type-check; npx vitest run; npm run lint; npm run audit:sessions; live before/after with scripts/run-local-session.ts tbct-s01 --interactive (S01_TASK_INTENTS=off vs default) on scripted participants, reviewed by the user and the research team before any push."

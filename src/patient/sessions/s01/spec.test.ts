@@ -232,6 +232,18 @@ describe("S01 redesign: real first session replay", () => {
     expect(view.session.runtimeContext.fields.s01RepresentativeProblem).toBe("계획을 반드시 세우고 그대로 해야 하는 강박이 있어요");
   }, 30_000);
 
+  it("asks again when no difficulty is picked, then keeps all of them rather than storing 'none'", async () => {
+    const session = await startSession();
+    await driveUntil(session.id, "representative-difficulty", {}, 25);
+    const none = await submitPatientInput(session.id, { kind: "text", value: "없어" });
+    expect(none.turnOutcome).toBe("clarification");
+    expect(currentSlug(await currentView(session.id))).toBe("representative-difficulty");
+    await submitPatientInput(session.id, { kind: "text", value: "모르겠어요" });
+    const view = await currentView(session.id);
+    expect(currentSlug(view)).toBe("goal-at-end");
+    expect(view.session.runtimeContext.fields.s01RepresentativeProblem).toBe(["걱정이 많아요", "계획을 반드시 세우고 그대로 해야 하는 강박이 있어요", "관계에서 좀 예민한 편이에요"].join(", "));
+  }, 30_000);
+
   it("accepts 'ㅇㅇ' as yes, and asks plainly again for a bare 'ㄴ'", async () => {
     // Without a model the deterministic clarification is what actually ships
     // -- which is the wording this test is about. (With one, the dialogue
