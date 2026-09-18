@@ -141,6 +141,19 @@ function soundsLikeNoPick(text: string) {
   return NO_PICK_CONTAINS.some((phrase) => normalized.includes(phrase));
 }
 
+const DECLINE_CONTAINS = ["그만", "안 할래", "안할래", "하기 싫", "하고 싶지 않", "다음에 할", "다음에 하", "오늘은 안", "멈추", "멈출", "stop", "not today", "another time", "don't want", "do not want"];
+// "나중에 힘들면 말할게요, 일단 해볼게요" goes on: a clear yes outweighs a
+// decline word in the same answer.
+const GO_ON_CONTAINS = ["해볼게", "해 볼게", "진행할게", "계속할게", "계속 할게", "이어서 할게", "좋아요", "yes", "okay", "sure", "go on", "let's"];
+
+/** "아니요", "그만할래요", "다음에 할게요" -- the participant does not want to go on today. */
+export function declinesToGoOn(text: string) {
+  const normalized = normalize(text);
+  if (isBareNo(text)) return true;
+  if (/^(네|예)(\s|,|$)/.test(normalized) || GO_ON_CONTAINS.some((phrase) => normalized.includes(phrase))) return false;
+  return DECLINE_CONTAINS.some((phrase) => normalized.includes(phrase));
+}
+
 // Words that say nothing about WHICH difficulty: every item is a difficulty,
 // and "the biggest one" is what the question asked.
 const PICK_FILLER = new Set([
@@ -186,7 +199,7 @@ export function matchListItemByWords(text: string, items: string[]): number | nu
 // Bare yes/no is the whole intended answer here ("함께 해보실 수 있을까요?",
 // "이어지는 게 보이세요?", "상황은 같았나요, 달랐나요?" ...), but the engine
 // treats a bare "네"/"yes" as a non-answer on free-text prompts.
-const BARE_YES_NO_SLUGS = new Set(["today-agenda", "practice-commitment", "link-check", "friend-same-thought", "problem-link", "situation-same", "feelings-compared", "actions-compared", "read-a-few", "homework-commitment"]);
+const BARE_YES_NO_SLUGS = new Set(["today-agenda", "agenda-continue", "practice-commitment", "link-check", "friend-same-thought", "problem-link", "situation-same", "feelings-compared", "actions-compared", "read-a-few", "homework-commitment"]);
 const STOP_FLAG_BY_SLUG: Record<string, string> = { "second-emotion": "personalEmotionsNoMore", "third-emotion": "personalEmotionsNoMore", "second-behavior": "personalBehaviorsNoMore" };
 // List-shaped prompts need their OWN stop handling: STOP_FLAG_BY_SLUG above
 // deletes the target field, and for a list that would throw away every item
@@ -317,6 +330,15 @@ export async function applyS01TurnRules(input: S01TurnRulesInput): Promise<S01Tu
       }
       logs.push({ summary: `representative-difficulty: no pick (${fields.s01RepresentativeProblemSource === "all_items" ? "kept all items" : "asked again"})`, output: { slug, answer: text } });
     }
+  }
+
+  // A "no" to today's order opens agenda-concern / agenda-continue; a "no"
+  // (or "그만할래요", "다음에 할게요") to going on pauses the session through
+  // agenda-stop (by the user, 2026-09-19).
+  if (slug === "today-agenda" && isBareNo(text)) fields.s01AgendaDeclined = true;
+  if (slug === "agenda-continue" && declinesToGoOn(text)) {
+    accept(text);
+    fields.s01SessionDeclined = true;
   }
 
   if (slug === "identify-distortion" && isDistortionSuggestionRequest(text)) {

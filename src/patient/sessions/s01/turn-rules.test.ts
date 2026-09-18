@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { PromptItem } from "@/shared/protocol/source-fidelity-types";
 import type { StateExtractionResult } from "@/types/runtime-session";
 import { FIXED_S01_SCENE } from "@/patient/sessions/s01/generation";
-import { applyS01TurnRules, fearedOutcomeDidNotHappen, isBareYesNo, isLongAnswer, isStopAnswer, isUncertainAnswer, matchListItemByWords, namesEmotionNotThought, parseOrdinal, s01PromptSlug } from "@/patient/sessions/s01/turn-rules";
+import { applyS01TurnRules, declinesToGoOn, fearedOutcomeDidNotHappen, isBareYesNo, isLongAnswer, isStopAnswer, isUncertainAnswer, matchListItemByWords, namesEmotionNotThought, parseOrdinal, s01PromptSlug } from "@/patient/sessions/s01/turn-rules";
 
 function prompt(slug: string, outputField: string, sessionId = "tbct-s01"): PromptItem {
   return { id: `${sessionId}-n05-p01-${slug}`, sessionId, nodeId: `${sessionId}-n05-node`, order: 1, type: "question", outputFields: [outputField], validation: null, activationCondition: null, completionEffect: null } as unknown as PromptItem;
@@ -162,6 +162,18 @@ describe("applyS01TurnRules", () => {
     const result = await run("representative-difficulty", "s01RepresentativeProblem", "둘 다 힘든데 졸린 게 더 커요", { s01Problems: problems, s01RepresentativeProblem: "둘 다 힘든데 졸린 게 더 커요" });
     expect(result.extracted.fields.s01RepresentativeProblem).toBe("너무 졸려");
     expect(result.extracted.fields.s01RepresentativeProblemSource).toBe("named");
+  });
+
+  it("marks a no to today's order, and a no to going on", async () => {
+    expect((await run("today-agenda", "sessionAgendaAgreed", "아니요", { sessionAgendaAgreed: "아니요" })).extracted.fields.s01AgendaDeclined).toBe(true);
+    expect((await run("today-agenda", "sessionAgendaAgreed", "네", { sessionAgendaAgreed: "네" })).extracted.fields.s01AgendaDeclined).toBeUndefined();
+    for (const answer of ["아니요", "오늘은 그만할래요", "다음에 할게요", "하고 싶지 않아요", "Not today"]) {
+      expect(declinesToGoOn(answer), answer).toBe(true);
+    }
+    for (const answer of ["네", "해 볼게요", "괜찮아요 해볼게요", "나중에 힘들면 말할게요, 일단 해볼게요", "네 다음에 힘들면 멈출게요"]) expect(declinesToGoOn(answer), answer).toBe(false);
+    const stop = await run("agenda-continue", "sessionAgendaContinue", "오늘은 그만할래요", {}, ["sessionAgendaContinue"]);
+    expect(stop.extracted.fields.s01SessionDeclined).toBe(true);
+    expect(stop.extracted.missingFields).not.toContain("sessionAgendaContinue");
   });
 
   it("matches in English, ignoring words every difficulty shares", () => {

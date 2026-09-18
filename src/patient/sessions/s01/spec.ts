@@ -54,6 +54,13 @@ export const spec: SessionSpec = {
       prompts: [
         { slug: "warm-acknowledgement", type: "opening", source: [53, 65], marker: "That sounds like a lot to be carrying", completionEffect: { type: "record_opening_acknowledgement" } },
         { slug: "today-agenda", type: "question", source: [53, 65], patientText: "Today we'll first talk about the difficulties you'd like help with and set a goal for when counseling ends. Then we'll look at how TBCT works and how thoughts and feelings connect, and at the end I'll give you a small practice for this week. Is it all right with you to go this way?", outputFields: ["sessionAgendaAgreed"], validation: { kind: "boolean" } },
+        // Only after a "no" to today's order (s01/turn-rules.ts sets the
+        // flags): hear what does not feel right, answer it within today's
+        // plan, ask whether to go on -- and on a second no, pause the session
+        // (resumable at the difficulties question). By the user, 2026-09-19.
+        { slug: "agenda-concern", type: "question", source: [53, 65], patientText: "That's all right -- thank you for telling me. What about it doesn't feel right to you? Please tell me in your own way.", outputFields: ["sessionAgendaConcern"], activationCondition: { field: "s01AgendaDeclined", operator: "equals", value: true } },
+        { slug: "agenda-continue", type: "question", source: [53, 65], patientText: "Thank you for telling me. Today you can go at your own pace, share only as much as you want, and stop at any time. Would you like to go on with today's session?", outputFields: ["sessionAgendaContinue"], validation: { kind: "boolean" }, activationCondition: { field: "s01AgendaDeclined", operator: "equals", value: true } },
+        { slug: "agenda-stop", type: "instruction", source: [53, 65], patientText: "All right, let's stop here for today. Thank you for telling me. Whenever you'd like to continue, you can pick up from here.", completionEffect: { type: "pause_session" }, activationCondition: { field: "s01SessionDeclined", operator: "equals", value: true } },
       ],
     },
     {

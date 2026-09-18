@@ -32,6 +32,9 @@ export function resolveStaticText(promptItem: PromptItem, fields: Record<string,
 // 감정이 ...") so the Korean particle never depends on the participant's word.
 export const koreanText: Record<string, string> = {
   "tbct-s01-n01-p01-warm-acknowledgement": "안녕하세요, 만나서 반가워요. 저는 TBCT, 공판 기반 인지치료 방식으로 함께하는 상담 도우미예요. 요즘 겪고 계신 어려움을 함께 살펴보면서 도움이 되고 싶어요. 상담은 제가 여쭤보고 편하게 답해 주시면서 같이 만들어 가는 협력적인 대화예요.",
+  "tbct-s01-n01-p03-agenda-concern": "괜찮아요, 말씀해 주셔서 고마워요. 어떤 점이 마음에 걸리셨어요? 편하게 말씀해 주세요.",
+  "tbct-s01-n01-p04-agenda-continue": "말씀해 주셔서 고마워요. 오늘은 편한 속도로, 이야기하고 싶은 만큼만 나누셔도 되고, 언제든 멈출 수 있어요. 그럼 오늘 이어서 진행해 보실 수 있을까요?",
+  "tbct-s01-n01-p05-agenda-stop": "알겠어요. 오늘은 여기서 멈출게요. 이야기해 주셔서 고마워요. 나중에 다시 이어서 하고 싶으실 때 언제든 여기서부터 시작하실 수 있어요.",
   "tbct-s01-n01-p02-today-agenda": "오늘은 먼저 도움받고 싶은 어려움들을 이야기 나누고, 상담이 끝났을 때의 목표를 정해 볼 거예요. 그다음 TBCT가 어떻게 진행되는지, 생각과 감정이 어떻게 이어지는지 함께 살펴보고, 마지막에 이번 주에 해 볼 작은 연습을 드릴게요. 이렇게 진행해도 괜찮으실까요?",
 
   "tbct-s01-n02-p01-main-difficulty": "요즘 도움을 받고 싶은 어려움이 있으세요? 떠오르는 것부터 편하게 말씀해 주세요.",

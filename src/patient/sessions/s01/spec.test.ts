@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createCanonicalTestRuntimeSession, getRuntimeSession } from "@/shared/api/runtime-session-api";
-import { startRuntimeSession, submitPatientInput } from "@/shared/api/runtime-execution-api";
+import { resumeRuntimeSession, startRuntimeSession, submitPatientInput } from "@/shared/api/runtime-execution-api";
 import { getLocalDb } from "@/shared/data/db/tbct-local-db";
 import { S01_COGNITIVE_DISTORTIONS } from "@/patient/sessions/s01/cognitive-distortions";
 import { s01PromptSlug } from "@/patient/sessions/s01/turn-rules";
@@ -85,7 +85,7 @@ function currentSlug(view: RuntimeSessionView) {
 // These prompts declare validation.kind "boolean" (spec.ts), so the
 // participant answers them with the yes/no buttons rather than free text --
 // the replay has to send the same shape the UI does.
-const BOOLEAN_SLUGS = new Set(["today-agenda", "practice-commitment", "link-check", "friend-same-thought", "read-a-few", "homework-commitment"]);
+const BOOLEAN_SLUGS = new Set(["today-agenda", "agenda-continue", "practice-commitment", "link-check", "friend-same-thought", "read-a-few", "homework-commitment"]);
 
 function answerFor(slug: string, overrides: Record<string, string>): PatientInput {
   const text = overrides[slug] ?? REAL_SESSION[slug];
@@ -243,6 +243,40 @@ describe("S01 redesign: real first session replay", () => {
     const view = await currentView(session.id);
     expect(currentSlug(view)).toBe("goal-at-end");
     expect(view.session.runtimeContext.fields.s01RepresentativeProblem).toBe(["걱정이 많아요", "계획을 반드시 세우고 그대로 해야 하는 강박이 있어요", "관계에서 좀 예민한 편이에요"].join(", "));
+  }, 30_000);
+
+  // By the user, 2026-09-19: a "no" to today's order is heard, answered, and
+  // -- if they still do not want to go on -- the session pauses, resumable.
+  it("after a no to today's order asks what does not feel right, then goes on when they agree", async () => {
+    const session = await startSession();
+    await submitPatientInput(session.id, { kind: "boolean", value: false });
+    expect(currentSlug(await currentView(session.id))).toBe("agenda-concern");
+    await submitPatientInput(session.id, { kind: "text", value: "처음이라 좀 부담스러워요" });
+    expect(currentSlug(await currentView(session.id))).toBe("agenda-continue");
+    await submitPatientInput(session.id, { kind: "boolean", value: true });
+    const view = await currentView(session.id);
+    expect(currentSlug(view)).toBe("main-difficulty");
+    expect(view.session.runtimeContext.fields.sessionAgendaConcern).toBe("처음이라 좀 부담스러워요");
+  }, 30_000);
+
+  it("pauses the session when they still do not want to go on, and resumes at the difficulties question", async () => {
+    const session = await startSession();
+    await submitPatientInput(session.id, { kind: "boolean", value: false });
+    await submitPatientInput(session.id, { kind: "text", value: "오늘은 하고 싶지 않아요" });
+    await submitPatientInput(session.id, { kind: "text", value: "오늘은 그만할래요" });
+    const paused = await currentView(session.id);
+    expect(paused.session.status).toBe("paused");
+    expect(assistantTexts(paused).at(-1)).toContain("여기서 멈출게요");
+    await resumeRuntimeSession(session.id);
+    const resumed = await currentView(session.id);
+    expect(resumed.session.status).toBe("waiting_for_input");
+    expect(currentSlug(resumed)).toBe("main-difficulty");
+  }, 30_000);
+
+  it("does not ask about a no that was never said", async () => {
+    const session = await startSession();
+    const { visited } = await driveUntil(session.id, "main-difficulty", {}, 5);
+    expect(visited).toEqual(["today-agenda"]);
   }, 30_000);
 
   it("accepts 'ㅇㅇ' as yes, and asks plainly again for a bare 'ㄴ'", async () => {

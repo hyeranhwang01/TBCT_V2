@@ -67,6 +67,20 @@ const INTENTS: Record<string, S01TaskIntent> = {
     keep: ["Do not ask about their difficulties yet: that is the next question."],
     mustNotMention: OPENING_MUST_NOT,
   },
+  // After a "no" to today's order (by the user, 2026-09-19).
+  "agenda-concern": {
+    obtain: "What about going this way does not feel right to them, in their own words.",
+    keep: ["Take their 'no' warmly first; never argue or try to persuade.", "Ask only this."],
+  },
+  "agenda-continue": {
+    obtain: "Answer what they said briefly, within today's plan -- they can go at their own pace, share only as much as they want, and stop at any time -- then ask whether they would like to go on with today's session (yes or no).",
+    keep: ["Do not promise to change or skip the steps of today's session.", "Never press them: stopping for today is a fine answer."],
+    mustNotMention: OPENING_MUST_NOT,
+  },
+  "agenda-stop": {
+    obtain: "Close warmly: you will stop here for today, thank them for telling you, and say they can pick up from here whenever they want to continue.",
+    keep: ["Ask nothing, and do not try to change their mind.", "No summary."],
+  },
 
   "main-difficulty": {
     obtain: "The difficulties the participant would like help with these days, in their own words.",
