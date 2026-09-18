@@ -199,8 +199,19 @@ describe("must-include content", () => {
 
   it("counts any question in a turn the program does not wait on as a gap", () => {
     const welcome = compile("tbct-s01", "-warm-acknowledgement").taskIntent;
-    expect(taskIntentGaps("와 주셔서 감사해요. 오늘 함께 시작해 볼게요.", welcome)).toEqual([]);
-    expect(taskIntentGaps("와 주셔서 감사해요. 지금 상황을 짧게 말씀해 주시겠어요?", welcome)).toEqual([NO_QUESTION_ON_NON_INPUT_TURN]);
+    expect(taskIntentGaps("반가워요. 저는 TBCT 방식으로 함께하는 상담 도우미예요.", welcome)).toEqual([]);
+    expect(taskIntentGaps("반가워요. 저는 TBCT 방식으로 함께하는 상담 도우미예요. 지금 상황을 짧게 말씀해 주시겠어요?", welcome)).toEqual([NO_QUESTION_ON_NON_INPUT_TURN]);
+  });
+
+  // 2026-09-19: the introduction keeps the 9/15 persona -- no "expert", and
+  // S01 never counts sessions.
+  it("counts 'expert' or a number of sessions in the introduction as a gap, and a missing TBCT", () => {
+    const welcome = compile("tbct-s01", "-warm-acknowledgement").taskIntent;
+    expect(taskIntentGaps("반가워요. 저는 TBCT 전문가예요.", welcome)).toHaveLength(1);
+    expect(taskIntentGaps("반가워요. 저는 TBCT 방식으로 함께하는 상담 도우미예요. 앞으로 열두 번 만나요.", welcome)).toHaveLength(1);
+    expect(taskIntentGaps("반가워요. 저는 TBCT 방식으로 함께하는 상담 도우미예요. 8회기 동안 함께해요.", welcome)).toHaveLength(1);
+    expect(taskIntentGaps("반가워요. 이번 주에 한 번 함께 살펴봐요. 저는 TBCT 방식으로 함께하는 상담 도우미예요.", welcome)).toEqual([]);
+    expect(taskIntentGaps("반가워요. 저는 상담 도우미예요.", welcome)).toHaveLength(1);
   });
 
   it("writes a welcome that asked a question once more, then falls back to the approved sentence", async () => {

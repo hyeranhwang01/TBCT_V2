@@ -468,5 +468,29 @@
     "doNotTouch": ["src/shared/protocol/tbct-source-text.generated.ts", "sql/**", "src/patient/sessions/s02/**", "src/patient/sessions/s03/**"],
     "blastRadius": "S01 dialogue-agent turns only (taskIntent is undefined for every other session, and with S01_TASK_INTENTS=off). Step order, completion, what an answer stores, safety routing and the deterministic fallback text path are unchanged; without a dialogue provider nothing changes. One extra Claude call at most on a turn that misses must-include content.",
     "regressionPlan": "npm run type-check; npx vitest run; npm run lint; npm run audit:sessions; live before/after with scripts/run-local-session.ts tbct-s01 --interactive (S01_TASK_INTENTS=off vs default) on scripted participants, reviewed by the user and the research team before any push."
+  },
+  "note2026_09_19_s01_opening_intro": {
+    "task": "User feedback (2026-09-19): S01 jumps into the difficulties question after one line. The real first session this S01 follows (GMT20260911 recording) opens with a greeting and self-introduction, says the work is TBCT, why the session is held, that counseling is a collaborative conversation, walks through today's order (difficulties, goal, how TBCT works, the cognitive model, distortions, homework) and asks whether that is all right before the first question.",
+    "userDecision": "2026-09-19, by the user: the introduction keeps the 9/15 persona -- 'a counseling assistant who works in the way of TBCT' -- with no name, no 'expert', and no AI mention unless asked; add the agenda consent step (yes/no). Step order and the consent are code; the wording is Claude's (task intents). Must-include ('TBCT') and must-not-include ('expert', a number of sessions) are checked in code.",
+    "change": "S01 n01: warm-acknowledgement becomes the introduction (no input, asks nothing); new tbct-s01-n01-p02-today-agenda (boolean, sessionAgendaAgreed required) walks through today's order and asks whether that is all right. Task intents gain mustNotMention (checked like mustMention: one rewrite, then the approved text).",
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/patient/sessions/s01/spec.ts",
+      "src/patient/sessions/s01/messages.ts",
+      "src/patient/sessions/s01/task-intents.ts",
+      "src/patient/sessions/s01/task-intents.test.ts",
+      "src/patient/sessions/s01/turn-rules.ts (BARE_YES_NO_SLUGS only)",
+      "src/patient/sessions/s01/spec.test.ts",
+      "src/patient/sessions/s01/*.test.ts(x) (S01 flow tests that start from the first question)",
+      "src/shared/dialogue-agent/dialogue-agent-contract.ts (taskIntent.mustNotMention)",
+      "src/shared/dialogue-agent/anthropic-dialogue-agent.ts (must-not-include line)",
+      "src/shared/dialogue-agent/dialogue-agent-orchestrator.ts (taskIntentGaps)",
+      "src/shared/dialogue-agent/dialogue-contract-compiler.ts",
+      "src/shared/dialogue-agent/task-intent.test.ts",
+      "src/**/*.test.ts (only S01 flow tests whose first answer went to the difficulties question)"
+    ],
+    "doNotTouch": ["src/shared/protocol/tbct-source-text.generated.ts", "sql/**", "src/patient/sessions/s02/**", "src/patient/sessions/s03/**"],
+    "blastRadius": "S01's first node only: one more program turn (the consent) before the difficulties question. Other nodes' prompt ids are unchanged (ids are positional within a node). Other sessions unchanged.",
+    "regressionPlan": "npm run type-check; npx vitest run; npm run lint; npm run audit:sessions; local run of scripts/run-local-session.ts tbct-s01 --interactive; after deploy, a new S01 session."
   }
 }

@@ -15,6 +15,7 @@ type RuntimeSessionView = NonNullable<Awaited<ReturnType<typeof getRuntimeSessio
 // recorded 2026-09-11 (lightly shortened), keyed by prompt slug, and check
 // the order and branches the researcher approved.
 const REAL_SESSION: Record<string, string> = {
+  "today-agenda": "네",
   "main-difficulty": "걱정이 많아요",
   "difficulty-example": "과제나 일을 할 때 뭔가 놓치면 어떡하지 하는 걱정이 불안으로 이어져요.",
   "other-difficulty": "계획을 반드시 세우고 그대로 해야 하는 강박이 있어요",
@@ -84,7 +85,7 @@ function currentSlug(view: RuntimeSessionView) {
 // These prompts declare validation.kind "boolean" (spec.ts), so the
 // participant answers them with the yes/no buttons rather than free text --
 // the replay has to send the same shape the UI does.
-const BOOLEAN_SLUGS = new Set(["practice-commitment", "link-check", "friend-same-thought", "read-a-few", "homework-commitment"]);
+const BOOLEAN_SLUGS = new Set(["today-agenda", "practice-commitment", "link-check", "friend-same-thought", "read-a-few", "homework-commitment"]);
 
 function answerFor(slug: string, overrides: Record<string, string>): PatientInput {
   const text = overrides[slug] ?? REAL_SESSION[slug];
@@ -134,7 +135,7 @@ describe("S01 redesign: real first session replay", () => {
     const { view, visited } = await driveUntil(session.id, null);
     expect(view.session.status).toBe("completed");
 
-    const order = ["main-difficulty", "practice-commitment", "recent-moment", "first-emotion", "thought-behind-emotion", "first-behavior", "link-check", "after-behavior-feeling", "candidate-one-emotion", "candidate-two-thought", "what-made-difference", "what-made-feeling", "participant-summary", "identify-distortion", "homework-commitment"];
+    const order = ["today-agenda", "main-difficulty", "practice-commitment", "recent-moment", "first-emotion", "thought-behind-emotion", "first-behavior", "link-check", "after-behavior-feeling", "candidate-one-emotion", "candidate-two-thought", "what-made-difference", "what-made-feeling", "participant-summary", "identify-distortion", "homework-commitment"];
     const positions = order.map((slug) => visited.indexOf(slug));
     expect(positions.every((position) => position >= 0)).toBe(true);
     expect(positions).toEqual([...positions].sort((a, b) => a - b));

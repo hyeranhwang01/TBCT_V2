@@ -155,6 +155,9 @@ export const dialogueContractSchema = z.object({
     obtain: z.string(),
     keep: z.array(z.string()),
     mustMention: z.array(z.object({ describe: z.string(), pattern: z.string() })),
+    // What the turn must leave out (S01's opening: "expert", a number of
+    // sessions), checked in code the same way.
+    mustNotMention: z.array(z.object({ describe: z.string(), pattern: z.string() })).default([]),
     // False for a turn the program does not wait on (a welcome, an
     // explanation): its next message follows at once, so this turn must not
     // ask anything -- checked in code like mustMention.

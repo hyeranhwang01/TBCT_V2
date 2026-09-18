@@ -42,6 +42,11 @@ async function reachOtherDifficulty() {
     const view = await current(session.id);
     const slug = slugOf(view);
     if (slug === "other-difficulty") return session.id;
+    if (slug === "today-agenda") {
+      // S01 opens with today's order and a yes/no consent (note2026_09_19_s01_opening_intro).
+      await submitPatientInput(session.id, { kind: "boolean", value: true });
+      continue;
+    }
     const answer = slug ? answers[slug] : undefined;
     if (!answer) throw new Error(`Unexpected S01 prompt ${slug}`);
     await submitPatientInput(session.id, { kind: "text", value: answer });

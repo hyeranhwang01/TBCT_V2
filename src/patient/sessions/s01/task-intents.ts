@@ -14,7 +14,9 @@
 import { resolveBracketPlaceholders } from "@/shared/runtime/runtime-static-message";
 
 export type S01MustMention = { describe: string; ko?: string; en?: string; literal?: string };
-export type S01TaskIntent = { obtain: string; keep?: string[]; mustMention?: S01MustMention[] };
+/** mustNotMention: what the turn must leave out, checked in code the same
+ * way (the introduction must not call itself an expert or count sessions). */
+export type S01TaskIntent = { obtain: string; keep?: string[]; mustMention?: S01MustMention[]; mustNotMention?: S01MustMention[] };
 
 /** Off switch and before/after comparison: S01_TASK_INTENTS=off restores the
  * approved-sentence grounding. Read per call so tests and scripts can flip it. */
@@ -35,10 +37,31 @@ const BELIEF_ZERO_AND_HUNDRED: S01MustMention = {
 
 const SCENE_ONLY = "Scene only: the counselor's goodbye remark to three people. No interviewer, no job application.";
 
+// The opening introduces a counseling assistant (the 9/15 persona), never an
+// expert, and S01 never says how many sessions there are.
+const OPENING_MUST_NOT: S01MustMention[] = [
+  { describe: "the word 'expert' or 'specialist' about yourself", ko: "전문가", en: "\\b(expert|specialist)" },
+  {
+    describe: "a number of sessions (say 'when counseling ends' instead)",
+    ko: "[0-9]+\\s*(번|회|회기|차례)(?!째)|(두|세|네|다섯|여섯|일곱|여덟|아홉|열|열한|열두)\\s*(번|회|회기)(?!째)",
+    en: "\\b([0-9]+|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\\s+sessions?\\b",
+  },
+];
+
 const INTENTS: Record<string, S01TaskIntent> = {
   "warm-acknowledgement": {
-    obtain: "A warm welcome in one or two sentences.",
-    keep: ["Ask nothing -- not how they are, and not the manual's opening question about describing the situation: the program asks about their difficulties right after this message."],
+    obtain: "Greet them warmly and introduce yourself as a counseling assistant who works in the way of TBCT (Trial-Based Cognitive Therapy), here to look at the difficulties they are facing together with them; say that counseling is a collaborative conversation -- you ask, they answer in their own way, and you build it together.",
+    keep: [
+      "Ask nothing -- not how they are, and not the manual's opening question about describing the situation: the program walks them through today's order right after this message.",
+      "Give no name, and do not say you are a person, an expert or an AI (if they ask, answer as the persona says).",
+    ],
+    mustMention: [{ describe: "TBCT (Trial-Based Cognitive Therapy) by name", ko: "TBCT|공판", en: "TBCT|trial-based" }],
+    mustNotMention: OPENING_MUST_NOT,
+  },
+  "today-agenda": {
+    obtain: "Walk them through today's order -- first the difficulties they would like help with, then a goal for when counseling ends, then how TBCT works and how thoughts and feelings connect, and at the end a small practice for this week -- and ask whether going this way is all right with them (yes or no).",
+    keep: ["Do not ask about their difficulties yet: that is the next question."],
+    mustNotMention: OPENING_MUST_NOT,
   },
 
   "main-difficulty": {
@@ -333,7 +356,11 @@ export function resolveS01TaskIntent(promptItemId: string, locale: string, conte
     const pattern = korean ? item.ko : item.en;
     return pattern ? [{ describe: fill(item.describe), pattern }] : [];
   });
-  return { obtain: fill(intent.obtain), keep: (intent.keep ?? []).map(fill), mustMention };
+  const mustNotMention = (intent.mustNotMention ?? []).flatMap((item) => {
+    const pattern = korean ? item.ko : item.en;
+    return pattern ? [{ describe: fill(item.describe), pattern }] : [];
+  });
+  return { obtain: fill(intent.obtain), keep: (intent.keep ?? []).map(fill), mustMention, mustNotMention };
 }
 
 /** Exported for the coverage test only. */

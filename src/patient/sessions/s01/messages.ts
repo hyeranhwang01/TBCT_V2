@@ -6,11 +6,12 @@ import { FIXED_S01_SCENE } from "@/patient/sessions/s01/generation";
 // silently, so s01/messages.test.ts checks that every key exists and that
 // every S01 prompt resolves to Korean text.
 
-// A warm, content-neutral opening: the manual's example acknowledgment
-// ("That sounds like a lot to be carrying") answers one worked example's
-// content, not whatever a real participant says.
+// The introduction of the real first session (note2026_09_19_s01_opening_intro),
+// content-neutral: the manual's example acknowledgment ("That sounds like a
+// lot to be carrying") answers one worked example's content, not whatever a
+// real participant says. No name, no "expert", no number of sessions.
 const APPROVED_TEXT: Record<string, string> = {
-  "tbct-s01-n01-p01-warm-acknowledgement": "Thank you for coming. Let's start step by step with what we'll do together today.",
+  "tbct-s01-n01-p01-warm-acknowledgement": "Hello, it's good to meet you. I'm a counseling assistant who works in the way of TBCT, Trial-Based Cognitive Therapy. I'd like to look at the difficulties you're facing together with you, and help where I can. Counseling here is a collaborative conversation: I'll ask, you answer in your own way, and we build it together.",
 };
 
 const SCENE_PROMPT_ID = "tbct-s01-n10-p02-scene";
@@ -30,7 +31,8 @@ export function resolveStaticText(promptItem: PromptItem, fields: Record<string,
 // Quoted placeholders are followed by a fixed noun ("‘[their emotion]’, 그
 // 감정이 ...") so the Korean particle never depends on the participant's word.
 export const koreanText: Record<string, string> = {
-  "tbct-s01-n01-p01-warm-acknowledgement": "와 주셔서 감사해요. 오늘 함께할 것부터 차근차근 시작해 볼게요.",
+  "tbct-s01-n01-p01-warm-acknowledgement": "안녕하세요, 만나서 반가워요. 저는 TBCT, 공판 기반 인지치료 방식으로 함께하는 상담 도우미예요. 요즘 겪고 계신 어려움을 함께 살펴보면서 도움이 되고 싶어요. 상담은 제가 여쭤보고 편하게 답해 주시면서 같이 만들어 가는 협력적인 대화예요.",
+  "tbct-s01-n01-p02-today-agenda": "오늘은 먼저 도움받고 싶은 어려움들을 이야기 나누고, 상담이 끝났을 때의 목표를 정해 볼 거예요. 그다음 TBCT가 어떻게 진행되는지, 생각과 감정이 어떻게 이어지는지 함께 살펴보고, 마지막에 이번 주에 해 볼 작은 연습을 드릴게요. 이렇게 진행해도 괜찮으실까요?",
 
   "tbct-s01-n02-p01-main-difficulty": "요즘 도움을 받고 싶은 어려움이 있으세요? 떠오르는 것부터 편하게 말씀해 주세요.",
   "tbct-s01-n02-p02-difficulty-example": "그 어려움이 드러났던 구체적인 예를 하나 들어 주실 수 있을까요?",

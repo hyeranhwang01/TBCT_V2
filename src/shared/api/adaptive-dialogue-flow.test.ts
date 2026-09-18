@@ -34,6 +34,8 @@ function lastAssistant(messages: RuntimeMessage[]) {
 async function startS01() {
   const session = await createCanonicalTestRuntimeSession({ locale: "ko-KR" });
   await startRuntimeSession(session.id);
+  // S01 opens with today's order and a yes/no consent (note2026_09_19_s01_opening_intro).
+  await submitPatientInput(session.id, { kind: "boolean", value: true });
   return session.id;
 }
 

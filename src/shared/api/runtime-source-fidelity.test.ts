@@ -440,6 +440,8 @@ describe("canonical source-fidelity runtime", () => {
       });
 
       await startRuntimeSession(session.id);
+      // S01 opens with today's order and a yes/no consent (note2026_09_19_s01_opening_intro).
+      await submitPatientInput(session.id, { kind: "boolean", value: true });
       const before = await getRuntimeSession(session.id);
       const answeredPromptId = before?.session.currentPromptItemId;
       const assistantMessageCountBefore = before?.messages.filter((message) => message.role === "assistant").length ?? 0;
@@ -485,6 +487,8 @@ describe("canonical source-fidelity runtime", () => {
     try {
       const session = await createCanonicalTestRuntimeSession();
       await startRuntimeSession(session.id);
+      // S01 opens with today's order and a yes/no consent (note2026_09_19_s01_opening_intro).
+      await submitPatientInput(session.id, { kind: "boolean", value: true });
 
       // S01 redesign (note2026_09_12): the first S01 answer is now the first
       // difficulty, bound to the "My difficulties" worksheet list.
@@ -511,6 +515,8 @@ describe("canonical source-fidelity runtime", () => {
     try {
       const session = await createCanonicalTestRuntimeSession();
       await startRuntimeSession(session.id);
+      // S01 opens with today's order and a yes/no consent (note2026_09_19_s01_opening_intro).
+      await submitPatientInput(session.id, { kind: "boolean", value: true });
 
       await submitPatientInput(session.id, { kind: "text", value: "I worry about everything at work." });
       await submitPatientInput(session.id, { kind: "text", value: "Yesterday I kept re-reading one email for an hour." });

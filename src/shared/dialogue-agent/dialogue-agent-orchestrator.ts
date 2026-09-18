@@ -48,10 +48,25 @@ export function missingIntentContent(text: string, taskIntent: Pick<NonNullable<
  * asked another). */
 export const NO_QUESTION_ON_NON_INPUT_TURN = "no question at all -- this turn asks the participant nothing, the next message follows right after it";
 
+/** What a turn says that its intent tells it to leave out, as "leave out: ..."
+ * reasons for the rewrite. */
+export function forbiddenIntentContent(text: string, taskIntent: Pick<NonNullable<DialogueContract["taskIntent"]>, "mustNotMention"> | undefined): string[] {
+  if (!taskIntent) return [];
+  return taskIntent.mustNotMention
+    .filter(({ pattern }) => {
+      try {
+        return new RegExp(pattern, "i").test(text);
+      } catch {
+        return false;
+      }
+    })
+    .map(({ describe }) => `leave out ${describe}`);
+}
+
 export function taskIntentGaps(text: string, taskIntent: DialogueContract["taskIntent"]): string[] {
   if (!taskIntent) return [];
   const asksAnyway = !taskIntent.asksParticipant && /[?？]/.test(text);
-  return [...missingIntentContent(text, taskIntent), ...(asksAnyway ? [NO_QUESTION_ON_NON_INPUT_TURN] : [])];
+  return [...missingIntentContent(text, taskIntent), ...forbiddenIntentContent(text, taskIntent), ...(asksAnyway ? [NO_QUESTION_ON_NON_INPUT_TURN] : [])];
 }
 
 /** Safety-critical turns never go through Claude, in either direction: not

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { spec } from "@/patient/sessions/s01/spec";
-import { koreanText } from "@/patient/sessions/s01/messages";
+import { koreanText, resolveStaticText } from "@/patient/sessions/s01/messages";
 import { CANONICAL_PROMPT_ITEMS } from "@/shared/protocol/source-fidelity-catalog";
 import { promptRequiresPatientInput } from "@/shared/runtime/runtime-release-normalizer";
-import { missingIntentContent } from "@/shared/dialogue-agent/dialogue-agent-orchestrator";
+import { forbiddenIntentContent, missingIntentContent } from "@/shared/dialogue-agent/dialogue-agent-orchestrator";
 import { resolveS01TaskIntent, S01_FIXED_TASK_SLUGS, S01_TASK_INTENT_SLUGS, s01TaskIntent, s01TaskIntentsEnabled } from "@/patient/sessions/s01/task-intents";
 
 // Task intents (.claude/TASK_SCOPE.json note2026_09_19_s01_task_intents).
@@ -36,10 +36,11 @@ describe("S01 task intents", () => {
     for (const item of s01Prompts) {
       for (const locale of ["ko-KR", "en-US"]) {
         const intent = resolveS01TaskIntent(item.id, locale, { fields });
-        if (!intent?.mustMention.length) continue;
-        const approved = locale === "ko-KR" ? koreanText[item.id] : englishTextBySlug.get(slugOf(item.id));
+        if (!intent?.mustMention.length && !intent?.mustNotMention.length) continue;
+        const approved = locale === "ko-KR" ? koreanText[item.id] : (resolveStaticText(item, fields, locale) ?? englishTextBySlug.get(slugOf(item.id)));
         const text = (approved ?? "").replace("[person two hint]", fields.candidateTwoThoughtHint).replace("[person three hint]", fields.candidateThreeThoughtHint);
         expect(missingIntentContent(text, intent), `${item.id} ${locale}`).toEqual([]);
+        expect(forbiddenIntentContent(text, intent), `${item.id} ${locale}`).toEqual([]);
       }
     }
   });

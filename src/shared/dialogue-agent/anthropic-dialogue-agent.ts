@@ -240,6 +240,7 @@ export function systemPromptBlocks(contract: DialogueContract): { stable: string
           `The current task -- what this turn must get from the participant: ${contract.taskIntent.obtain}`,
           contract.taskIntent.keep.length ? `Keep to:\n${contract.taskIntent.keep.map((rule) => `- ${rule}`).join("\n")}` : "",
           contract.taskIntent.mustMention.length ? `This turn must include:\n${contract.taskIntent.mustMention.map((item) => `- ${item.describe}`).join("\n")}` : "",
+          contract.taskIntent.mustNotMention.length ? `This turn must not include:\n${contract.taskIntent.mustNotMention.map((item) => `- ${item.describe}`).join("\n")}` : "",
           ...(contract.taskIntent.asksParticipant
             ? [
                 "How you ask it, how you connect it to what they have said, and every word are yours -- there is no script to follow. Ask one question, for this task only: the rest of the step objective has its own turns.",

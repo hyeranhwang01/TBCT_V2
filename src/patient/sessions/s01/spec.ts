@@ -46,10 +46,14 @@ export const spec: SessionSpec = {
       titleKo: "세션 시작 - 도입",
       type: "session_start",
       source: [53, 65],
-      requiredFields: ["sessionOpeningAcknowledged"],
-      objective: "Welcome the participant warmly in one or two sentences and move straight on. Do not ask about feelings, history or problems in this turn -- the next step asks about their difficulties.",
+      requiredFields: ["sessionOpeningAcknowledged", "sessionAgendaAgreed"],
+      // As in the real first session (note2026_09_19_s01_opening_intro): a
+      // greeting and introduction, then today's order and whether that is all
+      // right, before the first question about difficulties.
+      objective: "Open as in the real first session: greet the participant and introduce yourself as a counseling assistant who works in the way of TBCT (Trial-Based Cognitive Therapy), there to look at their difficulties together; say that counseling is a collaborative conversation. Then walk them through today's order -- the difficulties they would like help with, a goal for when counseling ends, how TBCT works and how thoughts and feelings connect, and a small practice for this week -- and ask whether that is all right. Do not ask about feelings, history or problems yet.",
       prompts: [
         { slug: "warm-acknowledgement", type: "opening", source: [53, 65], marker: "That sounds like a lot to be carrying", completionEffect: { type: "record_opening_acknowledgement" } },
+        { slug: "today-agenda", type: "question", source: [53, 65], patientText: "Today we'll first talk about the difficulties you'd like help with and set a goal for when counseling ends. Then we'll look at how TBCT works and how thoughts and feelings connect, and at the end I'll give you a small practice for this week. Is it all right with you to go this way?", outputFields: ["sessionAgendaAgreed"], validation: { kind: "boolean" } },
       ],
     },
     {

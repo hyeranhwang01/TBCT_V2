@@ -186,7 +186,7 @@ export function matchListItemByWords(text: string, items: string[]): number | nu
 // Bare yes/no is the whole intended answer here ("함께 해보실 수 있을까요?",
 // "이어지는 게 보이세요?", "상황은 같았나요, 달랐나요?" ...), but the engine
 // treats a bare "네"/"yes" as a non-answer on free-text prompts.
-const BARE_YES_NO_SLUGS = new Set(["practice-commitment", "link-check", "friend-same-thought", "problem-link", "situation-same", "feelings-compared", "actions-compared", "read-a-few", "homework-commitment"]);
+const BARE_YES_NO_SLUGS = new Set(["today-agenda", "practice-commitment", "link-check", "friend-same-thought", "problem-link", "situation-same", "feelings-compared", "actions-compared", "read-a-few", "homework-commitment"]);
 const STOP_FLAG_BY_SLUG: Record<string, string> = { "second-emotion": "personalEmotionsNoMore", "third-emotion": "personalEmotionsNoMore", "second-behavior": "personalBehaviorsNoMore" };
 // List-shaped prompts need their OWN stop handling: STOP_FLAG_BY_SLUG above
 // deletes the target field, and for a list that would throw away every item
