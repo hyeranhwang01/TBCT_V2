@@ -23,6 +23,14 @@ export const ADDED_MEANING_TRIGGER = "#덧붙임";
 export const TENTATIVE_TRIGGER = "#잠정";
 export const FAKE_EXPLORATION_QUESTION = { ko: "그 이야기를 조금 더 들려주시겠어요?", en: "Could you tell me a little more about that?" };
 
+/** Task intents (note2026_09_19_s01_task_intents): OMIT_INTENT_CONTENT_TRIGGER
+ * makes the fake's first draft leave out the step's must-include content (its
+ * rewrite then carries the task text); KEEP_OMITTING_INTENT_CONTENT_TRIGGER
+ * leaves it out of the rewrite too. */
+export const OMIT_INTENT_CONTENT_TRIGGER = "#필수빠짐";
+export const KEEP_OMITTING_INTENT_CONTENT_TRIGGER = "#필수계속빠짐";
+export const FAKE_TURN_WITHOUT_INTENT_CONTENT = { ko: "좋아요, 이어서 여쭤볼게요.", en: "Thanks, let's keep going." };
+
 /** Stand-in for the Claude summary fidelity check (summary-fidelity.ts). */
 export function dispatchFakeSummaryFidelity(request: SummaryFidelityRequest): SummaryFidelityResult {
   if (request.summary.includes(ADDED_MEANING_TRIGGER)) return { faithful: false, checked: true, tentative: false, addedMeaning: "fake: added meaning" };
@@ -104,6 +112,16 @@ function baseFakeDecision(contract: DialogueContract): DialogueDecision {
       responseType: "reflect_and_ask",
       patientFacingMessage: contract.locale.toLowerCase().startsWith("ko") ? FAKE_EXPLORATION_QUESTION.ko : FAKE_EXPLORATION_QUESTION.en,
       conversationMove: "explore",
+      keepCurrentNode: true,
+      participantResponseState: "valid_answer",
+    };
+  }
+
+  const omitsIntentContent = message.includes(KEEP_OMITTING_INTENT_CONTENT_TRIGGER) || (message.includes(OMIT_INTENT_CONTENT_TRIGGER) && !contract.intentFeedback);
+  if (contract.taskIntent?.mustMention.length && omitsIntentContent) {
+    return {
+      responseType: "reflect_and_ask",
+      patientFacingMessage: contract.locale.toLowerCase().startsWith("ko") ? FAKE_TURN_WITHOUT_INTENT_CONTENT.ko : FAKE_TURN_WITHOUT_INTENT_CONTENT.en,
       keepCurrentNode: true,
       participantResponseState: "valid_answer",
     };

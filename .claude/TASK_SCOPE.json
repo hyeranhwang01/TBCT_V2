@@ -1,7 +1,7 @@
 {
   "task": "TBCT Sessions 1-3 session-local enhancement work (content/flow/wording), following prompts/.claude/rules/tbct-session-manual.md",
   "createdAt": "2026-08-13",
-  "updatedAt": "2026-09-13",
+  "updatedAt": "2026-09-19",
   "allowedPaths": [
     "src/patient/pages/homework-list-page.tsx",
     "src/patient/pages/patient-list-page.tsx",
@@ -440,5 +440,30 @@
     ],
     "blastRadius": "All eight sessions' dialogue-agent turns. Step order, completion, safety routing and what an answer stores are unchanged; exploration only delays the next task by at most 2 turns. Without a dialogue provider (tests' default path, AI_PROVIDER=mock audits) nothing explores or summarizes, so transcripts are unchanged.",
     "regressionPlan": "npx tsc --noEmit; npx vitest run; live S01 run with a key (confirmation count per session, exploration following the participant, no added meaning in summaries, step order kept); after deploy, per-session counts of reflectionCheck / pendingExploration and guard_log:summary_added_meaning in Supabase."
+  },
+  "note2026_09_19_s01_task_intents": {
+    "task": "Research-team S01 feedback (2026-09-18/19): the conversation still feels scripted -- 'regex/worksheet-based' -- e.g. after free talk it asks which difficulty represents the others \"'두 번째 거요'처럼\". Cause: every Claude turn is grounded on the finished approved sentence (runtime-orchestrator.ts approvedPatientText -> currentTaskTextOverride), so Claude paraphrases that sentence.",
+    "userDecision": "2026-09-19, by the user: keep WHAT each step must obtain and which question it is (and step order, completion, storage, safety in code); free HOW it is asked. Must-not-miss content is checked in code; the rest stays in the prompt. S01 first. Evidence reviewed with the user: CALM (Bocklisch 2024), SSAG (Sun 2024), Wei et al. CSCW 2024, MIBot (ACL Findings 2025).",
+    "change": "(1) src/patient/sessions/s01/task-intents.ts: per-slug intent (obtain, keep, mustMention) for every S01 prompt except the fixed scene and suggested-candidates; S01_TASK_INTENTS=off restores the previous behavior. (2) DialogueContract.taskIntent / intentFeedback; the compiler fills taskIntent for S01 with placeholders resolved. (3) systemPromptBlocks: with a taskIntent the turn states what to obtain, what to keep and what must be included instead of the approved sentence, and the user payload omits currentTaskText; S01 quoting rule changed from 'exactly as written' to 'refer by their key words without changing the meaning' (scene and example-thought hints stay exact). (4) Orchestrator: a turn that asks the task but misses mustMention content gets one rewrite with the reason, then the approved text (guard_log:task_intent_missing_content). (5) S01 representative difficulty: a named answer is matched to the list item; the fallback text no longer asks for 'the second one'.",
+    "sharedFileReason": "Session-local means (messages.ts, patientText, participantRationale, dialogue-guidance) can only change the sentence Claude receives, not the fact that the task is a sentence: the task framing lives in the shared contract/compiler/prompt. Follows the existing precedent of dialogue-contract-compiler.ts importing s01DialogueGuidance. Every change is additive and gated on taskIntent, which only S01 provides.",
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/patient/sessions/s01/task-intents.ts (new)",
+      "src/patient/sessions/s01/task-intents.test.ts (new)",
+      "src/patient/sessions/s01/dialogue-guidance.ts",
+      "src/patient/sessions/s01/turn-rules.ts",
+      "src/patient/sessions/s01/turn-rules.test.ts",
+      "src/patient/sessions/s01/messages.ts",
+      "src/patient/sessions/s01/spec.ts (representative-difficulty patientText only)",
+      "src/shared/dialogue-agent/dialogue-agent-contract.ts",
+      "src/shared/dialogue-agent/dialogue-contract-compiler.ts",
+      "src/shared/dialogue-agent/anthropic-dialogue-agent.ts",
+      "src/shared/dialogue-agent/dialogue-agent-orchestrator.ts",
+        "src/shared/dialogue-agent/task-intent.test.ts (new)",
+      "src/test/fakes/dialogue-agent.fake.ts"
+    ],
+    "doNotTouch": ["src/shared/protocol/tbct-source-text.generated.ts", "sql/**", "src/patient/sessions/s02/**", "src/patient/sessions/s03/**"],
+    "blastRadius": "S01 dialogue-agent turns only (taskIntent is undefined for every other session, and with S01_TASK_INTENTS=off). Step order, completion, what an answer stores, safety routing and the deterministic fallback text path are unchanged; without a dialogue provider nothing changes. One extra Claude call at most on a turn that misses must-include content.",
+    "regressionPlan": "npm run type-check; npx vitest run; npm run lint; npm run audit:sessions; live before/after with scripts/run-local-session.ts tbct-s01 --interactive (S01_TASK_INTENTS=off vs default) on scripted participants, reviewed by the user and the research team before any push."
   }
 }

@@ -233,7 +233,17 @@ export function systemPromptBlocks(contract: DialogueContract): { stable: string
   const turn = [
     localeInstruction(contract.locale),
     `Current step objective: ${contract.therapeuticObjective}`,
-    `The current task -- what this turn must ask or do. Keep its clinical meaning; the wording is yours: ${contract.currentTaskText}`,
+    // With a task intent (note2026_09_19_s01_task_intents) Claude gets what
+    // the step must obtain rather than a finished sentence to paraphrase.
+    ...(contract.taskIntent
+      ? [
+          `The current task -- what this turn must get from the participant: ${contract.taskIntent.obtain}`,
+          contract.taskIntent.keep.length ? `Keep to:\n${contract.taskIntent.keep.map((rule) => `- ${rule}`).join("\n")}` : "",
+          contract.taskIntent.mustMention.length ? `This turn must include:\n${contract.taskIntent.mustMention.map((item) => `- ${item.describe}`).join("\n")}` : "",
+          "How you ask it, how you connect it to what they have said, and every word are yours -- there is no script to follow. Ask one question.",
+          "If they have already told you this, do not ask as if it were new: refer to what they said, in their key words, and invite them to say it or add to it.",
+        ]
+      : [`The current task -- what this turn must ask or do. Keep its clinical meaning; the wording is yours: ${contract.currentTaskText}`]),
     contract.participantRationale ? `Why this step matters, if the participant asks or seems confused (1-2 sentences, do not lecture): ${contract.participantRationale}` : "",
     contract.expectedConstruct ? `What ${contract.targetField} means here: ${contract.expectedConstruct}` : "",
     contract.scaleExplanation ? `Scale meaning if asked: ${contract.scaleExplanation}` : "",
@@ -255,6 +265,9 @@ export function systemPromptBlocks(contract: DialogueContract): { stable: string
     "- Otherwise set needsConfirmation=false.",
     contract.fidelityFeedback
       ? `- Your previous draft of this turn added meaning the participant did not express (${contract.fidelityFeedback}). Write the turn again using only what they said; anything of your own must be a clearly tentative question.`
+      : "",
+    contract.intentFeedback
+      ? `- Your previous draft of this turn left out what it must include: ${contract.intentFeedback}. Write the turn again and include it.`
       : "",
     contract.reflectionCheckContext
       ? `- Your previous understanding was: ${JSON.stringify(contract.reflectionCheckContext.previousSummary)}. Their last message does not simply confirm it -- it corrects or restates it. Summarize again from their words (their words take priority over yours), ask whether that is right, set needsConfirmation=true and reflectionText. Do not ask the current task.`
@@ -323,6 +336,9 @@ export async function generateDialogueDecision(contract: DialogueContract, conte
       // Already in the cached system block -- not repeated on every turn.
       sessionProtocolRules: undefined,
       sessionToneGuidance: undefined,
+      // With a task intent the approved sentence is only the fallback; showing
+      // it would bring back the script the intent replaces.
+      currentTaskText: parsedContract.taskIntent ? undefined : parsedContract.currentTaskText,
       lastParticipantMessage: parsedContract.lastParticipantMessage ? redactDirectIdentifiers(parsedContract.lastParticipantMessage) : undefined,
       recentContext: parsedContract.recentContext.map((message) => ({ ...message, content: redactDirectIdentifiers(message.content) })),
     };

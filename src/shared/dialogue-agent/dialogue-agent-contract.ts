@@ -146,6 +146,18 @@ export const dialogueContractSchema = z.object({
   patientThemes: z.array(z.string()).optional(),
   // Set on a rewrite after the summary fidelity check found added meaning.
   fidelityFeedback: z.string().optional(),
+  // Task intents (.claude/TASK_SCOPE.json note2026_09_19_s01_task_intents):
+  // what this step must obtain, instead of the approved sentence in
+  // currentTaskText, which then stays only the fallback. mustMention is
+  // checked in code (dialogue-agent-orchestrator.ts); `pattern` is a RegExp source
+  // already resolved for this turn's locale and fields. Set for S01 only.
+  taskIntent: z.object({
+    obtain: z.string(),
+    keep: z.array(z.string()),
+    mustMention: z.array(z.object({ describe: z.string(), pattern: z.string() })),
+  }).optional(),
+  // Set on a rewrite after the turn left out must-include content.
+  intentFeedback: z.string().optional(),
 });
 export type DialogueContract = z.infer<typeof dialogueContractSchema>;
 

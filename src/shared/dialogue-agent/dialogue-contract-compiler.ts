@@ -8,6 +8,7 @@ import type { DialogueContract, ExpectedInputType } from "@/shared/dialogue-agen
 import { dialogueContractSchema } from "@/shared/dialogue-agent/dialogue-agent-contract";
 import type { WorksheetBinding, WorksheetValueType } from "@/types/worksheet";
 import { isS01SummaryCheckForbidden, s01DialogueGuidance } from "@/patient/sessions/s01/dialogue-guidance";
+import { resolveS01TaskIntent, s01TaskIntentsEnabled } from "@/patient/sessions/s01/task-intents";
 
 // Pattern-based, session-agnostic construct terminology. Keyed by field-NAME
 // shape rather than an exact per-session map, because the same construct
@@ -505,6 +506,12 @@ export function compileDialogueContract(input: {
     explorationAllowed,
     explorationTurns: input.explorationTurns,
     patientThemes: input.patientThemes?.length ? input.patientThemes : undefined,
+    // What the step must obtain, in place of the approved sentence
+    // (note2026_09_19_s01_task_intents). S01 only; S01_TASK_INTENTS=off
+    // restores the sentence grounding.
+    taskIntent: sourcePromptItem.sessionId === "tbct-s01" && s01TaskIntentsEnabled()
+      ? resolveS01TaskIntent(sourcePromptItem.id, session.locale, session.runtimeContext)
+      : undefined,
   };
 
   return dialogueContractSchema.parse(contract);

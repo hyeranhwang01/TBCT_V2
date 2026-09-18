@@ -26,6 +26,22 @@ export function isDialogueAgentEnabled(sessionDefinitionId: string) {
   return DIALOGUE_AGENT_ENABLED_SESSIONS.has(sessionDefinitionId);
 }
 
+/** Task intents (note2026_09_19_s01_task_intents): what a turn that asks the
+ * task still leaves out of the step's must-include content, as the
+ * descriptions Claude was given. Empty when nothing is missing. */
+export function missingIntentContent(text: string, taskIntent: DialogueContract["taskIntent"]): string[] {
+  if (!taskIntent) return [];
+  return taskIntent.mustMention
+    .filter(({ pattern }) => {
+      try {
+        return !new RegExp(pattern, "i").test(text);
+      } catch {
+        return false;
+      }
+    })
+    .map(({ describe }) => describe);
+}
+
 /** Safety-critical turns never go through Claude, in either direction: not
  * the question ("how are you doing today") and not the crisis-pause
  * instruction. Risk disposition and its wording stay fully deterministic
@@ -78,8 +94,9 @@ export type DialogueAgentTurnResult = {
  * (runtime-orchestrator.ts) and the "clarification" path
  * (runtime-execution-api.ts) call through, so the compile -> call ->
  * validate -> fall back sequence lives in exactly one place. A turn makes one
- * Claude call, plus -- only when it ends in a summary -- a fidelity check and
- * at most one rewrite. deterministicFallbackText is ALWAYS what ships if
+ * Claude call, plus -- only when it ends in a summary -- a fidelity check, and
+ * at most one rewrite (added meaning, or a task intent's must-include content
+ * left out). deterministicFallbackText is ALWAYS what ships if
  * anything here fails or fails validation -- this function can only ever
  * replace the wording of a turn, or hold the task for a confirmation or an
  * exploration question the caller supports, never the runtime's own decision
@@ -153,6 +170,39 @@ export async function resolveDialogueAgentMessage(input: {
   let { provider, model, latencyMs } = result;
   const fidelityLogs: string[] = [];
   let recordable: boolean | undefined;
+  // At most one rewrite per turn, whichever check asks for it first.
+  let rewritten = false;
+
+  // Task intents (note2026_09_19_s01_task_intents): a turn that asks the task
+  // must carry the step's must-include content (a scale's two ends, the
+  // manual's explanation). A gap gets one rewrite with the reason, then the
+  // approved text. A confirmation or exploration turn does not ask the task.
+  const intentGaps = () => (validation.accepted && !validation.summaryCheck && !validation.exploration
+    ? missingIntentContent(validation.finalText ?? decision.patientFacingMessage, contract.taskIntent)
+    : []);
+  let gaps = intentGaps();
+  if (gaps.length) {
+    fidelityLogs.push("guard_log:task_intent_missing_content");
+    if (latencyMs < REWRITE_LATENCY_BUDGET_MS) {
+      rewritten = true;
+      const rewriteContract: DialogueContract = { ...contract, intentFeedback: gaps.join("; ") };
+      const rewrite = await callDialogueAgent(rewriteContract, context);
+      if (!rewrite.failed) {
+        const rewriteValidation = validateDialogueDecision(rewrite.decision, rewriteContract);
+        if (rewriteValidation.accepted) {
+          decision = rewrite.decision;
+          validation = rewriteValidation;
+          provider = rewrite.provider;
+          model = rewrite.model;
+          latencyMs = result.latencyMs + rewrite.latencyMs;
+          gaps = intentGaps();
+        }
+      }
+    }
+    if (gaps.length) {
+      return { patientMessage: input.deterministicFallbackText, decision, usedFallback: true, fallbackReason: "task_intent_missing_content", provider, model, latencyMs, guardLogs: [...validation.guardLogs, ...fidelityLogs] };
+    }
+  }
 
   // Summary fidelity (note2026_09_15_olivia_persona): a summary is checked
   // against the participant's words before they see it. Added meaning gets
@@ -165,7 +215,7 @@ export async function resolveDialogueAgentMessage(input: {
     let fidelity = await judge(summary);
     if (fidelity.checked && !fidelity.faithful) {
       fidelityLogs.push("guard_log:summary_added_meaning");
-      if (latencyMs < REWRITE_LATENCY_BUDGET_MS) {
+      if (!rewritten && latencyMs < REWRITE_LATENCY_BUDGET_MS) {
         const rewriteContract: DialogueContract = { ...contract, fidelityFeedback: fidelity.addedMeaning ?? "an interpretation they did not state" };
         const rewrite = await callDialogueAgent(rewriteContract, context);
         if (!rewrite.failed) {

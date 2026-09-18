@@ -3,6 +3,8 @@
 // stepSpecificGuidanceFor -- the channel the agent's system prompt treats as
 // mandatory. Keyed by prompt slug, never by the positional id.
 
+import { s01TaskIntentsEnabled } from "@/patient/sessions/s01/task-intents";
+
 function slugOf(promptItemId: string): string | null {
   const match = /^tbct-s01-n\d+-p\d+-(.+)$/.exec(promptItemId);
   return match ? match[1] : null;
@@ -12,8 +14,13 @@ const SESSION_RULES = [
   "Session 1 wording: never use the words belief, assumption or core belief (신념, 가정, 핵심 믿음); say 'thought' (생각) instead.",
   "Never name, suggest or rank a cognitive distortion unless the participant has explicitly asked for suggestions.",
   "Say 'when counseling ends' rather than any number of sessions. Never mention the Intrapersonal Thought Record. Do not summarize the session and do not ask for feedback.",
-  "When the current task contains the participant's own words, the scene, or an example thought in quotation marks, keep that quoted text exactly as written.",
 ];
+
+const QUOTE_EXACTLY_RULE = "When the current task contains the participant's own words, the scene, or an example thought in quotation marks, keep that quoted text exactly as written.";
+// With task intents (note2026_09_19_s01_task_intents): repeating a long
+// answer word for word ("‘요즘 회사에서 상사랑…’, 이 어려움이") was part of
+// what made the session read as a form being filled in.
+const REFER_BY_KEY_WORDS_RULE = "When you refer to something the participant said earlier, use their key words and never change its meaning; you need not repeat all of it. The scene and an example thought in quotation marks are the exception: keep those exactly as written.";
 
 const RULES_BY_SLUG: Record<string, string[]> = {
   "main-difficulty": ["Ask for the participant's own difficulties; never suggest or name a difficulty or a diagnosis."],
@@ -67,7 +74,8 @@ const SUMMARY_CHECK_FORBIDDEN_SLUGS = new Set([
 export function s01DialogueGuidance(promptItemId: string): string[] {
   const slug = slugOf(promptItemId);
   if (!slug) return [];
-  return [...SESSION_RULES, ...(RULES_BY_SLUG[slug] ?? [])];
+  const quoteRule = s01TaskIntentsEnabled() ? REFER_BY_KEY_WORDS_RULE : QUOTE_EXACTLY_RULE;
+  return [...SESSION_RULES, quoteRule, ...(RULES_BY_SLUG[slug] ?? [])];
 }
 
 export function isS01SummaryCheckForbidden(promptItemId: string): boolean {
