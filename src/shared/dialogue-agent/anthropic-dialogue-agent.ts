@@ -240,8 +240,12 @@ export function systemPromptBlocks(contract: DialogueContract): { stable: string
           `The current task -- what this turn must get from the participant: ${contract.taskIntent.obtain}`,
           contract.taskIntent.keep.length ? `Keep to:\n${contract.taskIntent.keep.map((rule) => `- ${rule}`).join("\n")}` : "",
           contract.taskIntent.mustMention.length ? `This turn must include:\n${contract.taskIntent.mustMention.map((item) => `- ${item.describe}`).join("\n")}` : "",
-          "How you ask it, how you connect it to what they have said, and every word are yours -- there is no script to follow. Ask one question.",
-          "If they have already told you this, do not ask as if it were new: refer to what they said, in their key words, and invite them to say it or add to it.",
+          ...(contract.taskIntent.asksParticipant
+            ? [
+                "How you ask it, how you connect it to what they have said, and every word are yours -- there is no script to follow. Ask one question, for this task only: the rest of the step objective has its own turns.",
+                "If they have already told you this, do not ask as if it were new: refer to what they said, in their key words, and invite them to say it or add to it.",
+              ]
+            : ["This turn asks the participant nothing: the program's next message follows right after it. Say what the task says, in your own words, and do not ask any question -- not even one from the manual."]),
         ]
       : [`The current task -- what this turn must ask or do. Keep its clinical meaning; the wording is yours: ${contract.currentTaskText}`]),
     contract.participantRationale ? `Why this step matters, if the participant asks or seems confused (1-2 sentences, do not lecture): ${contract.participantRationale}` : "",

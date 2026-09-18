@@ -29,7 +29,7 @@ export function isDialogueAgentEnabled(sessionDefinitionId: string) {
 /** Task intents (note2026_09_19_s01_task_intents): what a turn that asks the
  * task still leaves out of the step's must-include content, as the
  * descriptions Claude was given. Empty when nothing is missing. */
-export function missingIntentContent(text: string, taskIntent: DialogueContract["taskIntent"]): string[] {
+export function missingIntentContent(text: string, taskIntent: Pick<NonNullable<DialogueContract["taskIntent"]>, "mustMention"> | undefined): string[] {
   if (!taskIntent) return [];
   return taskIntent.mustMention
     .filter(({ pattern }) => {
@@ -40,6 +40,18 @@ export function missingIntentContent(text: string, taskIntent: DialogueContract[
       }
     })
     .map(({ describe }) => describe);
+}
+
+/** A turn the program does not wait on is followed at once by the next
+ * message, so a question in it is left hanging (2026-09-19 live S01: the
+ * welcome asked the manual's old opening question, then the next message
+ * asked another). */
+export const NO_QUESTION_ON_NON_INPUT_TURN = "no question at all -- this turn asks the participant nothing, the next message follows right after it";
+
+export function taskIntentGaps(text: string, taskIntent: DialogueContract["taskIntent"]): string[] {
+  if (!taskIntent) return [];
+  const asksAnyway = !taskIntent.asksParticipant && /[?？]/.test(text);
+  return [...missingIntentContent(text, taskIntent), ...(asksAnyway ? [NO_QUESTION_ON_NON_INPUT_TURN] : [])];
 }
 
 /** Safety-critical turns never go through Claude, in either direction: not
@@ -175,10 +187,11 @@ export async function resolveDialogueAgentMessage(input: {
 
   // Task intents (note2026_09_19_s01_task_intents): a turn that asks the task
   // must carry the step's must-include content (a scale's two ends, the
-  // manual's explanation). A gap gets one rewrite with the reason, then the
-  // approved text. A confirmation or exploration turn does not ask the task.
+  // manual's explanation), and a turn the program does not wait on must not
+  // ask anything. A gap gets one rewrite with the reason, then the approved
+  // text. A confirmation or exploration turn does not ask the task.
   const intentGaps = () => (validation.accepted && !validation.summaryCheck && !validation.exploration
-    ? missingIntentContent(validation.finalText ?? decision.patientFacingMessage, contract.taskIntent)
+    ? taskIntentGaps(validation.finalText ?? decision.patientFacingMessage, contract.taskIntent)
     : []);
   let gaps = intentGaps();
   if (gaps.length) {

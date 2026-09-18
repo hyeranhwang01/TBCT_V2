@@ -155,6 +155,10 @@ export const dialogueContractSchema = z.object({
     obtain: z.string(),
     keep: z.array(z.string()),
     mustMention: z.array(z.object({ describe: z.string(), pattern: z.string() })),
+    // False for a turn the program does not wait on (a welcome, an
+    // explanation): its next message follows at once, so this turn must not
+    // ask anything -- checked in code like mustMention.
+    asksParticipant: z.boolean(),
   }).optional(),
   // Set on a rewrite after the turn left out must-include content.
   intentFeedback: z.string().optional(),

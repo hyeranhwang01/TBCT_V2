@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { spec } from "@/patient/sessions/s01/spec";
 import { koreanText } from "@/patient/sessions/s01/messages";
 import { CANONICAL_PROMPT_ITEMS } from "@/shared/protocol/source-fidelity-catalog";
+import { promptRequiresPatientInput } from "@/shared/runtime/runtime-release-normalizer";
 import { missingIntentContent } from "@/shared/dialogue-agent/dialogue-agent-orchestrator";
 import { resolveS01TaskIntent, S01_FIXED_TASK_SLUGS, S01_TASK_INTENT_SLUGS, s01TaskIntent, s01TaskIntentsEnabled } from "@/patient/sessions/s01/task-intents";
 
@@ -40,6 +41,17 @@ describe("S01 task intents", () => {
         const text = (approved ?? "").replace("[person two hint]", fields.candidateTwoThoughtHint).replace("[person three hint]", fields.candidateThreeThoughtHint);
         expect(missingIntentContent(text, intent), `${item.id} ${locale}`).toEqual([]);
       }
+    }
+  });
+
+  // Turns the program does not wait on must not ask anything, and their
+  // approved sentence is what ships when Claude's version does.
+  it("has no question in the approved sentence of a step the program does not wait on", () => {
+    const passive = s01Prompts.filter((item) => !promptRequiresPatientInput(item));
+    expect(passive.map((item) => slugOf(item.id))).toContain("warm-acknowledgement");
+    for (const item of passive) {
+      expect(koreanText[item.id] ?? "", item.id).not.toMatch(/[?？]/);
+      expect(englishTextBySlug.get(slugOf(item.id)) ?? "", item.id).not.toMatch(/[?？]/);
     }
   });
 

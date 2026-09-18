@@ -37,13 +37,13 @@ const SCENE_ONLY = "Scene only: the counselor's goodbye remark to three people. 
 
 const INTENTS: Record<string, S01TaskIntent> = {
   "warm-acknowledgement": {
-    obtain: "A warm welcome in one or two sentences, then move straight on.",
-    keep: ["Do not ask about feelings, history or problems in this turn."],
+    obtain: "A warm welcome in one or two sentences.",
+    keep: ["Ask nothing -- not how they are, and not the manual's opening question about describing the situation: the program asks about their difficulties right after this message."],
   },
 
   "main-difficulty": {
     obtain: "The difficulties the participant would like help with these days, in their own words.",
-    keep: ["Never suggest or name a difficulty or a diagnosis."],
+    keep: ["Never suggest or name a difficulty or a diagnosis.", "Ask only for the difficulties -- a concrete example is the next question."],
   },
   "difficulty-example": {
     obtain: "One concrete example of when that difficulty showed up.",

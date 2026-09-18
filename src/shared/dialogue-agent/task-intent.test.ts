@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { CANONICAL_PROMPT_ITEMS, CANONICAL_STAGE_NODES } from "@/shared/protocol/source-fidelity-catalog";
 import { compileDialogueContract } from "@/shared/dialogue-agent/dialogue-contract-compiler";
 import { generateDialogueDecision, systemPromptBlocks } from "@/shared/dialogue-agent/anthropic-dialogue-agent";
-import { resolveDialogueAgentMessage } from "@/shared/dialogue-agent/dialogue-agent-orchestrator";
+import { NO_QUESTION_ON_NON_INPUT_TURN, resolveDialogueAgentMessage, taskIntentGaps } from "@/shared/dialogue-agent/dialogue-agent-orchestrator";
+import { promptRequiresPatientInput } from "@/shared/runtime/runtime-release-normalizer";
 import { koreanText } from "@/patient/sessions/s01/messages";
 import { FAKE_TURN_WITHOUT_INTENT_CONTENT, KEEP_OMITTING_INTENT_CONTENT_TRIGGER, OMIT_INTENT_CONTENT_TRIGGER } from "@/test/fakes/dialogue-agent.fake";
 import type { RuntimeSession } from "@/types/runtime-session";
@@ -34,7 +35,7 @@ function session(sessionDefinitionId: string, locale = "ko-KR"): RuntimeSession 
   } as RuntimeSession;
 }
 
-function runtimePromptItemFor(nodeId: string): RuntimePromptItem {
+function runtimePromptItemFor(nodeId: string, requiresPatientInput = true): RuntimePromptItem {
   return {
     id: "task-intent-runtime-prompt",
     nodeId,
@@ -50,7 +51,7 @@ function runtimePromptItemFor(nodeId: string): RuntimePromptItem {
     requiredFields: [],
     validationRules: [],
     maxAttempts: 3,
-    requiresPatientInput: true,
+    requiresPatientInput,
     outputSchemaVersion: "1",
   };
 }
@@ -69,7 +70,7 @@ function compile(sessionId: string, suffix: string) {
     session: session(sessionId),
     node,
     sourcePromptItem: promptItem,
-    runtimePromptItem: runtimePromptItemFor(node.id),
+    runtimePromptItem: runtimePromptItemFor(node.id, promptRequiresPatientInput(promptItem)),
     recentMessages: [],
     clarificationAttemptCount: 0,
     isFirstPromptOfNode: false,
@@ -114,6 +115,18 @@ describe("the prompt", () => {
     expect(systemPromptBlocks(contract).turn).toContain(`the wording is yours: ${contract.currentTaskText}`);
   });
 
+  // 2026-09-19 live S01: with "Ask one question" on every intent, the welcome
+  // (which the program does not wait on) asked the manual's old opening
+  // question, and the next message asked another.
+  it("tells a turn the program does not wait on to ask nothing", () => {
+    const welcome = compile("tbct-s01", "-warm-acknowledgement");
+    expect(welcome.taskIntent?.asksParticipant).toBe(false);
+    const { turn } = systemPromptBlocks(welcome);
+    expect(turn).toContain("This turn asks the participant nothing");
+    expect(turn).not.toContain("Ask one question");
+    expect(systemPromptBlocks(compile("tbct-s01", "-main-difficulty")).turn).toContain("Ask one question, for this task only");
+  });
+
   it("names what a rewrite must add", () => {
     const contract = { ...compile("tbct-s01", "-first-emotion-intensity"), intentFeedback: "the scale's two ends" };
     expect(systemPromptBlocks(contract).turn).toContain("left out what it must include: the scale's two ends");
@@ -144,14 +157,14 @@ describe("the prompt", () => {
 });
 
 describe("must-include content", () => {
-  async function resolve(lastParticipantMessage: string) {
-    const { promptItem, node } = promptEndingWith("tbct-s01", "-first-emotion-intensity");
+  async function resolve(lastParticipantMessage: string, suffix = "-first-emotion-intensity") {
+    const { promptItem, node } = promptEndingWith("tbct-s01", suffix);
     const approved = koreanText[promptItem.id];
     return resolveDialogueAgentMessage({
       session: session("tbct-s01"),
       node,
       sourcePromptItem: promptItem,
-      runtimePromptItem: runtimePromptItemFor(node.id),
+      runtimePromptItem: runtimePromptItemFor(node.id, promptRequiresPatientInput(promptItem)),
       lastParticipantMessage,
       recentMessages: [],
       clarificationAttemptCount: 0,
@@ -182,5 +195,21 @@ describe("must-include content", () => {
     expect(result.usedFallback).toBe(true);
     expect(result.fallbackReason).toBe("task_intent_missing_content");
     expect(result.patientMessage).toBe(koreanText[promptEndingWith("tbct-s01", "-first-emotion-intensity").promptItem.id]);
+  });
+
+  it("counts any question in a turn the program does not wait on as a gap", () => {
+    const welcome = compile("tbct-s01", "-warm-acknowledgement").taskIntent;
+    expect(taskIntentGaps("와 주셔서 감사해요. 오늘 함께 시작해 볼게요.", welcome)).toEqual([]);
+    expect(taskIntentGaps("와 주셔서 감사해요. 지금 상황을 짧게 말씀해 주시겠어요?", welcome)).toEqual([NO_QUESTION_ON_NON_INPUT_TURN]);
+  });
+
+  it("writes a welcome that asked a question once more, then falls back to the approved sentence", async () => {
+    const rewritten = await resolve(`#필수빠짐`, "-warm-acknowledgement");
+    expect(rewritten.usedFallback).toBe(false);
+    expect(rewritten.patientMessage).not.toMatch(/[?？]/);
+    expect(rewritten.guardLogs).toContain("guard_log:task_intent_missing_content");
+    const replaced = await resolve(`#필수계속빠짐`, "-warm-acknowledgement");
+    expect(replaced.usedFallback).toBe(true);
+    expect(replaced.patientMessage).toBe(koreanText[promptEndingWith("tbct-s01", "-warm-acknowledgement").promptItem.id]);
   });
 });

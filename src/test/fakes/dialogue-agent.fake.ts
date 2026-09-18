@@ -30,6 +30,7 @@ export const FAKE_EXPLORATION_QUESTION = { ko: "그 이야기를 조금 더 들�
 export const OMIT_INTENT_CONTENT_TRIGGER = "#필수빠짐";
 export const KEEP_OMITTING_INTENT_CONTENT_TRIGGER = "#필수계속빠짐";
 export const FAKE_TURN_WITHOUT_INTENT_CONTENT = { ko: "좋아요, 이어서 여쭤볼게요.", en: "Thanks, let's keep going." };
+export const FAKE_UNWANTED_QUESTION = { ko: "지금 상황을 짧게 표현한다면 어떻게 말할 수 있을까요?", en: "How would you describe what is happening right now?" };
 
 /** Stand-in for the Claude summary fidelity check (summary-fidelity.ts). */
 export function dispatchFakeSummaryFidelity(request: SummaryFidelityRequest): SummaryFidelityResult {
@@ -117,11 +118,16 @@ function baseFakeDecision(contract: DialogueContract): DialogueDecision {
     };
   }
 
+  // On a turn the program does not wait on, the same triggers make the fake
+  // add a question it must not ask.
   const omitsIntentContent = message.includes(KEEP_OMITTING_INTENT_CONTENT_TRIGGER) || (message.includes(OMIT_INTENT_CONTENT_TRIGGER) && !contract.intentFeedback);
-  if (contract.taskIntent?.mustMention.length && omitsIntentContent) {
+  if (contract.taskIntent && omitsIntentContent && (contract.taskIntent.mustMention.length || !contract.taskIntent.asksParticipant)) {
+    const korean = contract.locale.toLowerCase().startsWith("ko");
     return {
       responseType: "reflect_and_ask",
-      patientFacingMessage: contract.locale.toLowerCase().startsWith("ko") ? FAKE_TURN_WITHOUT_INTENT_CONTENT.ko : FAKE_TURN_WITHOUT_INTENT_CONTENT.en,
+      patientFacingMessage: contract.taskIntent.asksParticipant
+        ? (korean ? FAKE_TURN_WITHOUT_INTENT_CONTENT.ko : FAKE_TURN_WITHOUT_INTENT_CONTENT.en)
+        : `${contract.currentTaskText} ${korean ? FAKE_UNWANTED_QUESTION.ko : FAKE_UNWANTED_QUESTION.en}`,
       keepCurrentNode: true,
       participantResponseState: "valid_answer",
     };

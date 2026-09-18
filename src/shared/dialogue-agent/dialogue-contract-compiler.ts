@@ -331,6 +331,12 @@ export function stepSpecificGuidanceFor(sourcePromptItem: PromptItem): string[] 
   return all.length ? all : undefined;
 }
 
+function taskIntentFor(sourcePromptItem: PromptItem, session: RuntimeSession, asksParticipant: boolean): DialogueContract["taskIntent"] {
+  if (sourcePromptItem.sessionId !== "tbct-s01" || !s01TaskIntentsEnabled()) return undefined;
+  const intent = resolveS01TaskIntent(sourcePromptItem.id, session.locale, session.runtimeContext);
+  return intent ? { ...intent, asksParticipant } : undefined;
+}
+
 /** The kind of answer a prompt expects -- the same resolution
  * compileDialogueContract uses (worksheet binding, then validation kind). */
 export function expectedInputTypeForPrompt(sessionDefinitionId: string, promptItem: PromptItem): ExpectedInputType {
@@ -509,9 +515,7 @@ export function compileDialogueContract(input: {
     // What the step must obtain, in place of the approved sentence
     // (note2026_09_19_s01_task_intents). S01 only; S01_TASK_INTENTS=off
     // restores the sentence grounding.
-    taskIntent: sourcePromptItem.sessionId === "tbct-s01" && s01TaskIntentsEnabled()
-      ? resolveS01TaskIntent(sourcePromptItem.id, session.locale, session.runtimeContext)
-      : undefined,
+    taskIntent: taskIntentFor(sourcePromptItem, session, runtimePromptItem.requiresPatientInput),
   };
 
   return dialogueContractSchema.parse(contract);
