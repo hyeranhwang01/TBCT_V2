@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { PromptItem } from "@/shared/protocol/source-fidelity-types";
 import type { StateExtractionResult } from "@/types/runtime-session";
 import { FIXED_S01_SCENE } from "@/patient/sessions/s01/generation";
-import { applyS01TurnRules, fearedOutcomeDidNotHappen, isBareYesNo, isLongAnswer, isStopAnswer, isUncertainAnswer, namesEmotionNotThought, parseOrdinal, s01PromptSlug } from "@/patient/sessions/s01/turn-rules";
+import { applyS01TurnRules, fearedOutcomeDidNotHappen, isBareYesNo, isLongAnswer, isStopAnswer, isUncertainAnswer, matchListItemByWords, namesEmotionNotThought, parseOrdinal, s01PromptSlug } from "@/patient/sessions/s01/turn-rules";
 
 function prompt(slug: string, outputField: string, sessionId = "tbct-s01"): PromptItem {
   return { id: `${sessionId}-n05-p01-${slug}`, sessionId, nodeId: `${sessionId}-n05-node`, order: 1, type: "question", outputFields: [outputField], validation: null, activationCondition: null, completionEffect: null } as unknown as PromptItem;
@@ -125,6 +125,31 @@ describe("applyS01TurnRules", () => {
     const result = await run("representative-difficulty", "s01RepresentativeProblem", "두 번째요", { s01Problems: ["걱정이 많다", "계획 강박", "관계에서 예민함"], s01RepresentativeProblem: "두 번째요" });
     expect(result.extracted.fields.s01RepresentativeProblem).toBe("계획 강박");
     expect(result.extracted.fields.s01RepresentativeProblemSource).toBe("ordinal");
+  });
+
+  // Task intents (note2026_09_19_s01_task_intents): the question no longer
+  // asks for a position, so a difficulty named in words is matched too.
+  it("maps a difficulty named in words to the participant's own listed item", async () => {
+    const problems = ["요즘 걱정이 너무 많아요", "일을 자꾸 미뤄요", "사람들과의 관계에서 예민해져요"];
+    const result = await run("representative-difficulty", "s01RepresentativeProblem", "관계 문제가 제일 커요", { s01Problems: problems, s01RepresentativeProblem: "관계 문제가 제일 커요" });
+    expect(result.extracted.fields.s01RepresentativeProblem).toBe("사람들과의 관계에서 예민해져요");
+    expect(result.extracted.fields.s01RepresentativeProblemSource).toBe("named");
+  });
+
+  it("keeps the participant's own words when they point to no item, or to several", async () => {
+    const problems = ["걱정이 많다", "계획 강박", "관계에서 예민함"];
+    const none = await run("representative-difficulty", "s01RepresentativeProblem", "잠을 잘 못 자는 거요", { s01Problems: problems, s01RepresentativeProblem: "잠을 잘 못 자는 거요" });
+    expect(none.extracted.fields.s01RepresentativeProblem).toBe("잠을 잘 못 자는 거요");
+    expect(none.extracted.fields.s01RepresentativeProblemSource).toBeUndefined();
+    const both = await run("representative-difficulty", "s01RepresentativeProblem", "걱정이랑 계획이요", { s01Problems: problems, s01RepresentativeProblem: "걱정이랑 계획이요" });
+    expect(both.extracted.fields.s01RepresentativeProblem).toBe("걱정이랑 계획이요");
+  });
+
+  it("matches in English, ignoring words every difficulty shares", () => {
+    const problems = ["I worry about everything", "I put off work until the last minute", "Arguments with my partner"];
+    expect(matchListItemByWords("The worrying is the biggest problem", problems)).toBe(0);
+    expect(matchListItemByWords("probably my partner", problems)).toBe(2);
+    expect(matchListItemByWords("the biggest one", problems)).toBeNull();
   });
 
   it("writes the conclusion and feared-outcome flags on accepted answers", async () => {

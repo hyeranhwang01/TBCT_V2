@@ -36,7 +36,7 @@ export const koreanText: Record<string, string> = {
   "tbct-s01-n02-p02-difficulty-example": "그 어려움이 드러났던 구체적인 예를 하나 들어 주실 수 있을까요?",
   "tbct-s01-n02-p03-other-difficulty": "그 밖에 도움을 받고 싶은 다른 어려움도 있나요?",
   "tbct-s01-n02-p04-other-difficulty-more": "또 다른 어려움이 있을까요? 없으면 없다고 하셔도 괜찮아요.",
-  "tbct-s01-n02-p05-representative-difficulty": "말씀해 주신 것들 중에서, 다른 어려움들을 대표하는 가장 큰 어려움은 무엇일까요? '두 번째 거요'처럼 말씀하셔도 돼요.",
+  "tbct-s01-n02-p05-representative-difficulty": "말씀해 주신 것들 중에서, 다른 어려움들을 대표하는 가장 큰 어려움은 무엇일까요?",
   "tbct-s01-n02-p06-goal-at-end": "상담이 끝났을 때, ‘[representative difficulty]’, 이 어려움이 어떻게 되어 있으면 좋겠어요?",
   "tbct-s01-n02-p07-goal-benefit": "그렇게 된다면 어떤 기분이 들 것 같고, 생활에서는 무엇이 달라질까요?",
 

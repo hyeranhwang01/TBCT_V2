@@ -69,7 +69,7 @@ export const spec: SessionSpec = {
         // records that one as representative and sets s01RepresentativeAuto,
         // because asking "which of these is the biggest" about a list of one
         // reads as if the session were not listening (2026-09-13 live session).
-        { slug: "representative-difficulty", type: "question", source: [263, 279], patientText: "Of the difficulties you mentioned, which one feels like the biggest -- the one that sits underneath the others? You can simply say 'the second one'.", outputFields: ["s01RepresentativeProblem"], activationCondition: { field: "s01RepresentativeAuto", operator: "not_equals", value: true } },
+        { slug: "representative-difficulty", type: "question", source: [263, 279], patientText: "Of the difficulties you mentioned, which one feels like the biggest -- the one that sits underneath the others?", outputFields: ["s01RepresentativeProblem"], activationCondition: { field: "s01RepresentativeAuto", operator: "not_equals", value: true } },
         { slug: "goal-at-end", type: "question", source: [334, 350], patientText: "When counseling ends, how would you like [representative difficulty] to be different?", outputFields: ["s01Goal"] },
         { slug: "goal-benefit", type: "question", source: [334, 350], patientText: "If that happened, how would you feel, and what would change in your daily life?", outputFields: ["s01GoalBenefit"] },
       ],

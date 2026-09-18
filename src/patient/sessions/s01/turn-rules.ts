@@ -121,6 +121,41 @@ export function parseOrdinal(text: string): number | null {
   return cleaned in ORDINALS ? ORDINALS[cleaned] : null;
 }
 
+// Words that say nothing about WHICH difficulty: every item is a difficulty,
+// and "the biggest one" is what the question asked.
+const PICK_FILLER = new Set([
+  "제일", "가장", "그게", "그거", "그건", "거", "것", "건", "게", "같아요", "같은데", "같네요", "커요", "커", "큰", "크다", "저는", "제가", "좀", "더", "거요", "것요",
+  "문제", "어려움", "힘든", "힘들", "고민",
+  "the", "one", "biggest", "big", "most", "main", "is", "it", "its", "it's", "that", "this", "think", "my", "me", "probably", "guess", "maybe", "would", "say", "about", "for", "and",
+  "problem", "difficulty", "issue",
+]);
+const TRAILING_PARTICLE = /(이에요|예요|이요|에서|으로|이랑|하고|은|는|이|가|을|를|에|도|요|로|랑|과|와|의)$/u;
+
+function contentStems(text: string): string[] {
+  return normalize(text)
+    .split(/[^\p{L}\p{N}]+/u)
+    .map((token) => (/^[a-z]+$/.test(token) ? (token.length > 4 ? token.replace(/(ing|ed|es|ly|s)$/, "") : token) : token.replace(TRAILING_PARTICLE, "")))
+    .filter((token) => token.length >= 2 && !PICK_FILLER.has(token));
+}
+
+/** Task intents (note2026_09_19_s01_task_intents): the representative
+ * difficulty is chosen in words now, not by position. Returns the one list
+ * item the answer's words point to, or null when none or several do -- the
+ * participant's own words are then kept as they are. */
+export function matchListItemByWords(text: string, items: string[]): number | null {
+  const stems = contentStems(text);
+  if (!stems.length || !items.length) return null;
+  const scores = items.map((item) => {
+    const haystack = normalize(item);
+    // Korean endings vary ("예민해서" / "예민해져요"), so a Korean word also
+    // matches on its stem; English words are already stemmed above.
+    return stems.filter((stem) => haystack.includes(stem) || (!/^[a-z]+$/.test(stem) && stem.length >= 3 && haystack.includes(stem.slice(0, Math.max(2, stem.length - 2))))).length;
+  });
+  const best = Math.max(...scores);
+  if (best < 1 || scores.filter((score) => score === best).length > 1) return null;
+  return scores.indexOf(best);
+}
+
 // Bare yes/no is the whole intended answer here ("함께 해보실 수 있을까요?",
 // "이어지는 게 보이세요?", "상황은 같았나요, 달랐나요?" ...), but the engine
 // treats a bare "네"/"yes" as a non-answer on free-text prompts.
@@ -236,6 +271,12 @@ export async function applyS01TurnRules(input: S01TurnRulesInput): Promise<S01Tu
     } else if (list.length === 1 && isBareYesNo(text) && !isBareNo(text)) {
       accept(list[0]);
       fields.s01RepresentativeProblemSource = "only_item";
+    } else if (!isBareYesNo(text)) {
+      const named = matchListItemByWords(text, list);
+      if (named !== null) {
+        accept(list[named]);
+        fields.s01RepresentativeProblemSource = "named";
+      }
     }
   }
 
