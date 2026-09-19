@@ -40,7 +40,6 @@ export function StreamingText({
       return undefined;
     }
     if (streamedKeyRef.current === streamKey) return undefined;
-    streamedKeyRef.current = streamKey;
     const chars = Array.from(text);
     let i = 0;
     setShown("");
@@ -49,6 +48,14 @@ export function StreamingText({
       setShown(chars.slice(0, i).join(""));
       if (i >= chars.length) {
         window.clearInterval(id);
+        // Marked on completion, never before. Claiming the key up front meant
+        // that any re-run of this effect -- StrictMode's second invocation in
+        // development, or a prop that genuinely changed mid-stream -- ran the
+        // cleanup, cleared the interval, then hit the guard above and returned
+        // without restarting. The message stayed blank with the caret still
+        // blinking, and because onDone never fired the page's reveal queue
+        // stalled behind it forever.
+        streamedKeyRef.current = streamKey;
         onDone?.();
       }
     }, speedMs);

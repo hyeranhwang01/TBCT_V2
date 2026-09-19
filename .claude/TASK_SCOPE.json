@@ -1,7 +1,7 @@
 {
   "task": "TBCT Sessions 1-3 session-local enhancement work (content/flow/wording), following prompts/.claude/rules/tbct-session-manual.md",
   "createdAt": "2026-08-13",
-  "updatedAt": "2026-09-13",
+  "updatedAt": "2026-09-19",
   "allowedPaths": [
     "src/patient/pages/homework-list-page.tsx",
     "src/patient/pages/patient-list-page.tsx",
@@ -104,7 +104,14 @@
     "src/shared/protocol/source-fidelity-catalog.test.ts",
     "src/clinician/lib/session-catalog.test.ts",
     "src/shared/runtime/testing/simulated-patient-runner.test.ts",
-    "src/shared/runtime/source-fidelity-prompt-progression.test.ts"
+    "src/shared/runtime/source-fidelity-prompt-progression.test.ts",
+    "src/patient/lib/speech/normalize-speech-text.ts",
+    "src/patient/lib/speech/normalize-speech-text.test.ts",
+    "src/patient/lib/speech/use-browser-tts.ts",
+    "src/patient/lib/speech/use-browser-tts.test.ts",
+    "src/patient/pages/patient-session-page.tsx",
+    "src/patient/components/streaming-text.tsx",
+    "src/patient/components/streaming-text.test.tsx"
   ],
   "notes": "Session-local edit scope per prompts/.claude/rules/tbct-session-manual.md §1/7. Worksheet/homework files for S01-S03 (worksheet-renderers/s0N-worksheet.tsx, worksheet-bindings/tbct-s0N.ts, homework/s0N-*.tsx) are NOT yet in scope -- add them here first if a task requires changing worksheet/homework UI, not just conversation content/flow/wording. Protected field names must not be renamed within these files: S02 problems/problemRatings/goals/goalRatings; S03 automaticThought/evidenceFor/evidenceAgainst (see docs/ai/TBCT_SESSIONS_1_3.md for the runtime-context.ts mechanisms behind these). runtime-static-message.ts added 2026-08-14 with explicit user approval (TBCT S01-S03 fidelity v3 task, Phase 0 STOP S-1): SESSION_HANDLERS[1|2|3] must forward `locale` to s0N.resolveStaticText the same way SESSION_HANDLERS[8] already does for s08, so s01-s03 static messages can branch English/Korean for dynamically-computed text (totals, emotion lists, readback sentences) that the shared bracket-substitution helper can't cover. Edit is limited to forwarding an already-available argument at 3 existing call sites -- no new logic, no change to s04-s07 behavior. dialogue-agent-stale-value.test.ts added 2026-08-14 with explicit user approval: s03.ts's new redirection-contract prompt (§6.3, boolean validation) is now one of the pre-situation turns this test's fixture loop walks through; its single canned filler answer (\"No, nothing urgent. Please continue.\") doesn't parse as a valid boolean and got stuck re-asking that prompt. Fix is limited to the loop sending \"Yes, that's okay.\" when the currently active prompt's validation.kind is \"boolean\", otherwise the original filler text -- no change to what the test actually verifies (worksheet-edited value reaching the next dialogue contract). runtime-context.ts edited 2026-08-14 with explicit user approval (AskUserQuestion, \"지금 고침 (권장)\"): isMeaningfulTextResponse's NON_ANSWER_TEXT blacklist ran before the boolean/enum-kind acceptance check, so every boolean-kind prompt codebase-wide (s01.ts confirm-list, s03.ts redirection-contract, etc.) rejected its own only two valid answers (\"yes\"/\"no\"/네/예 are in both the blacklist and the boolean accept-list) and looped forever. Fix adds an early return for validation.kind==='boolean'|'enum' immediately after the existing evidenceFor/evidenceAgainst guard, before the blacklist check -- no other behavior in the function changed.",
   "note2026_08_17_s01_phase_controller_refactor": "S01 Neutral Example (three-person example) redesign per explicit, detailed user instruction: replaced job-interview vignette with a presentation vignette ('발표 잘 들었어요'), and collapsed each candidate's flow from a 7-8 prompt Thought/Emotion/Behavior/Reaction/Arrow(s) cycle down to 2 prompts (Emotion, Behavior) with the automatic thought now stated by the counselor and deterministically recorded via completionEffect:set_field (same pattern the existing candidateTwoEmotion-recheck prompt already used), not elicited from the participant. Removed candidate*Reaction, candidate*ReturningArrows/Cycle, candidate*Possibility(Accepted), candidate*EmotionRepeatsSibling-driven clarification branches, and candidate*SameSituation prompts -- verified via full-repo grep that none of these are read by worksheet bindings, homework UI, or any test that asserts real S01 protocol content (only generic/synthetic tests reuse 'candidateOneReaction' as an arbitrary field-name string, unaffected). Retained candidateOneEmotion/Behavior, candidateTwoEmotion/Behavior, candidateThreeEmotion/Behavior, candidateOneThought/TwoThought/ThreeThought (now set deterministically), and threePersonModelInsight (now a single merged prompt instead of two) because worksheet-bindings/tbct-s01.ts and worksheet-renderers/s01-worksheet.tsx (both still out of scope, not edited) read exactly those field names. dialogue-agent-expansion.test.ts added to allowedPaths because it asserts on the node title 'First Candidate Full Cycle' and prompt id 'candidate-one-thought', both of which stop existing once the thought is counselor-stated rather than elicited -- updated the same two assertions to the new equivalent (candidate-one-emotion, now the real participant-owned content field) without weakening what the test verifies (participant-owned/assistantMustNotSupply classification of a real content field vs. an administrative gate field). Left Phase 1 (mandatory-opening / situation-thought-distinction, i.e. the early telegraphic-situation elicitation) structurally unchanged: it is already a 2-turn opening and is protected by two regression tests in src/shared/api/runtime-source-fidelity.test.ts (out of scope, not edited) that assert its exact overwrite-prevention behavior -- reported as a Manual-vs-code / scope tension rather than silently restructured. Left Phase 4 (personal-returning-arrows), Phase 5 (participant-summary), Phase 6 (cognitive-distortions), and Phase 7 (daily-observation-closing) structurally unchanged: the user's instructions for these phases were directional/structural, not concrete replacement content the way Phase 2 was, and none of them are part of the branch-explosion problem this pass targets.",
@@ -204,7 +211,12 @@
       "src/test/fakes/dialogue-agent.fake.ts",
       ".claude/TASK_SCOPE.json"
     ],
-    "doNotTouch": ["src/shared/protocol/tbct-source-text.generated.ts", "sql/**", "src/patient/sessions/s0N/spec.ts", "src/patient/sessions/s0N/messages.ts"],
+    "doNotTouch": [
+      "src/shared/protocol/tbct-source-text.generated.ts",
+      "sql/**",
+      "src/patient/sessions/s0N/spec.ts",
+      "src/patient/sessions/s0N/messages.ts"
+    ],
     "blastRadius": "All 8 sessions: (a) every patient-content turn (acknowledge/reflect_and_ask/clarify/repair/restore_context/request_missing_field) on a protected field is now assembled from parts in S01-S07 as it already was in S08; (b) a summarize_and_confirm turn delays the next task by one turn; (c) the Groq continuity fallback cannot produce messageParts, so on gated turns it degrades to the approved static text (already true for S08). Mock/no-provider runs (audit:sessions, simulated-patient-runner) never produce a summary check, so their transcripts are unchanged.",
     "regressionPlan": "npm run type-check && npm run lint && npx vitest run (from a worktree outside the nested parent repo) && npm run audit:sessions; live: npm run audit:sessions:constrained and scripts/run-local-session.ts with ANTHROPIC_API_KEY.",
     "followUp2026_09_11": "After a mock-Claude audit (scratch script answering only api.anthropic.com, all 8 sessions end to end), the user approved two follow-ups: (1) contractMayRequireAssembly now gates EVERY turn of an enabled session regardless of field ownership -- the audit shipped 5 invented conclusions without confirmation on the 13/272 prompts whose field is an administrative flag; (2) at most one summary check per protocol node (reflection-check.ts summaryCheckAlreadyUsedInNode) -- a model summarizing at every allowed turn took S01-S08 from 239 to 462 patient turns. Remaining known gap by design: explain_term/explain_scale/explain_rationale/show_required_visual/acknowledge_pause stay free prose (protocol explanation), guarded only by the prompt rule."
@@ -332,7 +344,10 @@
       "src/patient/sessions/s01/turn-rules.test.ts",
       "src/patient/sessions/s01/worksheet-binding.ts (S01_SUMMARY_WRITE_FIELDS only)"
     ],
-    "doNotTouch": ["src/shared/protocol/tbct-source-text.generated.ts", "sql/**"],
+    "doNotTouch": [
+      "src/shared/protocol/tbct-source-text.generated.ts",
+      "sql/**"
+    ],
     "blastRadius": "All eight sessions' dialogue-agent turns (prompt, tool schema, validation, confirmation flow) and worksheet projection provenance. Session specs, messages and progression are unchanged. S01's write-situation-line / write-thought-line prompts are no longer activated (their flags are not set); a confirmed summary fills situationLine / thoughtLine instead.",
     "regressionPlan": "npm run type-check; npx vitest run; live (needs ANTHROPIC_API_KEY in .env.local): npm run audit:sessions:constrained and npx tsx scripts/run-local-session.ts tbct-s01 reviewed by a person before any push."
   },
@@ -440,5 +455,8 @@
     ],
     "blastRadius": "All eight sessions' dialogue-agent turns. Step order, completion, safety routing and what an answer stores are unchanged; exploration only delays the next task by at most 2 turns. Without a dialogue provider (tests' default path, AI_PROVIDER=mock audits) nothing explores or summarizes, so transcripts are unchanged.",
     "regressionPlan": "npx tsc --noEmit; npx vitest run; live S01 run with a key (confirmation count per session, exploration following the participant, no added meaning in summaries, step order kept); after deploy, per-session counts of reflectionCheck / pendingExploration and guard_log:summary_added_meaning in Supabase."
-  }
+  },
+  "note2026_09_19_tts_m1_normalizer_and_fifo": "TTS 고도화 M1 + M2-0 PoC 하네스. M1: normalizeSpeechText 신규(순수/멱등), use-browser-tts.ts를 실제 FIFO 큐로 전환(신규 메시지 enqueue 시 cancel() 금지, stop/mic/세션전환/unmount에서만 cancel), patient-session-page.tsx 자동발화를 latestAssistantMessage -> displayMessages 순회로 교체해 배치 누락(D2)과 화면/음성 비동기(D3) 제거. M2-0: api/tts-poc.py는 facebook/mms-tts-kor CPU 추론 실행성 측정용 독립 PoC로, Next.js 런타임 경로와 결합하지 않으며 배포는 사람이 판단. 세션 원고(src/patient/sessions/**)는 읽기 전용, 정규화는 런타임에서만 수행.",
+  "note2026_09_19_tts_browser_only": "TTS는 브라우저 Web Speech API 단독으로 확정. MMS/XTTS-v2 자체 호스팅 PoC는 청취 평가 후 폐기하고 관련 파일(api/, scripts/tts-poc-*.mjs)을 전부 제거함. MMS는 어휘 26토큰에 숫자가 없어 '0점에서 3점까지'를 '점에서 점까지'로 읽었고 억양도 브라우저보다 열위. XTTS-v2는 숫자/여성화자/24kHz는 해결했으나 E2E p95 7.4초, Peak RSS 4.7GB, 콜드스타트 17초로 런타임 사용 불가. 남은 범위는 브라우저 TTS 경로의 재생 품질과 환자 제어(다시 듣기/재생 표시/음소거)뿐.",
+  "note2026_09_19_streaming_text_reveal_freeze": "streaming-text.tsx 기존 버그 수정(HEAD 727967c부터 존재). streamedKeyRef를 interval 시작 전에 설정해 두어, effect가 한 번이라도 재실행되면(React StrictMode의 두 번째 호출 -- Next 15 기본 활성 -- 또는 text/active prop 변경) cleanup이 interval을 지운 뒤 가드에 걸려 재시작하지 않았음. 결과: Program 말풍선이 커서만 깜빡인 채 영구히 비어 있고, onDone이 호출되지 않아 patient-session-page의 revealedNewMessageIds 큐가 그 지점에서 멈춰 이후 메시지도 노출/발화되지 않음. 수정: 완료 시점에만 streamedKeyRef를 설정. 재현 테스트 4개 추가."
 }
