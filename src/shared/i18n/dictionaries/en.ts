@@ -562,6 +562,12 @@ const en = {
     group: { session: "Session {number}", other: "Other records", recordCount: "{count} progress record(s)", total: "Total {count}", open: "Open {count}", complete: "Complete {count}", empty: "No sessions started yet.", earlierAttempts: "Earlier attempts ({count})", hideEarlierAttempts: "Hide earlier attempts" },
     row: { updated: "Updated", open: "Open", view: "View details", continue: "Continue", summary: "Summary" },
   },
+  devMode: {
+    toggle: "Developer",
+    toggleHint: "Developer mode lets you start any session, whatever the order.",
+    banner: "Developer mode. Tap any step on the journey to start that session. A session started out of order has no previous session behind it, so its homework review comes up empty.",
+    openSession: "Start session {number} ({title})",
+  },
   patientJourney: {
     heading: "My 8-session journey",
     subheading: "Continue in order after completing each session.",

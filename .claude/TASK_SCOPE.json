@@ -1,4 +1,25 @@
 {
+  "note2026_09_21_developer_mode_session_unlock": {
+    "task": "A developer-mode switch that unlocks the eight-step patient journey so any session can be started without finishing the one before it. Off, the journey behaves exactly as before.",
+    "userDecision": "Asked for a toggle at the top of the screen; chose the option where every step on the journey becomes clickable while it is on, and nothing changes while it is off.",
+    "whatActuallyGated": "Nothing enforced the order. createCanonicalTestRuntimeSession accepts any session id, and /projects/demo/patient/sessions/new already lists all eight with start buttons -- it is simply not linked from the patient nav. The order came from buildPatientJourney marking everything after the lowest incomplete session as 'upcoming' and the home page rendering one continue button for that session only. So this work exposes an existing capability rather than removing a guard.",
+    "flagDesign": "src/shared/dev-mode/dev-mode.ts, a module-level store read through useSyncExternalStore. Not a React context, because the toggle lives in the shared patient shell and the journey it unlocks is a child page of that shell -- siblings in the tree -- so the state has to sit outside both, and this needs no provider wired into studio-app.tsx. Persisted in localStorage (tbct.devMode) so it survives navigating into a session; per-browser on purpose, never written to the participant record.",
+    "failOpenDecision": "devToolsAvailable() treats an unset NEXT_PUBLIC_DEV_TOOLS as available, so the switch works on the current deployment with no configuration. NEXT_PUBLIC_DEV_TOOLS=off hides it. This is fail-open, which is the wrong default for a clinical tool: it MUST be set to off in the production project before real participants are enrolled, or a participant can skip sessions and is then running a different protocol than the one being studied.",
+    "nextEnvInliningTrap": "devToolsAvailable's default parameter spells out process.env.NEXT_PUBLIC_DEV_TOOLS in full. Next inlines that exact expression into the browser bundle at build time; reading it off a destructured or aliased process.env leaves it undefined in the browser, so the off switch would silently never hide anything.",
+    "knownConsequence": "A session started out of order has no previous session behind it. session-continuity.ts's EMPTY_CONTINUITY_SEED already supports that, so nothing crashes, but the homework-review step comes up empty. The developer-mode banner says so.",
+    "stillOpen": "/projects/demo/patient/sessions/new is reachable by typing the URL and starts any session regardless of this switch. It has no nav link, so it is hidden rather than closed. Reported to the user; no decision yet on whether to gate it behind the same switch before enrollment.",
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/shared/dev-mode/**",
+      "src/patient/components/patient-shell.tsx",
+      "src/patient/pages/patient-list-page.tsx",
+      "src/patient/pages/patient-journey.test.tsx",
+      "src/shared/i18n/dictionaries/ko.ts",
+      "src/shared/i18n/dictionaries/en.ts"
+    ],
+    "doNotTouch": ["src/patient/sessions/**", "src/shared/runtime/**", "src/shared/protocol/**", "src/shared/api/**"],
+    "verification": "npx tsc --noEmit; npx vitest run (88 files / 973 tests); npm run lint; npm run build with placeholder Supabase env vars (the local build otherwise stops on NEXT_PUBLIC_SUPABASE_URL, which is unrelated to this change and is configured on Vercel)."
+  },
   "task": "TBCT Sessions 1-3 session-local enhancement work (content/flow/wording), following prompts/.claude/rules/tbct-session-manual.md",
   "createdAt": "2026-08-13",
   "updatedAt": "2026-09-21",

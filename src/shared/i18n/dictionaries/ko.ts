@@ -562,6 +562,12 @@ const ko = {
     group: { session: "{number}회기", other: "기타 기록", recordCount: "진행 기록 {count}개", total: "전체 {count}", open: "진행중 {count}", complete: "완료 {count}", empty: "아직 진행한 회기가 없습니다.", earlierAttempts: "이전 시도 {count}개", hideEarlierAttempts: "이전 시도 숨기기" },
     row: { updated: "업데이트", open: "열기", view: "내용 보기", continue: "이어서 하기", summary: "요약" },
   },
+  devMode: {
+    toggle: "개발자",
+    toggleHint: "개발자 모드를 켜면 회기 순서와 상관없이 아무 회기나 시작할 수 있어요.",
+    banner: "개발자 모드입니다. 여정의 회기를 눌러 아무 회기나 바로 시작할 수 있어요. 순서를 건너뛰고 시작한 회기는 되짚을 지난 회기가 없어서 과제 리뷰가 비어 있습니다.",
+    openSession: "{number}회기 ({title}) 시작하기",
+  },
   patientJourney: {
     heading: "나의 8회기 여정",
     subheading: "완료한 회기 다음부터 순서대로 진행합니다.",

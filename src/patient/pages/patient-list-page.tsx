@@ -15,6 +15,7 @@ import { PATIENT_TOUR_STEPS } from "@/shared/onboarding/tour-steps";
 import { useOnboardingTour } from "@/shared/onboarding/use-onboarding-tour";
 import { HOMEWORK_LABEL_BY_SESSION, hasHomeworkActivity } from "@/types/homework";
 import { UI_LOCALE_STORAGE_KEY, useT } from "@/shared/i18n/context";
+import { useDevMode } from "@/shared/dev-mode/dev-mode";
 import { mapToUiLocale } from "@/shared/i18n/locales";
 import { useAuth } from "@/shared/auth/auth-context";
 
@@ -120,9 +121,10 @@ export function PatientListPage() {
   );
 }
 
-function PatientJourney({ journey, participant, localPreview }: { journey: ReturnType<typeof buildPatientJourney>; participant: Awaited<ReturnType<typeof getOrCreateParticipantForUiLocale>> | undefined; localPreview: boolean }) {
+export function PatientJourney({ journey, participant, localPreview }: { journey: ReturnType<typeof buildPatientJourney>; participant: Awaited<ReturnType<typeof getOrCreateParticipantForUiLocale>> | undefined; localPreview: boolean }) {
   const { t, locale } = useT();
   const router = useRouter();
+  const { enabled: devMode } = useDevMode();
   const [isStarting, setIsStarting] = useState(false);
   const completed = journey.filter((item) => item.state === "completed").length;
   const current = journey.find((item) => item.state === "in_progress" || item.state === "next");
@@ -133,16 +135,19 @@ function PatientJourney({ journey, participant, localPreview }: { journey: Retur
     upcoming: "border-border bg-surface-subtle text-text-muted",
   };
 
-  const handleContinue = async () => {
-    if (!current || isStarting) return;
-    if (current.sessionId) {
-      router.push(`/projects/demo/patient/sessions/${current.sessionId}`);
+  // Opens one session: resumes the unfinished attempt if there is one, and
+  // otherwise starts it. Used by the "continue" button for the current session
+  // and, in developer mode, by any of the eight steps.
+  const handleOpen = async (item: { number: number; sessionId?: string } | undefined) => {
+    if (!item || isStarting || localPreview) return;
+    if (item.sessionId) {
+      router.push(`/projects/demo/patient/sessions/${item.sessionId}`);
       return;
     }
     setIsStarting(true);
     try {
       const session = await createCanonicalTestRuntimeSession({
-        sessionDefinitionId: `tbct-s${String(current.number).padStart(2, "0")}`,
+        sessionDefinitionId: `tbct-s${String(item.number).padStart(2, "0")}`,
         locale: participant?.locale,
         participantId: participant?.id,
         patientAlias: participant?.alias,
@@ -165,16 +170,36 @@ function PatientJourney({ journey, participant, localPreview }: { journey: Retur
         </div>
       </div>
       <div className="mt-7 grid grid-cols-4 gap-y-7 md:grid-cols-8">
-        {journey.map((item, index) => (
-          <div key={item.number} className="relative flex flex-col items-center text-center">
-            {index > 0 && <div className={`absolute right-1/2 top-5 z-0 hidden h-0.5 w-full md:block ${item.state === "completed" ? "bg-success" : "bg-border"}`} />}
+        {journey.map((item, index) => {
+          const dot = (
             <div className={`relative z-10 flex h-10 w-10 items-center justify-center rounded-full border text-sm font-bold ${stateStyles[item.state]}`}>
               {item.state === "completed" ? <Check className="h-5 w-5" /> : item.state === "in_progress" ? <CircleDot className="h-5 w-5" /> : item.number}
             </div>
-            <span className={`mt-2 text-xs ${item.state === "upcoming" ? "font-medium text-text-muted" : "font-semibold text-text-primary"}`}>{locale === "ko" ? `${item.number}회기` : `Session ${item.number}`}</span>
-            <span className="sr-only">{t(`patientJourney.${item.state}`)}</span>
-          </div>
-        ))}
+          );
+          return (
+            <div key={item.number} className="relative flex flex-col items-center text-center">
+              {index > 0 && <div className={`absolute right-1/2 top-5 z-0 hidden h-0.5 w-full md:block ${item.state === "completed" ? "bg-success" : "bg-border"}`} />}
+              {/* Developer mode makes every step its own entry point. Without
+                  it the dots stay exactly what they were: a picture of where
+                  the patient is, with the one "continue" button below. */}
+              {devMode ? (
+                <button
+                  type="button"
+                  onClick={() => void handleOpen(item)}
+                  disabled={isStarting || localPreview}
+                  aria-label={t("devMode.openSession", { number: item.number, title: SESSION_TITLES[locale][item.number] })}
+                  className="relative z-10 rounded-full outline-offset-4 transition hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ai-violet disabled:cursor-not-allowed disabled:hover:scale-100"
+                >
+                  {dot}
+                </button>
+              ) : (
+                dot
+              )}
+              <span className={`mt-2 text-xs ${item.state === "upcoming" ? "font-medium text-text-muted" : "font-semibold text-text-primary"}`}>{locale === "ko" ? `${item.number}회기` : `Session ${item.number}`}</span>
+              <span className="sr-only">{t(`patientJourney.${item.state}`)}</span>
+            </div>
+          );
+        })}
       </div>
       {current && (
         <div data-tour-id="journey-continue" className="mt-8 rounded-2xl border border-clinical-blue-light bg-gradient-to-r from-clinical-blue-light/55 via-surface to-ai-violet-light/25 p-5 sm:flex sm:items-center sm:justify-between sm:gap-6">
@@ -185,7 +210,7 @@ function PatientJourney({ journey, participant, localPreview }: { journey: Retur
               <span className="text-sm font-semibold text-text-secondary">({SESSION_TITLES[locale][current.number]})</span>
             </div>
           </div>
-          <Button className="mt-4 w-full disabled:opacity-100 sm:mt-0 sm:w-auto" onClick={() => void handleContinue()} disabled={isStarting || localPreview}>
+          <Button className="mt-4 w-full disabled:opacity-100 sm:mt-0 sm:w-auto" onClick={() => void handleOpen(current)} disabled={isStarting || localPreview}>
             <Play className="h-4 w-4" />
             {isStarting ? t("patientJourney.starting") : t("patientJourney.continue")}
           </Button>

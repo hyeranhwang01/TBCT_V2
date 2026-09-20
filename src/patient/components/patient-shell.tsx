@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { ClipboardList, HelpCircle, History, ListChecks, MessageCircle, Settings, UserRound } from "lucide-react";
+import { ClipboardList, HelpCircle, History, ListChecks, MessageCircle, Settings, UserRound, Wrench } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -12,6 +12,7 @@ import { LocaleToggle } from "@/shared/components/ui/locale-toggle";
 import { Logo } from "@/shared/components/ui/logo";
 import { ThemeToggle } from "@/shared/components/ui/theme-toggle";
 import { useT } from "@/shared/i18n/context";
+import { useDevMode } from "@/shared/dev-mode/dev-mode";
 import { useAuth } from "@/shared/auth/auth-context";
 import { getOrCreateParticipantForUiLocale } from "@/shared/api/participant-api";
 import { applyPatientLocaleChange } from "@/patient/lib/api/patient-locale-sync";
@@ -46,6 +47,7 @@ export function PatientShell({
   const reducedMotion = useReducedMotionPreference();
   const { user, signOut } = useAuth();
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const devMode = useDevMode();
   const queryClient = useQueryClient();
   // Reuses the same ["runtime-participant", userId] query every patient
   // page already mounts -- React Query dedupes the identical key, so this
@@ -130,6 +132,21 @@ export function PatientShell({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {/* Developer mode: unlocks every session on the journey so any one
+                can be started without finishing the one before it. Hidden
+                entirely when NEXT_PUBLIC_DEV_TOOLS=off. */}
+            {devMode.available && (
+              <Button
+                size="sm"
+                variant={devMode.enabled ? "violet" : "ghost"}
+                onClick={devMode.toggle}
+                aria-pressed={devMode.enabled}
+                title={t("devMode.toggleHint")}
+              >
+                <Wrench className="h-4 w-4" />
+                {t("devMode.toggle")}
+              </Button>
+            )}
             <LocaleToggle onChange={(next) => void handleLocaleChange(next)} />
             <span data-tour-id="theme-toggle" className="hidden sm:inline-flex"><ThemeToggle /></span>
             {/* Replays the onboarding tour -- it only ever mounts on the
@@ -152,6 +169,15 @@ export function PatientShell({
           </div>
         </div>
       </header>
+      {/* Says so plainly while the lock is off, and warns about the one thing
+          that surprises people who skip ahead: a session started out of order
+          has no previous session to review (see session-continuity.ts's
+          EMPTY_CONTINUITY_SEED). */}
+      {devMode.enabled && (
+        <div role="status" className="border-b border-ai-violet bg-ai-violet-light/40 px-4 py-2 text-xs font-semibold text-text-primary lg:px-8">
+          {t("devMode.banner")}
+        </div>
+      )}
       <main className="p-4 lg:p-8">
         {/* Every patient page wraps itself in its own <PatientShell> (see
             studio-app.tsx's routing), so this is the one shared place that
