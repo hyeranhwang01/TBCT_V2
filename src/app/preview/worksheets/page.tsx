@@ -164,13 +164,27 @@ function s01View(locale: "ko" | "en", stage: S01Stage): WorksheetView {
   return makeView(TBCT_S01_BINDINGS, Object.fromEntries(entries.slice(0, cut)), {});
 }
 
+// S02 is the fifteen-pattern table with the CD-Quest score beside each row
+// (note2026_09_21_s02_cognitive_distortions). Mid-round on purpose: the first
+// rows carry an example and a score, one row has no example, and the rest are
+// still ahead -- so the empty-row styling and the unscored chip are both visible.
+// The problems/goals fixture this replaced matched no binding any more, which
+// rendered the preview as an empty table.
 const initialS02View = makeView(TBCT_S02_BINDINGS, {
-  problems: ["집중이 안 돼요", "잠을 잘 못 자요", "사람들과 있으면 불안해요", "매사에 의욕이 없어요", "작은 일에도 화가 나요", "혼자 있으면 우울해요"],
-  problemRatings: [0, 1, 2, 3, 4, 5],
-  totalProblemScore: 15,
-  goals: ["숙면 취하기", "사람들과 편하게 지내기", "집중력 회복하기", "화내지 않고 대화하기", "외출을 편하게 하기", "활력 되찾기"],
-  goalRatings: [0, 1, 2, 3, 4, 5],
-  totalGoalsScore: 15,
+  distortionExamples: [
+    "인사를 안 했으니 저를 싫어하는 거라고 생각했어요",
+    "계획에 실패하면 모든 게 무너질 거라고 생각했어요",
+    "점수가 잘 나온 건 그냥 운이 좋았던 거라고 생각했어요",
+    "불안하면 곧 큰일이 일어날 거라고 믿었어요",
+    "친절하지 않았던 사람을 원래 안 좋은 사람이라고 봤어요",
+    "—",
+    "칭찬도 완벽하지 않으니 그냥 해준 말이라고 봤어요",
+    "그만둔 걸 보고 끈기 없다고 생각했을 거라고 봤어요",
+  ],
+  cdQuestScores: [2, 3, 2, 3, 2, 0],
+  cdQuestFrequency: [2, 1, 2, 2, 2, 0],
+  cdQuestIntensity: [1, 3, 1, 2, 1, 0],
+  cdQuestTotal: 12,
 });
 
 const initialS03View = makeView(TBCT_S03_BINDINGS, {

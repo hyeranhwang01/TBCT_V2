@@ -19,11 +19,13 @@ import { getListScoreHistory } from "@/shared/worksheet/worksheet-projection";
 // connections" rule this feature is built around. Sessions without a
 // configured pair below simply show "not available" rather than a
 // half-working table.
-const HISTORY_CAPABLE_SESSIONS: Record<string, Array<{ itemsKey: string; scoresKey: string; label: string }>> = {
-  "tbct-s02": [
-    { itemsKey: "problems", scoresKey: "problemRatings", label: "Problems" },
-    { itemsKey: "goals", scoresKey: "goalRatings", label: "Goals" },
-  ],
+/** Exported so a test can check the keys against the session's own worksheet
+ * bindings: a key that does not exist draws no table and reports no error. */
+export const HISTORY_CAPABLE_SESSIONS: Record<string, Array<{ itemsKey: string; scoresKey: string; label: string }>> = {
+  // S02 collects the fifteen cognitive distortions and their CD-Quest scores
+  // (note2026_09_21_s02_cognitive_distortions); the problems/goals pair it used
+  // to show belongs to the session this one replaced.
+  "tbct-s02": [{ itemsKey: "distortionExamples", scoresKey: "cdQuestScores", label: "Cognitive distortions" }],
   "tbct-s06": [{ itemsKey: "symptomItems", scoresKey: "symptomItemScores", label: "Symptoms" }],
 };
 

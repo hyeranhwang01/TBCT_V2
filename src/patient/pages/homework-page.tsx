@@ -10,7 +10,7 @@ import { useRealtimeInvalidate } from "@/shared/supabase/use-realtime-invalidate
 import { HOMEWORK_LABEL_BY_SESSION, hasHomeworkActivity } from "@/types/homework";
 import { useT } from "@/shared/i18n/context";
 import { WeeklyExamplesHomework } from "@/patient/sessions/s01/homework";
-import { CheckInHomework } from "@/patient/sessions/s02/homework";
+import { CdQuestHomework } from "@/patient/sessions/s02/homework";
 import { ReviewIntraTrHomework } from "@/patient/sessions/s03/homework";
 import { ActionPlanHomework } from "@/patient/sessions/s04/homework";
 import { ReviewGridHomework } from "@/patient/sessions/s05/homework";
@@ -58,7 +58,7 @@ function HomeworkSessionView({ sessionView, homework, label }: { sessionView: Ru
   const { session } = sessionView;
   switch (session.sessionDefinitionId) {
     case "tbct-s01": return <WeeklyExamplesHomework session={session} homework={homework} label={label} />;
-    case "tbct-s02": return <CheckInHomework session={session} homework={homework} label={label} />;
+    case "tbct-s02": return <CdQuestHomework session={session} homework={homework} label={label} />;
     case "tbct-s03": return <ReviewIntraTrHomework session={session} homework={homework} label={label} />;
     case "tbct-s04": return <ActionPlanHomework session={session} homework={homework} label={label} />;
     case "tbct-s05": return <ReviewGridHomework session={session} homework={homework} label={label} />;

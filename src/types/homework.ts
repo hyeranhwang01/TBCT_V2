@@ -34,7 +34,7 @@ export interface HomeworkEntryRecord {
 // are review/share only, with no new patient-authored entries.
 export const HOMEWORK_LABEL_BY_SESSION: Record<string, string> = {
   "tbct-s01": "Distortion Examples", // 15-distortion table with a "내 예시" column (note2026_09_12_s01_redesign)
-  "tbct-s02": "Check-in",
+  "tbct-s02": "CD-Quest",
   "tbct-s03": "Review Intra-TR",
   "tbct-s04": "Action Plan",
   "tbct-s05": "Review Grid",
@@ -45,7 +45,7 @@ export const HOMEWORK_LABEL_BY_SESSION: Record<string, string> = {
 
 export const HOMEWORK_CATEGORY_BY_SESSION: Record<string, "ongoing" | "action_plan" | "review"> = {
   "tbct-s01": "ongoing",
-  "tbct-s02": "ongoing", // repeated check-in rounds building a "journey" trend, like S1/S6/S8
+  "tbct-s02": "ongoing", // a fresh CD-Quest round each week, building a trend, like S1/S6/S8
   "tbct-s03": "review",
   "tbct-s04": "action_plan",
   "tbct-s05": "review",
