@@ -325,10 +325,29 @@ export const spec: SessionSpec = {
       type: "session_complete",
       source: [156, 159],
       terminal: true,
-      objective: "Give this week's practice concretely, as in the real first session: keep the cognitive distortions list nearby and, whenever such a thought comes up, write a short example in the 'My examples' column of the matching distortion; you will look at it together next time. Ask whether they can do it. Do not mention the Intrapersonal Thought Record, do not summarize the session and do not ask for feedback. Close with one short goodbye.",
+      objective: "Give this week's practice concretely, as in the real first session: keep the cognitive distortions list nearby and, whenever such a thought comes up, write a short example in the 'My examples' column of the matching distortion; you will look at it together next time. Ask whether they can do it. Then recap what today covered -- naming none of their own answers -- and close with one short goodbye. Do not mention the Intrapersonal Thought Record and never ask for feedback.",
       prompts: [
         { slug: "homework-assignment", type: "worksheet_instruction", source: [156, 157], patientText: "This week, keep the cognitive distortions list nearby. Whenever a thought like this comes up, write a short example in the 'My examples' column of the pattern it fits. We'll look at them together next time.", outputFields: ["dailyObservationPractice"] },
         { slug: "homework-commitment", type: "question", source: [156, 157], patientText: "Do you think you can do that?", outputFields: ["homeworkCommitment"], validation: { kind: "boolean" } },
+        // The therapist's recap, as in the real first session
+        // (note2026_09_21_s01_closing_recap): it comes AFTER the homework and
+        // before the goodbye, and it recaps what was DONE today rather than
+        // reading the participant's answers back -- the recording names no
+        // difficulty, goal or situation. It asks nothing, so it declares no
+        // output field and never waits for input. The feedback question that
+        // follows it in the book and the recording is deliberately left out.
+        //
+        // source is [159, 159] like the goodbye, NOT the node's [156, 159]:
+        // line 158 is the Intra-TR instruction, and a range covering it would
+        // put the Intra-TR into this prompt's verbatim source text -- the one
+        // thing S01 must never surface.
+        //
+        // The English says "how thoughts work", not "the cognitive model":
+        // isPatientSafeFallbackText rejects /\bmodels?\b/
+        // (runtime-release-normalizer.ts:219) and would replace this whole
+        // sentence with the content-free generic line. Korean "인지 모델" is
+        // unaffected -- the check is Latin word-boundary only.
+        { slug: "session-recap", type: "closing", source: [159, 159], patientText: "Here is what we did today. We started with the difficulties you would like help with, and set a goal for when counseling ends. Then we looked at how thoughts work, through something you went through and through the example of the three people. You saw how one thought reaches your feelings, your behavior and your body. And at the end we looked at the fifteen patterns a thought can be distorted into." },
         { slug: "goodbye", type: "closing", source: [159, 159], patientText: "Thank you for sharing today. See you next time.", completionEffect: { type: "complete_session" } },
       ],
     },

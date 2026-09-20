@@ -186,6 +186,41 @@ describe("S01 redesign: real first session replay", () => {
     expect(cell("participantSummary")?.value).toBeTruthy();
   }, 90_000);
 
+  // The counselor's own recap of the session, as in the real first session
+  // (note2026_09_21_s01_closing_recap). It recaps what was DONE and reads
+  // none of the participant's answers back, it asks nothing, and it is never
+  // written to a field or the worksheet.
+  it("recaps the session between the homework and the goodbye, without reading the participant's answers back", async () => {
+    const session = await startSession();
+    const { view } = await driveUntil(session.id, null);
+    expect(view.session.status).toBe("completed");
+
+    const assistant = view.messages.filter((message) => message.role === "assistant");
+    const recapIndex = assistant.findIndex((message) => message.promptItemId?.endsWith("-session-recap"));
+    const homeworkIndex = assistant.findIndex((message) => message.promptItemId?.endsWith("-homework-commitment"));
+    const goodbyeIndex = assistant.findIndex((message) => message.promptItemId?.endsWith("-goodbye"));
+    expect(recapIndex).toBeGreaterThan(homeworkIndex);
+    expect(goodbyeIndex).toBeGreaterThan(recapIndex);
+
+    const recap = assistant[recapIndex].content;
+    // What today covered, not what the participant said.
+    expect(recap).toMatch(/(15|십오)\s*가지/);
+    for (const own of ["걱정이 많아요", "배신감", "의견 차이가 있어서"]) expect(recap, own).not.toContain(own);
+    // Asks nothing, and never for feedback -- the feedback step of the real
+    // session is deliberately left out.
+    expect(recap).not.toMatch(/[?？]/);
+    expect(recap).not.toMatch(/피드백|어떠셨|어떠세요|feedback/i);
+    // The guards that would silently swap the whole message for the generic
+    // locale line, or leave a placeholder in it.
+    expect(recap.length).toBeLessThanOrEqual(600);
+    expect(recap).not.toMatch(/\[[a-z][^\]]*\]/i);
+
+    // An assistant summary is never written to a field or projected.
+    expect(Object.keys(view.session.runtimeContext.fields)).not.toContain("s01SessionRecap");
+    const worksheet = await getWorksheetView(session.id, "tbct-s01");
+    expect(worksheet?.fields.some((item) => item.definition.worksheetFieldKey === "s01SessionRecap")).toBe(false);
+  }, 90_000);
+
   it("summarizes a long situation answer, and the summary the participant confirms fills the one-line box beside their own words", async () => {
     const session = await startSession();
     await driveUntil(session.id, "recent-moment");

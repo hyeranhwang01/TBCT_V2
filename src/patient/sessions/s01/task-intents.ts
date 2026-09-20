@@ -324,15 +324,33 @@ const INTENTS: Record<string, S01TaskIntent> = {
 
   "homework-assignment": {
     obtain: "Give this week's practice concretely.",
-    keep: ["No session summary."],
+    keep: ["The recap of the session has its own step right after the commitment question; do not summarize here."],
     mustMention: [{ describe: "keep the cognitive distortions list nearby and, whenever such a thought comes up, write a short example in the 'My examples' column of the matching distortion; you will look at them together next time", ko: "내 예시", en: "my examples" }],
   },
   "homework-commitment": {
     obtain: "Whether they think they can do that.",
   },
+  // The one step where a session summary is wanted
+  // (note2026_09_21_s01_closing_recap). The real recording recaps what was
+  // DONE and names none of the participant's own content, so the wording is
+  // Claude's and "name none of their answers" is a rule rather than a
+  // template. It asks nothing: a question mark is checked for in code.
+  "session-recap": {
+    obtain: "Recap what today covered, in order: the difficulties they wanted help with, the goal for when counseling ends, the cognitive model looked at through something they went through and through the three people, how one thought reaches feelings, behavior and the body, and the fifteen patterns a thought can be distorted into.",
+    keep: [
+      "Recap what was DONE today, never what they said or concluded: name no difficulty, no goal, no situation, no feeling and no distortion of theirs.",
+      "Ask nothing -- no confirmation that the recap is right, and no feedback question.",
+      "No praise and no encouragement; just what today covered.",
+    ],
+    mustMention: [{ describe: "the fifteen patterns a thought can be distorted into", ko: "(15|십오)\\s*가지", en: "fifteen|15" }],
+    // Asking anything at all is already caught for a turn the program does
+    // not wait on (NO_QUESTION_ON_NON_INPUT_TURN, dialogue-agent-orchestrator.ts),
+    // so only the feedback wording needs its own pattern here.
+    mustNotMention: [{ describe: "a feedback question", ko: "피드백|어떠셨|어떠세요", en: "\\bfeedback\\b" }],
+  },
   "goodbye": {
     obtain: "One short goodbye.",
-    keep: ["No session summary and no feedback question."],
+    keep: ["The recap has just been given; do not summarize again, and never ask for feedback."],
   },
 };
 

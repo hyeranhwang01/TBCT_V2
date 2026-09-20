@@ -122,7 +122,14 @@ export const koreanText: Record<string, string> = {
 
   "tbct-s01-n18-p01-homework-assignment": "이번 주에는 인지 왜곡 목록을 곁에 두고, 이런 생각이 들 때마다 해당하는 왜곡의 ‘내 예시’ 칸에 짧게 적어 보세요. 다음 시간에 같이 볼게요.",
   "tbct-s01-n18-p02-homework-commitment": "할 수 있으시겠어요?",
-  "tbct-s01-n18-p03-goodbye": "오늘 이야기 나눠 주셔서 고마워요. 다음 시간에 뵐게요.",
+  // The counselor's recap of the session, as in the real first session
+  // (2026-09-11, 62:50-63:23). It recaps what was DONE and names none of the
+  // participant's own answers -- the recording names no difficulty, no goal
+  // and no situation -- so this is ordinary approved text with no
+  // placeholder, and Claude phrases it (s01/task-intents.ts "session-recap").
+  // Asks nothing: the goodbye follows right after it.
+  "tbct-s01-n18-p03-session-recap": "오늘은 이렇게 함께했어요. 먼저 요즘 도움받고 싶은 어려움들을 찾아보고, 상담이 끝났을 때의 목표를 세웠어요. 그다음 본인이 겪은 일과 세 사람의 예를 가지고 인지 모델을 함께 살펴봤고요. 하나의 생각이 감정과 행동, 몸의 느낌까지 영향을 준다는 것을 보셨어요. 마지막으로 우리 생각에는 왜곡된 패턴이 있을 수 있다는 것, 그 15가지 패턴을 함께 살펴봤어요.",
+  "tbct-s01-n18-p04-goodbye": "오늘 이야기 나눠 주셔서 고마워요. 다음 시간에 뵐게요.",
 };
 
 // When the dialogue agent falls back to identical approved text three turns

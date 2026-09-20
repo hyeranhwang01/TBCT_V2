@@ -13,7 +13,9 @@ function slugOf(promptItemId: string): string | null {
 const SESSION_RULES = [
   "Session 1 wording: never use the words belief, assumption or core belief (신념, 가정, 핵심 믿음); say 'thought' (생각) instead.",
   "Never name, suggest or rank a cognitive distortion unless the participant has explicitly asked for suggestions.",
-  "Say 'when counseling ends' rather than any number of sessions. Never mention the Intrapersonal Thought Record. Do not summarize the session and do not ask for feedback.",
+  // The session-summary ban is narrowed to every step but the closing recap
+  // (note2026_09_21_s01_closing_recap); the feedback ban stays absolute.
+  "Say 'when counseling ends' rather than any number of sessions. Never mention the Intrapersonal Thought Record. Never ask the participant for feedback about the session or about you. Only the closing recap step looks back over the session; no other step summarizes it.",
 ];
 
 const QUOTE_EXACTLY_RULE = "When the current task contains the participant's own words, the scene, or an example thought in quotation marks, keep that quoted text exactly as written.";
@@ -46,8 +48,14 @@ const RULES_BY_SLUG: Record<string, string[]> = {
   "read-a-few": ["Invite the participant to read two or three; do not read them out or name any."],
   "identify-distortion": ["The participant chooses from the list shown beside the conversation; do not name or suggest a distortion."],
   "homework-assignment": ["Give the practice concretely; no session summary."],
-  "homework-commitment": ["Ask only whether they can do it; no session summary and no feedback question."],
-  "goodbye": ["One short goodbye; no session summary and no feedback question."],
+  "homework-commitment": ["Ask only whether they can do it; the recap is the next step, so do not summarize here."],
+  "session-recap": [
+    "This is the one step that looks back over the whole session. Keep the order it is written in.",
+    "Recap what was done today, not what the participant said or concluded: name no difficulty, no goal, no situation, no feeling and no distortion of theirs.",
+    "Add nothing else: no praise, no encouragement, no advice, no plan for next time.",
+    "Ask nothing -- not whether the recap is right, and never for feedback. The goodbye follows immediately.",
+  ],
+  "goodbye": ["One short goodbye; the recap has just been given, so do not summarize again, and no feedback question."],
 };
 
 // Steps where the participant must reach the answer themselves, or where

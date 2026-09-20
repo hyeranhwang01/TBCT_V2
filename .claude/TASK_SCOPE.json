@@ -85,6 +85,8 @@
     "src/patient/sessions/s01/generation.ts",
     "src/patient/sessions/s01/generation.test.ts",
     "src/patient/sessions/s01/dialogue-guidance.ts",
+    "src/patient/sessions/s01/task-intents.ts",
+    "src/patient/sessions/s01/task-intents.test.ts",
     "src/patient/sessions/s01/worksheet-diagram.tsx",
     "src/patient/sessions/s01/distortion-table.tsx",
     "src/patient/sessions/s01/worksheet-labels.ts",
@@ -493,5 +495,34 @@
     "doNotTouch": ["src/shared/protocol/tbct-source-text.generated.ts", "sql/**", "src/patient/sessions/s02/**", "src/patient/sessions/s03/**"],
     "blastRadius": "S01's first node only: one more program turn (the consent) before the difficulties question. Other nodes' prompt ids are unchanged (ids are positional within a node). Other sessions unchanged.",
     "regressionPlan": "npm run type-check; npx vitest run; npm run lint; npm run audit:sessions; local run of scripts/run-local-session.ts tbct-s01 --interactive; after deploy, a new S01 session."
+  },
+  "note2026_09_21_s01_closing_recap": {
+    "task": "S01 ends at homework -> homework consent -> goodbye, with no recap of what the session covered. The book this protocol comes from (de Oliveira, Trial-Based Cognitive Therapy, ch.1, 'Designing Homework, Summarizing, and Concluding Session 1') and the real first session S01 follows (GMT20260911 recording, 62:50-63:23, right after 'can you do that' / 'I think I can') both have the therapist recap the session between the homework and the goodbye.",
+    "userDecision": "2026-09-21, by the user: the COUNSELOR gives the recap, as in the real session, and it covers the whole session. It goes in the last node. The wording is Claude's (task intent), not a fixed sentence -- step order, completion and safety stay in code, the wording does not. The feedback request that follows the recap in the book and the recording is deliberately LEFT OUT: taking feedback means carrying it into the next session, which is separate work for later.",
+    "keyObservation": "The recap in the real recording names none of the participant's own content -- not the difficulty, not the goal, not the situation. It is entirely a recap of what was DONE ('we looked at the difficulties you have, we set a goal, we understood the cognitive model through your case and through three people's cases, ... we looked at those fifteen patterns'). So the step is a process recap, not a read-back of their answers, which is why the wording can be left to Claude: there is almost nothing to get wrong, and 'name none of their answers' is a rule rather than a template.",
+    "noConfirmationQuestion": "By the user, after weighing it: the recap does not ask 'is that right'. It is in neither the book nor the recording; the participant's own understanding was already taken at n16 participant-summary, and asking twice weakens that step; and a 'no' would have no clinical script at the very end of the session. The step asks nothing and the session closes on the goodbye that follows.",
+    "notStored": "The recap text is not written to any field. Claude phrases it differently each time, so the S07/S08 pattern (compose the string, then record the identical string in applyPromptCompletionEffect) does not apply, and capturing the delivered assistant message would need a new shared-runtime path -- out of proportion here. The recap is in the conversation log, which is what the clinician reads. Revisit together with the feedback step.",
+    "change": "S01 n18 homework-closing: new prompt tbct-s01-n18-p03-session-recap (type closing, no outputFields, no validation, no completionEffect -> never waits for input, writes nothing) between homework-commitment and goodbye; goodbye moves to p04. The node objective, the session-wide dialogue rule and the per-slug rules that forbade a session summary are narrowed so the ban stays on homework-assignment / homework-commitment / goodbye and the feedback ban stays absolute.",
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/patient/sessions/s01/spec.ts",
+      "src/patient/sessions/s01/messages.ts",
+      "src/patient/sessions/s01/task-intents.ts",
+      "src/patient/sessions/s01/dialogue-guidance.ts",
+      "src/patient/sessions/s01/spec.test.ts",
+      "src/patient/sessions/s01/messages.test.ts",
+      "src/patient/sessions/s01/task-intents.test.ts",
+      "docs/ai/TBCT_SESSIONS_1_3.md"
+    ],
+    "doNotTouch": [
+      "src/shared/**",
+      "src/shared/protocol/tbct-source-text.generated.ts",
+      "sql/**",
+      "src/patient/sessions/s02/**",
+      "src/patient/sessions/s03/**"
+    ],
+    "blastRadius": "S01 n18 only. Prompt ids are positional within a node, so n01-n17 are untouched and the ids pinned in summary-check.test.ts and runtime-orchestrator.test.ts (n05/n06/n07/n14/n16/n17) still resolve; the only renumbering is the n18 goodbye koreanText key p03 -> p04. No new field, so no worksheet binding, no projection and no change to the audit's missing-field check. No shared file is touched.",
+    "manualDivergence": "REPORTED, not silently applied. The RCT prompt manual (artifacts/tbct-source-text.txt, S01 = lines 18-222) has no summary in 'Step 6 - Closing the Session', and its Tone and Style (lines 180-193) says 'Ask, do not tell ... at every point where you would be tempted to explain, describe, or summarize - ask a question instead'. This step follows the book and the recording instead. Per .claude/rules/tbct-session-manual.md section 8 the manual is left unchanged and the divergence is stated in the completion report.",
+    "regressionPlan": "npx vitest run src/patient/sessions/s01; npm run type-check; npx vitest run src/shared/dialogue-agent src/shared/runtime; npm run audit:sessions; npx tsx scripts/run-local-session.ts tbct-s01. With a live key, check once that the recap does not leak the participant's own answers."
   }
 }
