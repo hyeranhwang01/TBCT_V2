@@ -75,6 +75,59 @@ describe("S02 task intents", () => {
     });
   });
 
+  describe("the CD-Quest grid explanation", () => {
+    const id = S02_PROMPTS.find((item) => item.id.endsWith("-cdquest-explain"))!.id;
+
+    // The bands are the one place in the session where the numbers have to be
+    // exact: a turn that explains the grid without them leaves the participant
+    // guessing what they are scoring against.
+    it("requires both sets of bands, so a band cannot go missing", () => {
+      const taskIntent = { ...intent(id)!, asksParticipant: false };
+      expect(taskIntentGaps("유형마다 얼마나 자주 그랬고 얼마나 강하게 믿었는지를 점수로 매겨볼게요.", taskIntent)).toHaveLength(2);
+      // Frequency bands present, intensity percentages missing.
+      expect(taskIntentGaps("1~2일, 3~5일, 6~7일 중에 고르시면 돼요.", taskIntent)).toHaveLength(1);
+      const full =
+        "유형마다 두 가지를 적어요. 지난 한 주에 1~2일이었는지, 3~5일이었는지, 6~7일이었는지. 그리고 그 순간 얼마나 믿었는지 -- 약간(30%까지), 꽤(31~70%), 아주 강하게(70% 넘게)요.";
+      expect(taskIntentGaps(full, taskIntent)).toEqual([]);
+    });
+  });
+
+  describe("scoring a pattern", () => {
+    const id = "tbct-s02-n07-p01-score-distortion";
+
+    it("names the pattern the scoring loop is on, and moves with the stored scores", () => {
+      for (const [index, distortion] of COGNITIVE_DISTORTIONS.entries()) {
+        const fields = { cdQuestScores: Array.from({ length: index }, () => 2) };
+        const resolved = intent(id, fields)!;
+        expect(resolved.obtain, distortion.id).toContain(distortion.nameKo);
+        expect(resolved.obtain).toContain(`pattern ${index + 1} of 15`);
+      }
+    });
+
+    it("does not run off the end once all fifteen are scored", () => {
+      const fields = { cdQuestScores: Array.from({ length: COGNITIVE_DISTORTIONS.length }, () => 2) };
+      expect(intent(id, fields)!.obtain).toContain(COGNITIVE_DISTORTIONS.at(-1)!.nameKo);
+    });
+
+    it("requires this pattern's name, so a bare 'how often was it' is caught", () => {
+      const taskIntent = { ...intent(id, {})!, asksParticipant: true };
+      expect(taskIntentGaps("이건 이번 주에 며칠 있었고 얼마나 강했나요?", taskIntent)).toHaveLength(1);
+      expect(taskIntentGaps(`${COGNITIVE_DISTORTIONS[0].nameKo}은 이번 주에 며칠 정도였고, 그 순간 얼마나 믿었나요?`, taskIntent)).toEqual([]);
+    });
+  });
+
+  describe("the total", () => {
+    const id = S02_PROMPTS.find((item) => item.id.endsWith("-total"))!.id;
+
+    // 49:20 of the recording: the counselor says there is no cut-off. Without
+    // it a total reads like a test result.
+    it("requires the no-cut-off framing", () => {
+      const taskIntent = { ...intent(id)!, asksParticipant: false };
+      expect(taskIntentGaps("다 더하면 34점이에요.", taskIntent)).toHaveLength(1);
+      expect(taskIntentGaps("다 더하면 34점인데, 여기에는 정해진 기준점이 없어요. 지난 한 주의 모습일 뿐이에요.", taskIntent)).toEqual([]);
+    });
+  });
+
   describe("the closing recap", () => {
     const id = S02_PROMPTS.find((item) => item.id.endsWith("-session-recap"))!.id;
 

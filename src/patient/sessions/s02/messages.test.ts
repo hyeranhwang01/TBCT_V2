@@ -15,6 +15,10 @@ const DYNAMIC_IDS = new Set([
   // Composed in full so the S01 homework recap reaches Korean -- see the
   // comment on homeworkUpdateText.
   "tbct-s02-n02-p01-homework-update",
+  // Stage 2: both name the pattern (or the total) the turn is actually on, so a
+  // koreanText entry would override the composed text and freeze it.
+  "tbct-s02-n07-p01-score-distortion",
+  "tbct-s02-n08-p01-total",
 ]);
 
 describe("S02 fallback wording", () => {

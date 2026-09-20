@@ -106,12 +106,107 @@ function stringList(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
+function numberList(value: unknown): number[] {
+  return Array.isArray(value) ? value.filter((item): item is number => typeof item === "number" && Number.isFinite(item)) : [];
+}
+
+/** Frequency and intensity can legitimately be null for an item whose score the
+ * participant stated outright, so the list keeps the holes. */
+function numberOrNullList(value: unknown): Array<number | null> {
+  return Array.isArray(value) ? value.map((item) => (typeof item === "number" && Number.isFinite(item) ? item : null)) : [];
+}
+
+// ---------------------------------------------------------------- CD-Quest
+//
+// The grid from the book's appendix (Table A1): frequency across, intensity
+// down, and the cell is the item's score.
+//
+//                      no    1-2 days  3-5 days  6-7 days
+//   a little (<=30%)    0        1         2         3
+//   quite (31-70%)      0        2         3         4
+//   very much (>70%)    0        3         4         5
+//
+// which is frequency + intensity - 1, and 0 whenever it did not occur. Fifteen
+// items x 5 = 0-75, matching the book's own stated range. The real second
+// session's fifteen answers come to 34 under this formula, which is the total
+// the recording states -- pinned by a test.
+export type CdQuestGrade = 0 | 1 | 2 | 3;
+
+export function cdQuestScore(frequency: CdQuestGrade, intensity: CdQuestGrade): number {
+  if (frequency === 0 || intensity === 0) return 0;
+  return frequency + intensity - 1;
+}
+
+// An English answer spells the day counts out at least as often as it writes
+// them in digits ("three to five days"), so both forms are read.
+const FREQUENCY_PATTERNS: Array<{ grade: CdQuestGrade; patterns: RegExp[] }> = [
+  // "It did not come up at all this week" -- the negation and "at all" are not
+  // adjacent, so the verb phrases are matched in their own right.
+  { grade: 0, patterns: [/없었|없어|없음|안\s*나타|나타나지\s*않|해당\s*없/, /\b(none|never|not at all|not this week)\b|\b(?:did\s*n[o']t|does\s*n[o']t|didn.t|doesn.t)\s+(?:come up|happen|occur|show up|apply)/i] },
+  { grade: 3, patterns: [/6\s*일?\s*[-~]?\s*(?:에서)?\s*7\s*일|거의\s*매일|매일|늘|항상|하루도\s*빠짐없/, /\b((?:6|six)\s*(?:-|to)\s*(?:7|seven)|almost every day|every day|daily|always|constantly)\b/i] },
+  { grade: 2, patterns: [/3\s*일?\s*[-~]?\s*(?:에서)?\s*5\s*일|중간\s*정도|절반|꽤\s*자주/, /\b((?:3|three)\s*(?:-|to)\s*(?:5|five)|much of the time|about half|fairly often)\b/i] },
+  { grade: 1, patterns: [/1\s*일?\s*[-~]?\s*(?:에서)?\s*2\s*일|하루\s*이틀|한\s*두\s*번|한두\s*번|가끔|드물|이따금/, /\b((?:1|one)\s*(?:-|to|or)\s*(?:2|two)|once or twice|occasionally|rarely|now and then)\b/i] },
+];
+
+const INTENSITY_PATTERNS: Array<{ grade: CdQuestGrade; patterns: RegExp[] }> = [
+  { grade: 3, patterns: [/아주\s*강|매우\s*강|정말\s*강|심하게|아주\s*세게/, /\b(?:very\s+(?:much|strong)|extremely|intensely)/i] },
+  // "강한 정도"/"강하게" without 아주 is the middle band, as the recording used it.
+  { grade: 2, patterns: [/꽤|좀\s*강|강한\s*정도|강하게|보통\s*정도|중간\s*강도/, /\b(quite|fairly strong|moderate|somewhat strong)\b/i] },
+  { grade: 1, patterns: [/약간|조금|살짝|약하게|크지\s*않/, /\b(a little|slight|mild|not much|weak)\b/i] },
+];
+
+function gradeFrom(text: string, table: Array<{ grade: CdQuestGrade; patterns: RegExp[] }>): CdQuestGrade | null {
+  for (const row of table) if (row.patterns.some((pattern) => pattern.test(text))) return row.grade;
+  return null;
+}
+
+/** A percentage maps straight onto the intensity bands the book gives. */
+function intensityFromPercent(text: string): CdQuestGrade | null {
+  const match = /(\d{1,3})\s*%/.exec(text);
+  if (!match) return null;
+  const percent = Number(match[1]);
+  if (!Number.isFinite(percent) || percent < 0 || percent > 100) return null;
+  if (percent === 0) return 0;
+  if (percent <= 30) return 1;
+  if (percent <= 70) return 2;
+  return 3;
+}
+
+/** "2점" -- the recording's participant answered this way repeatedly. A bare
+ * number is deliberately NOT read as a score: "2" could as easily be the 3-5
+ * day band, so the step asks again instead of guessing. */
+function directScore(text: string): number | null {
+  const match = /(?:^|[^0-9])([0-5])\s*점/.exec(text);
+  return match ? Number(match[1]) : null;
+}
+
+export type CdQuestReading = { frequency: CdQuestGrade | null; intensity: CdQuestGrade | null; score: number | null };
+
+export function readCdQuestAnswer(rawText: string): CdQuestReading {
+  const text = normalize(rawText);
+  const frequency = gradeFrom(text, FREQUENCY_PATTERNS);
+  const intensity = intensityFromPercent(text) ?? gradeFrom(text, INTENSITY_PATTERNS);
+  if (frequency === 0) return { frequency: 0, intensity: 0, score: 0 };
+  if (frequency !== null && intensity !== null) return { frequency, intensity, score: cdQuestScore(frequency, intensity) };
+  const stated = directScore(text);
+  // A stated score stands on its own; the two halves stay unknown.
+  if (stated !== null) return { frequency, intensity, score: stated };
+  return { frequency, intensity, score: null };
+}
+
+// 50:10: "나는 그냥 원래 불안한 사람이야 라고 받아들이고 있었는데".
+const INNATE_PATTERNS = [/선천적|타고|원래\s*(그런|불안|이런)|천성|체질/, /\b(born (?:this way|with it)|just how i am|innate)\b/i];
+function looksLikeInnateAttribution(text: string) {
+  const value = normalize(text);
+  return INNATE_PATTERNS.some((pattern) => pattern.test(value));
+}
+
 /** The empty row: a pattern the participant had no example for. Stored rather
  * than skipped so the pointer stays aligned with the registry and the worksheet
  * shows the pattern as looked at. */
 export const NO_EXAMPLE_MARKER = "—";
 
-const BARE_YES_NO_SLUGS = new Set(["today-agenda", "agenda-continue", "homework-commitment"]);
+const BARE_YES_NO_SLUGS = new Set(["today-agenda", "agenda-continue", "understanding-check", "homework-commitment"]);
 
 export async function applyS02TurnRules(input: S02TurnRulesInput): Promise<S02TurnRulesOutput> {
   const { promptItem, rawText, extracted } = input;
@@ -180,6 +275,46 @@ export async function applyS02TurnRules(input: S02TurnRulesInput): Promise<S02Tu
     const done = rows.length >= COGNITIVE_DISTORTIONS.length;
     fields.allDistortionsReviewed = done;
     if (done) log("every pattern has a row; walkthrough complete", { allDistortionsReviewed: true });
+  }
+
+  if (slug === "score-distortion") {
+    // Reliable because cdQuestScores is not this prompt's output field: the
+    // shared extraction never writes it, so what arrives here is the list as
+    // the previous turn committed it. See the note in spec.ts.
+    const scores = numberList(extracted.fields.cdQuestScores);
+    const reading = readCdQuestAnswer(text);
+    if (reading.score === null) {
+      // Only half an answer (or neither half): the field stays missing so the
+      // engine asks about this same pattern again, and the step's guidance tells
+      // Claude to ask only for the half that is still missing. Nothing is
+      // stored, and no flag is set -- a turn the engine does not accept never
+      // commits its fields.
+      if (targetField && !missingFields.includes(targetField)) missingFields.push(targetField);
+      fields.cdQuestScores = scores;
+      log("only part of the frequency/intensity pair arrived; asking again", { cdQuestFrequency: reading.frequency, cdQuestIntensity: reading.intensity });
+    } else {
+      const nextScores = [...scores, reading.score];
+      accept(reading.score);
+      fields.cdQuestScores = nextScores;
+      // The two halves are the score's basis; they are kept for the worksheet
+      // and can be null when the participant stated a score outright.
+      fields.cdQuestFrequency = [...numberOrNullList(extracted.fields.cdQuestFrequency), reading.frequency];
+      fields.cdQuestIntensity = [...numberOrNullList(extracted.fields.cdQuestIntensity), reading.intensity];
+      const done = nextScores.length >= COGNITIVE_DISTORTIONS.length;
+      fields.allDistortionsScored = done;
+      if (done) {
+        // The total is written here rather than by a shared completion effect:
+        // it keeps CD-Quest out of applyPromptCompletionEffect entirely.
+        fields.cdQuestTotal = nextScores.reduce((sum, value) => sum + value, 0);
+        fields.cdQuestHighCount = nextScores.filter((value) => value >= 4).length;
+      }
+      log("pattern scored", { score: reading.score, frequency: reading.frequency, intensity: reading.intensity, scored: nextScores.length });
+    }
+  }
+
+  if (slug === "how-do-you-feel" && looksLikeInnateAttribution(text)) {
+    fields.s02InnateAttribution = true;
+    log("participant read the pattern as something inborn", { s02InnateAttribution: true });
   }
 
   return { extracted: { ...extracted, fields, missingFields }, logs };

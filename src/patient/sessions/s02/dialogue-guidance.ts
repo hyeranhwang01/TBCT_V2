@@ -58,6 +58,31 @@ const RULES_BY_SLUG: Record<string, string[]> = {
     "If nothing comes to mind for this pattern, accept it plainly and do not press. An empty row is a real answer.",
     "If they do not see why this one counts as a distortion, ask what feels off about it to them rather than explaining it yourself.",
   ],
+  "cdquest-explain": [
+    "Give both sets of bands with their numbers exactly. This is the one step where the numbers matter more than the phrasing.",
+    "Do not score anything and do not work out a score on their behalf. Ask nothing.",
+  ],
+  "understanding-check": ["Ask only whether the bands make sense. Do not begin scoring in this turn."],
+  "score-distortion": [
+    "One pattern per turn, the one the program names. Ask for how often it came up AND how strongly it was believed, in the same turn.",
+    "If they gave only one of the two, ask for the missing one alone -- never ask again for the half you already have.",
+    "Never decide the score yourself, and never talk them up or down from what they said. If they state a score outright, take it.",
+    "Do not read their example for this pattern back to them, and do not say what the score means about them.",
+    "If the pattern did not come up this week that is a score of 0 and a complete answer; accept it without pressing.",
+  ],
+  "total": [
+    "Say the total the program gives you. Never present it as good or bad, high or low, and say there is no cut-off.",
+    "Do not rank the patterns and do not say which to work on -- a later step asks them. Ask nothing.",
+  ],
+  "how-do-you-feel": [
+    "Ask what they make of their own scores. Do not interpret the total for them and do not supply a conclusion.",
+    "This is about the scores, not about the session or about you.",
+  ],
+  "innate-vs-learned": [
+    "Hold both sides: some of how we are is how we were born, and a habit of thinking is not that. Do not tell them they were wrong about themselves.",
+    "Do not promise the pattern will change -- only that something learned can. Ask nothing.",
+  ],
+  "what-to-adjust": ["They choose which patterns to work on. Never pick for them, never rank the list, and do not steer them toward the highest scores."],
   "session-recap": [
     "This is the one step that looks back over the whole session. Keep the order it is written in.",
     "Recap what was done today, not what the participant said or concluded: name no example, situation, feeling or pattern of theirs.",
@@ -74,7 +99,10 @@ const RULES_BY_SLUG: Record<string, string[]> = {
 // summary here would state it for them, or ask a second confirmation question
 // right after S02's own question. review-distortion runs fifteen times, so an
 // extra confirm turn per pattern would also double the session's length.
-const SUMMARY_CHECK_FORBIDDEN_SLUGS = new Set(["review-distortion", "agenda-concern"]);
+// review-distortion and score-distortion each run fifteen times, so an extra
+// confirm turn per pattern would double the session; what-to-adjust and
+// how-do-you-feel are conclusions the participant has to reach themselves.
+const SUMMARY_CHECK_FORBIDDEN_SLUGS = new Set(["review-distortion", "score-distortion", "agenda-concern", "how-do-you-feel", "what-to-adjust"]);
 
 export function s02DialogueGuidance(promptItemId: string): string[] {
   const slug = slugOf(promptItemId);

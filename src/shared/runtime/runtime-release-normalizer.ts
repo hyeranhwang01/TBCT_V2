@@ -402,7 +402,7 @@ const IMMEDIATE_COMPLETION_EFFECTS = new Set(["pause_session", "complete_session
 // "Thank you for letting me know it's there..." has no question either, and
 // blocked the task's own required final-verification scenario (add one X
 // placeholder, then answer the rating-card question) at this exact step.
-// tbct-s02-n07-p07-goal-confirmation ("That's a wonderful goal -- I'll add
+// S02's goal-confirmation ("That's a wonderful goal -- I'll add
 // that.") is the same pattern on the goals side, checked and fixed
 // alongside problem-confirmation per an explicit follow-up request. The six
 // rating/total reflections below are also statements with no question and

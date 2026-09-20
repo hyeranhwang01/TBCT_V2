@@ -36,7 +36,29 @@ const OWN_EXAMPLES = [
 // the fifteen categories apart was the hard part.
 const HOMEWORK_UPDATE = "틈틈이 적어봤는데, 15개 카테고리 중에 어떤 게 해당되는지 구분이 잘 안 되는 어려움이 있었어요.";
 
-const BOOLEAN_SLUGS = new Set(["today-agenda", "agenda-continue", "homework-commitment"]);
+// The fifteen CD-Quest answers as the recording settled them (44:00-49:00), in
+// the same order. Their grid total is 34, which is the total the counselor
+// states at 49:05; cdquest-grid.test.ts pins that arithmetic on its own.
+const REAL_SCORE_ANSWERS = [
+  "3에서 5일 정도, 약간의 강도예요",
+  "하루 이틀 정도인데 강한 정도예요",
+  "3에서 5일 정도 조금이요",
+  "3에서 5일 정도 강하게요",
+  "3에서 5일 정도 약간이요",
+  "2점인 것 같아요",
+  "2점인 것 같아요",
+  "6에서 7일 정도, 약간의 강도예요",
+  "6에서 7일 정도 조금씩이요",
+  "1점인 것 같아요",
+  "1점인 것 같아요",
+  "3에서 5일 정도 조금씩이요",
+  "6에서 7일 정도 조금씩이요",
+  "6일에서 7일 정도 강하게요",
+  "3에서 5일 정도 조금씩이요",
+];
+const REAL_SCORES = [2, 2, 2, 3, 2, 2, 2, 3, 3, 1, 1, 2, 3, 4, 2];
+
+const BOOLEAN_SLUGS = new Set(["today-agenda", "agenda-continue", "understanding-check", "homework-commitment"]);
 const FAILED_OUTCOMES = new Set(["clarification", "fallback", "safety_override", "rejected_duplicate"]);
 
 async function currentView(sessionId: string): Promise<RuntimeSessionView> {
@@ -55,6 +77,11 @@ function storedRows(view: RuntimeSessionView): string[] {
   return Array.isArray(value) ? (value as string[]) : [];
 }
 
+function storedScores(view: RuntimeSessionView): number[] {
+  const value = view.session.runtimeContext.fields.cdQuestScores;
+  return Array.isArray(value) ? (value as unknown[]).filter((item): item is number => typeof item === "number") : [];
+}
+
 async function startSession(locale = "ko-KR") {
   const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s02", locale });
   await startRuntimeSession(session.id);
@@ -67,12 +94,19 @@ function answerFor(slug: string, view: RuntimeSessionView, overrides: Record<str
     const index = Math.min(storedRows(view).length, OWN_EXAMPLES.length - 1);
     return { kind: "text", value: OWN_EXAMPLES[index] };
   }
+  if (slug === "score-distortion" && overrides["score-distortion"] === undefined) {
+    // Same pointer, one score per pattern: the score count is the index.
+    const index = Math.min(storedScores(view).length, REAL_SCORE_ANSWERS.length - 1);
+    return { kind: "text", value: REAL_SCORE_ANSWERS[index] };
+  }
   const scripted: Record<string, string> = {
     "homework-update": HOMEWORK_UPDATE,
     "today-agenda": "네",
     "agenda-concern": "생각을 다 꺼내야 하는 게 좀 부담돼요",
     "agenda-continue": "네",
-    "why-distorted": "증거 없이 단정한 거라서요",
+    "understanding-check": "네",
+    "how-do-you-feel": "생각보다 자주 하고 있었네요",
+    "what-to-adjust": "감정적 추론이랑 과잉 일반화, What if 이 세 가지요",
     "homework-commitment": "네",
     ...overrides,
   };
@@ -119,7 +153,16 @@ describe("S02 redesign: real second session replay", () => {
     // The order the recording used. The homework review comes BEFORE today's
     // order -- the counselor takes the difficulty just reported and turns it
     // into the plan -- which is the opposite of S01, where the agenda is first.
-    const order = ["homework-update", "today-agenda", "review-distortion", "homework-commitment"];
+    const order = [
+      "homework-update",
+      "today-agenda",
+      "review-distortion",
+      "understanding-check",
+      "score-distortion",
+      "how-do-you-feel",
+      "what-to-adjust",
+      "homework-commitment",
+    ];
     const positions = order.map((slug) => visited.indexOf(slug));
     expect(positions.every((position) => position >= 0)).toBe(true);
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
@@ -131,7 +174,12 @@ describe("S02 redesign: real second session replay", () => {
     expect(rows[13]).toContain("어떡하지");
     // The walkthrough is one turn per pattern, not one turn for all fifteen.
     expect(visited.filter((slug) => slug === "review-distortion")).toHaveLength(COGNITIVE_DISTORTIONS.length);
-  }, 120_000);
+    // And so is the scoring: the grid is explained once, then fifteen turns.
+    expect(visited.filter((slug) => slug === "score-distortion")).toHaveLength(COGNITIVE_DISTORTIONS.length);
+    // Every pattern is looked at before any of them is scored -- the recording
+    // finished the walkthrough at 43:00 and only then brought out the grid.
+    expect(visited.lastIndexOf("review-distortion")).toBeLessThan(visited.indexOf("score-distortion"));
+  }, 180_000);
 
   it("says the overlap is normal when the participant reports trouble telling the patterns apart", async () => {
     const session = await startSession();
@@ -229,6 +277,132 @@ describe("S02 redesign: real second session replay", () => {
     // An assistant recap is never written to a field or projected.
     expect(Object.keys(view.session.runtimeContext.fields)).not.toContain("s02SessionRecap");
   }, 120_000);
+
+  // ------------------------------------------------------------- CD-Quest
+  //
+  // 43:00-52:00 of the recording: the grid is explained, the fifteen patterns
+  // are scored one at a time, the total is spoken, and the participant says
+  // which patterns to work on. The grid arithmetic itself is pinned separately
+  // in cdquest-grid.test.ts; these tests are about the flow around it.
+
+  it("scores the fifteen patterns one at a time and reaches the recording's own total", async () => {
+    const session = await startSession();
+    await driveUntil(session.id, "score-distortion");
+
+    for (const [index, answer] of REAL_SCORE_ANSWERS.entries()) {
+      const view = await currentView(session.id);
+      expect(currentSlug(view), `pattern ${index + 1}`).toBe("score-distortion");
+      expect(storedScores(view)).toHaveLength(index);
+      // The turn names the pattern it is asking about, in the registry's order.
+      expect(assistantTexts(view).at(-1) ?? "", `pattern ${index + 1}`).toContain(COGNITIVE_DISTORTIONS[index].nameKo);
+      await submitPatientInput(session.id, { kind: "text", value: answer });
+    }
+
+    const view = await currentView(session.id);
+    const fields = view.session.runtimeContext.fields;
+    expect(storedScores(view)).toEqual(REAL_SCORES);
+    expect(fields.allDistortionsScored).toBe(true);
+    // 49:05 of the recording.
+    expect(fields.cdQuestTotal).toBe(34);
+    // Only What if came out at 4 or above.
+    expect(fields.cdQuestHighCount).toBe(1);
+
+    // The score's two halves are kept alongside it, and stay null for the items
+    // the participant answered with a score outright ("2점인 것 같아요").
+    const frequency = fields.cdQuestFrequency as Array<number | null>;
+    expect(frequency).toHaveLength(COGNITIVE_DISTORTIONS.length);
+    expect(frequency[0]).toBe(2);
+    expect(frequency[5]).toBeNull();
+    expect((fields.cdQuestIntensity as Array<number | null>)[5]).toBeNull();
+
+    // The total is spoken, not asked: the step moves straight on to the
+    // reflection question without waiting on the total itself.
+    expect(currentSlug(view)).toBe("how-do-you-feel");
+    const spoken = assistantTexts(view).find((text) => text.includes("34"));
+    expect(spoken).toBeTruthy();
+    // 49:20: "there is no cut-off" is the counselor's own framing.
+    expect(spoken).toMatch(/기준점|컷오프|잘라|합격|좋은 점수도|나쁜 점수도/);
+    expect(spoken?.length ?? 0).toBeLessThanOrEqual(600);
+  }, 180_000);
+
+  it("asks the same pattern again when only one half of the answer arrived, and stores nothing", async () => {
+    const session = await startSession();
+    await driveUntil(session.id, "score-distortion");
+    // A frequency with no intensity: not a score yet.
+    await submitPatientInput(session.id, { kind: "text", value: "3에서 5일 정도요" });
+
+    const view = await currentView(session.id);
+    expect(storedScores(view)).toHaveLength(0);
+    expect(currentSlug(view)).toBe("score-distortion");
+    // Still the first pattern, not advanced past it.
+    expect(assistantTexts(view).at(-1) ?? "").not.toContain(COGNITIVE_DISTORTIONS[1].nameKo);
+
+    // The missing half completes it, and only then does the pointer move.
+    await submitPatientInput(session.id, { kind: "text", value: "3에서 5일 정도, 약간이요" });
+    const after = await currentView(session.id);
+    expect(storedScores(after)).toEqual([2]);
+    expect(assistantTexts(after).at(-1) ?? "").toContain(COGNITIVE_DISTORTIONS[1].nameKo);
+  }, 120_000);
+
+  it("takes a pattern that did not come up as a zero without asking for an intensity", async () => {
+    const session = await startSession();
+    await driveUntil(session.id, "score-distortion");
+    await submitPatientInput(session.id, { kind: "text", value: "이건 이번 주에 없었어요" });
+
+    const view = await currentView(session.id);
+    expect(storedScores(view)).toEqual([0]);
+    expect(assistantTexts(view).at(-1) ?? "").toContain(COGNITIVE_DISTORTIONS[1].nameKo);
+  }, 120_000);
+
+  // 50:10: the participant had taken the anxiety as something she was simply
+  // born with, and the counselor separated what is inborn from what was learned.
+  it("separates inborn from learned only when the participant reads the pattern as innate", async () => {
+    const session = await startSession();
+    await driveUntil(session.id, "how-do-you-feel");
+    await submitPatientInput(session.id, { kind: "text", value: "저는 그냥 원래 불안한 사람인 것 같아요" });
+
+    const view = await currentView(session.id);
+    expect(view.session.runtimeContext.fields.s02InnateAttribution).toBe(true);
+    const fired = view.messages.some((message) => message.promptItemId?.endsWith("-innate-vs-learned"));
+    expect(fired).toBe(true);
+  }, 120_000);
+
+  it("leaves the inborn explanation out when nothing in the answer calls for it", async () => {
+    const session = await startSession();
+    await driveUntil(session.id, "what-to-adjust");
+    const view = await currentView(session.id);
+    expect(view.session.runtimeContext.fields.s02InnateAttribution).toBeUndefined();
+    expect(view.messages.some((message) => message.promptItemId?.endsWith("-innate-vs-learned"))).toBe(false);
+  }, 120_000);
+
+  it("keeps the participant's own choice of what to work on, without picking for them", async () => {
+    const session = await startSession();
+    const { view } = await driveUntil(session.id, null);
+    const chosen = view.session.runtimeContext.fields.cdQuestPriorityTypes;
+    expect(Array.isArray(chosen) ? chosen.join(" ") : String(chosen)).toContain("감정적 추론");
+
+    // The step that asks never names the patterns for them.
+    const asked = view.messages.find((message) => message.promptItemId?.endsWith("-what-to-adjust"));
+    expect(asked).toBeTruthy();
+    for (const name of ["감정적 추론", "과잉 일반화", "What if"]) expect(asked?.content, name).not.toContain(name);
+  }, 180_000);
+
+  it("projects the total onto the worksheet as a calculated value, beside the fifteen scores", async () => {
+    const session = await startSession();
+    await driveUntil(session.id, "how-do-you-feel");
+
+    const worksheet = await getWorksheetView(session.id, "tbct-s02");
+    const scores = worksheet?.fields.find((item) => item.binding.canonicalFieldKey === "cdQuestScores");
+    const total = worksheet?.fields.find((item) => item.binding.canonicalFieldKey === "cdQuestTotal");
+    expect((scores?.value?.value ?? []) as unknown[]).toHaveLength(COGNITIVE_DISTORTIONS.length);
+    expect(String(total?.value?.displayValue ?? "")).toContain("34");
+    // The scores are the participant's; the total is the program's arithmetic.
+    expect(scores?.binding.participantOwned).toBe(true);
+    expect(scores?.binding.assistantMustNotSupply).toBe(true);
+    expect(total?.binding.participantOwned).toBe(false);
+    expect(total?.value?.provenance).toBe("system_calculated");
+    expect(scores?.value?.provenance).toBe("participant_verbatim");
+  }, 180_000);
 
   it("fills the participant's own example into the matching worksheet row", async () => {
     const session = await startSession();

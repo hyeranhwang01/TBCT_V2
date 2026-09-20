@@ -18,6 +18,8 @@ import { COGNITIVE_DISTORTIONS } from "@/shared/protocol/cognitive-distortions";
 
 const REVIEW_DISTORTION_ID = "tbct-s02-n05-p01-review-distortion";
 const HOMEWORK_UPDATE_ID = "tbct-s02-n02-p01-homework-update";
+const SCORE_DISTORTION_ID = "tbct-s02-n07-p01-score-distortion";
+const TOTAL_ID = "tbct-s02-n08-p01-total";
 
 // After S01, the homework question recalls what the practice actually was and
 // how much of it they did -- previousS01HomeworkExampleCount, seeded at session
@@ -66,9 +68,40 @@ function composeReviewDistortion(fields: Record<string, unknown>, isKorean: bool
   return `Pattern ${ordinal} is "${distortion.nameEn[0]}". ${distortion.descriptionEn} For instance: "${distortion.exampleEn[0]}" Have you had a thought like that recently? If nothing comes to mind, it's fine to say so.`;
 }
 
+/** The scoring question, per pattern. Asks for both halves in one turn -- a
+ * repeat_until loop runs one prompt per iteration, so two prompts cannot
+ * alternate fifteen times inside one node. */
+function composeScoreDistortion(fields: Record<string, unknown>, isKorean: boolean): string {
+  const scored = Array.isArray(fields.cdQuestScores) ? fields.cdQuestScores.length : 0;
+  const index = Math.min(scored, COGNITIVE_DISTORTIONS.length - 1);
+  const distortion = COGNITIVE_DISTORTIONS[index];
+  const ordinal = index + 1;
+  if (isKorean) {
+    return `${ordinal}번째, '${distortion.nameKo}'입니다. 지난 한 주 동안 이런 생각이 얼마나 자주 있었나요 — 한두 번, 3~5일, 아니면 6~7일 정도였을까요? 그리고 그럴 때 그 생각을 얼마나 믿었나요 — 약간(30% 이하), 꽤(31~70%), 아주 강하게(70% 이상) 중에서요.`;
+  }
+  return `Pattern ${ordinal}, "${distortion.nameEn[0]}". How often did this come up over the past week -- once or twice, three to five days, or six to seven days? And how strongly did you believe it at the time -- a little (up to 30%), quite strongly (31-70%), or very strongly (over 70%)?`;
+}
+
+/** The total, spoken not asked. s02/turn-rules.ts wrote cdQuestTotal when the
+ * fifteenth score landed. */
+function composeTotal(fields: Record<string, unknown>, isKorean: boolean): string {
+  const total = typeof fields.cdQuestTotal === "number" ? fields.cdQuestTotal : null;
+  const high = typeof fields.cdQuestHighCount === "number" ? fields.cdQuestHighCount : null;
+  if (isKorean) {
+    const head = total === null ? "점수를 모두 더해 볼게요." : `모두 더하면 ${total}점이에요.`;
+    const tail = high && high > 0 ? ` 그중 ${high}개가 4점 이상이고요.` : "";
+    return `${head}${tail} 여기에는 정해진 컷오프가 없고, 좋은 총점이나 나쁜 총점도 없어요. 지난 한 주의 모습을 담은 기록이고, 앞으로 변화를 재어 볼 출발점입니다.`;
+  }
+  const head = total === null ? "Let's add those up." : `Adding those up comes to ${total}.`;
+  const tail = high && high > 0 ? ` ${high} of them are at 4 or above.` : "";
+  return `${head}${tail} There is no cut-off here and no good or bad total -- it is a record of this past week, and the starting point you'll measure change from.`;
+}
+
 export function resolveStaticText(promptItem: PromptItem, fields: Record<string, unknown>, locale?: string): string | undefined {
   const isKorean = (locale ?? "").toLowerCase().startsWith("ko");
   if (promptItem.id === REVIEW_DISTORTION_ID) return composeReviewDistortion(fields, isKorean);
+  if (promptItem.id === SCORE_DISTORTION_ID) return composeScoreDistortion(fields, isKorean);
+  if (promptItem.id === TOTAL_ID) return composeTotal(fields, isKorean);
   if (promptItem.id === HOMEWORK_UPDATE_ID) return homeworkUpdateText(fields, isKorean);
   return APPROVED_TEXT[promptItem.id];
 }
@@ -80,7 +113,7 @@ const APPROVED_TEXT: Record<string, string> = {
   // Never reaches the dialogue agent: a safety prompt ships exactly as written.
   // "your therapist" is avoided -- Arm 3 participants do not have one; the
   // participant manual's own distress box says study clinician.
-  "tbct-s02-n07-p01-pause-and-escalate":
+  "tbct-s02-n11-p01-pause-and-escalate":
     "It sounds like things feel very heavy right now, and that matters more than finishing this exercise. Please pause here and reach out to your study clinician, or your local emergency services, as soon as you can. You don't have to face this alone.",
 };
 
@@ -108,16 +141,28 @@ export const koreanText: Record<string, string> = {
   // review-distortion is composed per pattern in resolveStaticText above -- a
   // fixed Korean entry here would override it for every pattern.
 
-  "tbct-s02-n06-p01-session-recap":
-    "오늘은 이렇게 함께했어요. 먼저 한 주 동안 해 오신 과제를 같이 살펴봤고요. 그다음 생각이 왜곡될 수 있는 15가지 패턴을 하나씩 짚으면서, 각각이 어디에서 나타나는지 함께 찾아봤어요.",
-  "tbct-s02-n06-p02-homework-assignment":
-    "이번 주에는 15가지 패턴 목록을 곁에 두고, 이런 생각이 들 때마다 해당하는 패턴의 '내 예시' 칸에 짧게 적어 보세요. 다음 시간에 같이 볼게요.",
-  "tbct-s02-n06-p03-homework-commitment": "할 수 있으시겠어요?",
-  "tbct-s02-n06-p04-next-preview":
-    "다음 시간에는 한 단계 더 들어가 볼게요. 상황 속에서 스쳐 지나가는 생각이 첫 번째 층이고, 그 아래에는 우리가 지키며 살아가는 가정과 규칙이, 더 아래에는 스스로에 대해 오래 품어 온 믿음이 자리하고 있어요.",
-  "tbct-s02-n06-p05-goodbye": "오늘 이야기 나눠 주셔서 고마워요. 다음 시간에 뵐게요.",
+  "tbct-s02-n06-p01-cdquest-explain":
+    "이제 15가지 패턴마다 두 가지를 적어볼게요. 먼저 지난 한 주 동안 얼마나 자주 있었는지 — 한두 번, 3~5일, 6~7일 중에서요. 그리고 그럴 때 그 생각을 얼마나 믿었는지 — 약간(30% 이하), 꽤(31~70%), 아주 강하게(70% 이상) 중에서요. 이 둘을 합치면 0점에서 5점까지 점수가 나옵니다.",
+  "tbct-s02-n06-p02-understanding-check": "여기까지 이해되셨어요? 헷갈리는 부분이 있으면 다시 설명해 드릴게요.",
 
-  "tbct-s02-n07-p01-pause-and-escalate":
+  // score-distortion is composed per pattern in resolveStaticText above.
+
+  // total is composed from the stored scores in resolveStaticText above.
+  "tbct-s02-n08-p02-how-do-you-feel": "이걸 다 보고 나니 어떤 생각이 드세요?",
+  "tbct-s02-n08-p03-innate-vs-learned":
+    "우리가 타고나는 부분도 분명히 있고, 그건 우리가 고른 게 아니에요. 그런데 생각하는 습관은 좀 달라요. 태어나면서부터 나를 탓하겠다고 정하고 오는 사람은 없잖아요. 살아오면서 익혀진 것이고, 그래서 바뀔 수 있는 것이기도 해요.",
+  "tbct-s02-n09-p01-what-to-adjust": "이 패턴들 중에서 어떤 것을 좀 조정해 보고 싶으세요?",
+
+  "tbct-s02-n10-p01-session-recap":
+    "오늘은 이렇게 함께했어요. 먼저 한 주 동안 해 오신 과제를 같이 살펴봤고요. 그다음 생각이 왜곡될 수 있는 15가지 패턴을 하나씩 짚으면서 각각이 어디에서 나타나는지 찾아봤고, 마지막으로 하나하나 얼마나 자주 있었고 얼마나 믿었는지 점수를 매겨 봤어요.",
+  "tbct-s02-n10-p02-homework-assignment":
+    "이번 주에는 같은 양식을 새로 한 장 채워 보세요. 이런 생각이 들 때마다 '내 예시' 칸에 짧게 적고, 주말에 오늘처럼 패턴마다 점수를 매겨 보시면 됩니다. 다음 시간에 오늘 것과 비교해 볼게요.",
+  "tbct-s02-n10-p03-homework-commitment": "할 수 있으시겠어요?",
+  "tbct-s02-n10-p04-next-preview":
+    "다음 시간에는 한 단계 더 들어가 볼게요. 상황 속에서 스쳐 지나가는 생각이 첫 번째 층이고, 그 아래에는 우리가 지키며 살아가는 가정과 규칙이, 더 아래에는 스스로에 대해 오래 품어 온 믿음이 자리하고 있어요.",
+  "tbct-s02-n10-p05-goodbye": "오늘 이야기 나눠 주셔서 고마워요. 다음 시간에 뵐게요.",
+
+  "tbct-s02-n11-p01-pause-and-escalate":
     "지금 많이 무겁게 느껴지시는 것 같아요. 그건 이 연습을 끝내는 것보다 훨씬 중요한 일이에요. 여기서 잠시 멈추고, 가능한 한 빨리 연구 담당 임상가나 지역 응급 서비스에 연락해 주세요. 혼자 감당하지 않으셔도 됩니다.",
 };
 
@@ -141,7 +186,11 @@ const REPEATED_FALLBACK_REPHRASE: Record<string, { en: string; ko: string }> = {
     en: "Is going through the fifteen patterns one at a time all right with you? Yes or no is enough.",
     ko: "15가지 패턴을 하나씩 살펴보는 방식이 괜찮으신가요? 네, 아니요로만 답해 주셔도 돼요.",
   },
-  "tbct-s02-n06-p03-homework-commitment": {
+  "tbct-s02-n07-p01-score-distortion": {
+    en: "Two things for this one pattern: how many days it came up this past week, and how strongly you believed it at the time. If it did not come up at all, that is a 0.",
+    ko: "이 패턴 하나에 대해 두 가지만요. 지난 한 주에 며칠 정도 있었는지, 그리고 그럴 때 얼마나 믿었는지예요. 아예 없었다면 0점이에요.",
+  },
+  "tbct-s02-n10-p03-homework-commitment": {
     en: "Do you think you can do that this week? Yes or no is enough.",
     ko: "이번 주에 해 보실 수 있을까요? 네, 아니요로만 답해 주셔도 돼요.",
   },

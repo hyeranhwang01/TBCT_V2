@@ -77,8 +77,13 @@ describe("S02 statements do not demand a meaningless patient reply", () => {
     "tbct-s02-n04-p01-distortion-concept",
     "tbct-s02-n04-p02-research-evidence",
     "tbct-s02-n04-p03-future-use",
-    "tbct-s02-n06-p01-session-recap",
-    "tbct-s02-n06-p04-next-preview",
+    // Stage 2's statements: the grid explanation (which declares a field but
+    // asks nothing), the total, and the inborn-vs-learned aside.
+    "tbct-s02-n06-p01-cdquest-explain",
+    "tbct-s02-n08-p01-total",
+    "tbct-s02-n08-p03-innate-vs-learned",
+    "tbct-s02-n10-p01-session-recap",
+    "tbct-s02-n10-p04-next-preview",
   ]) {
     it(`${id} advances immediately after delivery`, () => {
       const promptItem = CANONICAL_PROMPT_ITEMS.find((item) => item.id === id);

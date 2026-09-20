@@ -34,6 +34,20 @@ const NEVER_LABEL_FOR_THEM =
 
 const ASK_ONE_THING = "Ask one thing only, and wait.";
 
+// The CD-Quest bands are the book's, so the numbers are checked rather than
+// trusted to a paraphrase -- the same reason S01 pins "0 and 100" on its
+// intensity questions.
+const FREQUENCY_BANDS: S02MustMention = {
+  describe: "all three frequency bands: once or twice, three to five days, and six to seven days",
+  ko: "(?=[\\s\\S]*1\\s*[-~]?\\s*(?:에서)?\\s*2)(?=[\\s\\S]*3\\s*[-~]?\\s*(?:에서)?\\s*5)(?=[\\s\\S]*6\\s*[-~]?\\s*(?:에서)?\\s*7)",
+  en: "(?=[\\s\\S]*1)(?=[\\s\\S]*3)(?=[\\s\\S]*5)(?=[\\s\\S]*7)",
+};
+const INTENSITY_BANDS: S02MustMention = {
+  describe: "all three intensity bands: a little (up to 30%), quite strongly (31-70%), and very strongly (over 70%)",
+  ko: "(?=[\\s\\S]*30)(?=[\\s\\S]*70)",
+  en: "(?=[\\s\\S]*30)(?=[\\s\\S]*70)",
+};
+
 const INTENTS: Record<string, S02TaskIntent> = {
   "greeting-recap": {
     obtain:
@@ -133,9 +147,68 @@ const INTENTS: Record<string, S02TaskIntent> = {
   // review-distortion is resolved per type in resolveS02TaskIntent below --
   // the pattern being walked changes every turn.
 
+  "cdquest-explain": {
+    obtain:
+      "How each pattern gets a score: how often it came up this past week (once or twice / three to five days / six to seven days) and how strongly it was believed at the moment it happened (a little, up to 30% / quite strongly, 31-70% / very strongly, over 70%), and that the two together give a score from 0 to 5.",
+    keep: [
+      "Ask nothing -- the next step checks the bands made sense.",
+      "Give both sets of bands with their numbers. Do not score anything yet and do not work out a score on their behalf.",
+      "Say it plainly; this is the one place the numbers have to be exact.",
+    ],
+    mustMention: [FREQUENCY_BANDS, INTENSITY_BANDS],
+  },
+  "understanding-check": {
+    obtain: "Whether the bands make sense to them so far.",
+    keep: [ASK_ONE_THING, "If they say no, the program asks again -- do not start scoring here."],
+  },
+
+  // score-distortion is resolved per pattern in resolveS02TaskIntent below.
+
+  "total": {
+    obtain:
+      "Their total across the fifteen patterns, and what it does and does not mean: it is not a grade, there is no cut-off score, and it is a snapshot of this past week that later weeks can be measured against.",
+    keep: [
+      "Ask nothing -- the next step asks what they make of it.",
+      "Say the total the program gives you and nothing else numeric. Do not rank the patterns and do not say which ones to work on; the step after next asks them.",
+      "Never present the number as good or bad, high or low.",
+    ],
+    mustMention: [
+      { describe: "that there is no cut-off and no good or bad total", ko: "컷오프|기준점|정해진\\s*기준|좋은|나쁜", en: "cut-?off|no good or bad" },
+    ],
+  },
+  "how-do-you-feel": {
+    obtain: "What thoughts come up for them now that they have seen the whole picture.",
+    keep: [
+      ASK_ONE_THING,
+      "Do not interpret the total for them and do not suggest what they should conclude.",
+      "Do not ask about the session or about you -- this is about what they see in their own scores.",
+    ],
+    // "어떠세요" collides with the closing recap's feedback ban; keep this
+    // question about the scores, not about the session.
+    mustNotMention: [{ describe: "asking how the session or you were", ko: "피드백|상담(은|이)\\s*어떠", en: "\\bfeedback\\b" }],
+  },
+  "innate-vs-learned": {
+    obtain:
+      "The difference between what someone is born with and a habit of thinking: being born a certain way is not chosen, but nobody is born deciding to think this way -- it was learned over time, which is also why it can change.",
+    keep: [
+      "Ask nothing.",
+      "Do not contradict them or tell them they were wrong about themselves. Hold both: some of it is how they are made, and these patterns are not.",
+      "Do not promise that it will change, only that something learned can.",
+      "Two or three sentences.",
+    ],
+  },
+  "what-to-adjust": {
+    obtain: "Which of the fifteen patterns they would want to work on adjusting.",
+    keep: [
+      ASK_ONE_THING,
+      "They choose. Never pick for them, never rank the list, and do not steer them to the highest scores.",
+      "More than one is fine, and so is naming just one.",
+    ],
+  },
+
   "session-recap": {
     obtain:
-      "Recap what today covered, in order: the practice they did over the week, and then going through the fifteen patterns one at a time, finding where each one shows up for them.",
+      "Recap what today covered, in order: the practice they did over the week, going through the fifteen patterns one at a time to find where each shows up for them, and then scoring each pattern for how often it came up and how strongly it was believed.",
     keep: [
       "Recap what was DONE today, never what they said or concluded: name no example of theirs, no situation, no feeling and no pattern they chose.",
       "Ask nothing -- no confirmation that the recap is right, and no feedback question.",
@@ -149,9 +222,12 @@ const INTENTS: Record<string, S02TaskIntent> = {
   },
   "homework-assignment": {
     obtain:
-      "This week's practice, concretely: keep the list of fifteen patterns nearby and, whenever one of these thoughts comes up, write a short example in the 'my examples' column of the pattern it fits; you will look at them together next time.",
+      "This week's practice, concretely: fill in a blank copy of this same form -- write a short example in the 'my examples' column whenever one of these thoughts comes up, and at the end of the week score each pattern the way you did together today, so the two weeks can be compared next time.",
     keep: ["The recap has just been given; do not summarize the session again.", "Ask nothing here -- the next step asks whether they can do it."],
-    mustMention: [{ describe: "writing it in the 'my examples' column", ko: "내 예시", en: "my examples" }],
+    mustMention: [
+      { describe: "writing it in the 'my examples' column", ko: "내 예시", en: "my examples" },
+      { describe: "scoring each pattern as well, not only writing examples", ko: "점수", en: "scor" },
+    ],
   },
   "homework-commitment": {
     obtain: "Whether they think they can do that.",
@@ -177,7 +253,7 @@ export const S02_FIXED_TASK_SLUGS: ReadonlySet<string> = new Set(["pause-and-esc
 
 /** Exported for the coverage test: every S02 prompt slug must either have an
  * intent here or be listed as fixed. */
-export const S02_TASK_INTENT_SLUGS: readonly string[] = [...Object.keys(INTENTS), "review-distortion"];
+export const S02_TASK_INTENT_SLUGS: readonly string[] = [...Object.keys(INTENTS), "review-distortion", "score-distortion"];
 
 function slugOf(promptItemId: string): string | null {
   const match = /^tbct-s02-n\d+-p\d+-(.+)$/.exec(promptItemId);
@@ -220,10 +296,32 @@ function escapeRegExp(text: string) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/** The scoring intent, built for whichever pattern the loop is on. Frequency and
+ * intensity are asked together because a repeat_until loop runs one prompt per
+ * iteration -- two prompts cannot alternate fifteen times inside one node. */
+function scoringIntent(fields: Record<string, unknown>, korean: boolean): S02TaskIntent {
+  const scored = Array.isArray(fields.cdQuestScores) ? fields.cdQuestScores.length : 0;
+  const index = Math.min(scored, COGNITIVE_DISTORTIONS.length - 1);
+  const distortion = COGNITIVE_DISTORTIONS[index];
+  const name = korean ? distortion.nameKo : distortion.nameEn[0];
+  return {
+    obtain: `For pattern ${index + 1} of 15, "${name}": how often it came up this past week, and how strongly they believed it at the moment it happened.`,
+    keep: [
+      `Name this pattern, and only this pattern: ${name}.`,
+      "Ask for both halves in one turn. If they give only one of them, ask for the other one alone next time -- never re-ask the half you already have.",
+      "Never decide the score yourself. If they state a score outright, take it.",
+      "Do not read their example for this pattern back to them, and do not comment on what the score says about them.",
+      "If it did not come up at all this week, that is a score of 0 and a complete answer.",
+    ],
+    mustMention: [{ describe: `this pattern's name, "${name}"`, ko: escapeRegExp(distortion.nameKo), en: escapeRegExp(distortion.nameEn[0]) }],
+  };
+}
+
 export function s02TaskIntent(promptItemId: string, fields: Record<string, unknown> = {}, korean = true): S02TaskIntent | undefined {
   const slug = slugOf(promptItemId);
   if (!slug || S02_FIXED_TASK_SLUGS.has(slug)) return undefined;
   if (slug === "review-distortion") return walkthroughIntent(fields, korean);
+  if (slug === "score-distortion") return scoringIntent(fields, korean);
   return INTENTS[slug];
 }
 

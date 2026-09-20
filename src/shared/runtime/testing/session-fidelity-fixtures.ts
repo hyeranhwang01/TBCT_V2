@@ -19,6 +19,27 @@ const SUM_TO_100_PAIR_KINDS = new Set(["consensus_weights"]);
 // a real patient repeating themselves turn after turn, which is exactly
 // the fidelity-check noise this fixture exists to avoid.
 const CONTENT_POOLS: Array<{ pattern: RegExp; replies: string[] }> = [
+  // S02's CD-Quest scoring asks frequency and intensity together, once per
+  // pattern (note2026_09_21_s02_cognitive_distortions). Fifteen answers that
+  // each carry both halves, so the loop actually advances -- and varied enough
+  // that isDuplicateListEntry does not reject them.
+  { pattern: /cdQuestItemScore/i, replies: [
+    "Three to five days, and a little each time.",
+    "One or two days, but quite strongly.",
+    "Three to five days, a little.",
+    "Three to five days, and quite strongly.",
+    "Three to five days, only a little.",
+    "Six to seven days, a little.",
+    "One or two days, a little.",
+    "Six to seven days, and quite strongly.",
+    "Three to five days, about 50%.",
+    "It did not come up at all this week.",
+    "One or two days, about 20%.",
+    "Three to five days, very strongly.",
+    "Six to seven days, about 80%.",
+    "Six to seven days, very strongly.",
+    "One or two days, and quite strongly.",
+  ] },
   // S02's fifteen-pattern walkthrough asks once per pattern
   // (note2026_09_21_s02_cognitive_distortions), so it needs fifteen DISTINCT
   // replies: the generic fallback cycles three sentences, and isDuplicateListEntry
@@ -269,7 +290,15 @@ export function syntheticPatientInput(prompt: PromptItem): PatientInput {
   // participationRatingStable is a free-text reflection field ("How does
   // that feel to you now?"), not a number -- excluded despite containing
   // "Rating" so the synthetic reply is realistic natural language.
-  if (validation.kind === "rating" || validation.kind === "paired_ratings" || fields.some((field) => field !== "participationRatingStable" && /percent|rating|score|weight|intensit/i.test(field))) {
+  //
+  // cdQuestItemScore is the same kind of exclusion for the same reason: S02's
+  // CD-Quest asks how OFTEN a pattern came up and how STRONGLY it was believed,
+  // and works the score out from that pair. A bare number answers neither half,
+  // so it produced a clarification every turn and the scoring loop never
+  // advanced. The CONTENT_POOLS entry below supplies fifteen answers that carry
+  // both halves (note2026_09_21_s02_cognitive_distortions).
+  const FREE_TEXT_DESPITE_NUMERIC_NAME = new Set(["participationRatingStable", "cdQuestItemScore"]);
+  if (validation.kind === "rating" || validation.kind === "paired_ratings" || fields.some((field) => !FREE_TEXT_DESPITE_NUMERIC_NAME.has(field) && /percent|rating|score|weight|intensit/i.test(field))) {
     const max = validation.max ?? 100;
     const value = Math.max(validation.min ?? 0, Math.min(max, max >= 10 ? 55 : max));
     return { kind: "rating", value: fields.map((_, index) => String(Math.max(validation.min ?? 0, value - index))).join(", ") || String(value) };

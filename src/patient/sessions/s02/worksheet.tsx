@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button, textareaClass } from "@/shared/components/ui/primitives";
-import { SessionSignals } from "@/patient/components/worksheet-renderers/shared";
+import { ScoreChip, SessionSignals } from "@/patient/components/worksheet-renderers/shared";
 import { COGNITIVE_DISTORTIONS } from "@/shared/protocol/cognitive-distortions";
 import { NO_EXAMPLE_MARKER } from "@/patient/sessions/s02/turn-rules";
 import type { WorksheetFieldView, WorksheetView } from "@/types/worksheet";
@@ -19,7 +19,26 @@ import type { WorksheetFieldView, WorksheetView } from "@/types/worksheet";
 // walkthrough is 38 minutes of talk with nothing to look at.
 //
 // Rows come from the registry, so the fifteen definitions are data. The row
-// being asked about is the one after the last stored example.
+// being asked about is the one after the last stored example -- or, once the
+// CD-Quest scoring is the active step, the one after the last stored score.
+
+function numbersOf(field?: WorksheetFieldView): Array<number | null> {
+  const value = field?.value?.value;
+  return Array.isArray(value)
+    ? value.map((item) => {
+        const number = typeof item === "number" ? item : Number(item);
+        return Number.isFinite(number) ? number : null;
+      })
+    : [];
+}
+
+/** Band labels for the score's two halves, shown under the chip as the basis of
+ * the score. Index 0 is "unknown": a participant who states a score outright
+ * leaves both halves null, and nothing is invented for them. */
+const FREQUENCY_LABELS = ["—", "1–2일", "3–5일", "6–7일"] as const;
+const FREQUENCY_LABELS_EN = ["—", "1-2 days", "3-5 days", "6-7 days"] as const;
+const INTENSITY_LABELS = ["—", "약간", "꽤", "아주 강함"] as const;
+const INTENSITY_LABELS_EN = ["—", "a little", "quite", "very much"] as const;
 
 function rowsOf(field?: WorksheetFieldView): string[] {
   const value = field?.value?.value;
@@ -50,10 +69,18 @@ export function S02Worksheet({
 }) {
   const korean = (locale ?? "").toLowerCase().startsWith("ko");
   const field = view.fields.find((item) => item.binding.canonicalFieldKey === "distortionExamples");
+  const scoreField = view.fields.find((item) => item.binding.canonicalFieldKey === "cdQuestScores");
+  const totalField = view.fields.find((item) => item.binding.canonicalFieldKey === "cdQuestTotal");
   const rows = rowsOf(field);
+  const scores = numbersOf(scoreField);
+  // The two halves the score was built from.
+  const frequencies = numbersOf(view.fields.find((item) => item.binding.canonicalFieldKey === "cdQuestFrequency"));
+  const intensities = numbersOf(view.fields.find((item) => item.binding.canonicalFieldKey === "cdQuestIntensity"));
   const active = activeCanonicalFieldKey === "distortionExamples";
+  const scoringActive = activeCanonicalFieldKey === "cdQuestScores";
   // The pattern currently being asked about: the row after the last stored one.
-  const currentIndex = Math.min(rows.length, COGNITIVE_DISTORTIONS.length - 1);
+  // During scoring the pointer follows the scores instead of the examples.
+  const currentIndex = Math.min(scoringActive ? scores.length : rows.length, COGNITIVE_DISTORTIONS.length - 1);
   const editable = Boolean(field) && (!readOnly || Boolean(allowEdit));
   const filledCount = rows.filter((row) => isFilled(row)).length;
 
@@ -71,6 +98,8 @@ export function S02Worksheet({
         items={[
           { label: korean ? "살펴본 유형" : "Patterns looked at", value: `${rows.length} / ${COGNITIVE_DISTORTIONS.length}` },
           { label: korean ? "내 예시" : "My examples", value: String(filledCount) },
+          { label: korean ? "채점한 유형" : "Patterns scored", value: `${scores.length} / ${COGNITIVE_DISTORTIONS.length}` },
+          { label: korean ? "총점" : "Total", value: totalField?.value?.displayValue ?? "—" },
         ]}
       />
       <div className={`rounded-panel border p-3 sm:p-4 transition ${active ? "ring-2 ring-clinical-blue border-clinical-blue" : "border-border bg-surface"}`}>
@@ -83,7 +112,10 @@ export function S02Worksheet({
               name={korean ? distortion.nameKo : distortion.nameEn[0]}
               description={korean ? distortion.descriptionKo : distortion.descriptionEn}
               example={rows[index]}
-              current={active && index === currentIndex}
+              score={scores[index] ?? undefined}
+              frequency={frequencies[index] ?? null}
+              intensity={intensities[index] ?? null}
+              current={(active || scoringActive) && index === currentIndex}
               editable={editable}
               busy={busy}
               korean={korean}
@@ -101,6 +133,9 @@ function DistortionRow({
   name,
   description,
   example,
+  score,
+  frequency,
+  intensity,
   current,
   editable,
   busy,
@@ -111,6 +146,9 @@ function DistortionRow({
   name: string;
   description: string;
   example?: string;
+  score?: number;
+  frequency: number | null;
+  intensity: number | null;
   current: boolean;
   editable: boolean;
   busy: boolean;
@@ -128,10 +166,24 @@ function DistortionRow({
       aria-current={current ? "step" : undefined}
       className={`rounded-panel border p-2.5 transition ${current ? "border-clinical-blue ring-1 ring-clinical-blue" : "border-border"} ${lookedAt ? "bg-surface" : "border-dashed bg-surface-subtle opacity-80"}`}
     >
-      <div className="text-sm font-semibold text-text-primary">
-        {index + 1}. {name}
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="text-sm font-semibold text-text-primary">
+            {index + 1}. {name}
+          </div>
+          <div className="mt-0.5 text-xs text-text-secondary">{description}</div>
+        </div>
+        {typeof score === "number" && Number.isFinite(score) && (
+          <div className="flex shrink-0 flex-col items-end gap-0.5" data-testid={`s02-distortion-score-${index + 1}`}>
+            <ScoreChip score={score} />
+            {(frequency !== null || intensity !== null) && (
+              <div className="text-[10px] text-text-muted">
+                {(korean ? FREQUENCY_LABELS : FREQUENCY_LABELS_EN)[frequency ?? 0]} · {(korean ? INTENSITY_LABELS : INTENSITY_LABELS_EN)[intensity ?? 0]}
+              </div>
+            )}
+          </div>
+        )}
       </div>
-      <div className="mt-0.5 text-xs text-text-secondary">{description}</div>
 
       <div className="mt-1.5">
         <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-text-muted">{korean ? "내 예시" : "My example"}</div>

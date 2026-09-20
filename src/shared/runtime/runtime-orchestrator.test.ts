@@ -162,7 +162,7 @@ describe("resolveRepeatedFallbackOverride: S02/S03 construct-preserving exceptio
       recentAssistantMessages: threeRepeats(APPROVED),
       lastPatientMessage: "힘들었어요",
       locale: "en-US",
-      activePromptItemId: "tbct-s02-n06-p04-next-preview",
+      activePromptItemId: "tbct-s02-n10-p04-next-preview",
     });
     expect(result).toContain(APPROVED);
     expect(result).not.toContain("specific moment");
@@ -210,7 +210,7 @@ describe("resolveRepeatedFallbackOverride: S04-S08 regression (unchanged generic
       recentAssistantMessages: ["something else entirely", "and another thing", "a third distinct message"],
       lastPatientMessage: "ok",
       locale: "en-US",
-      activePromptItemId: "tbct-s02-n06-p04-next-preview",
+      activePromptItemId: "tbct-s02-n10-p04-next-preview",
     });
     expect(result).toBeUndefined();
   });

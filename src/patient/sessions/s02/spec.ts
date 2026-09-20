@@ -13,10 +13,10 @@ import type { SessionSourceMetadata, SessionSpec } from "@/shared/protocol/sourc
 // Distortions Questionnaire", and its own Table C1 puts CD-Quest at "every
 // session from Session 2 on". CCPH/CCGH appears nowhere in that book.
 //
-// Stage 1 (this file) is the skeleton plus the fifteen-type walkthrough.
-// Stage 2 adds CD-Quest: the frequency x intensity grid, the scoring loop,
-// the total and the direction question, inserted BEFORE `closing` -- which
-// will renumber the closing node and therefore its prompt ids.
+// Stage 1 was the skeleton plus the fifteen-type walkthrough. Stage 2 added
+// CD-Quest -- the frequency x intensity grid, the scoring loop, the total and
+// the direction question -- between the walkthrough and the closing, which
+// renumbered the closing node (n06 -> n10) and safety-pause (n07 -> n11).
 //
 // Division of labour, as in S01 (note2026_09_19_s01_task_intents): step
 // order, completion, storage and safety live here; every word the participant
@@ -34,7 +34,7 @@ const metadata: SessionSourceMetadata = {
   id: "tbct-s02",
   title: "Cognitive Distortions",
   titleKo: "인지왜곡 유형",
-  techniqueName: "Cognitive Distortions List (CD-Quest scoring: stage 2)",
+  techniqueName: "Cognitive Distortions Questionnaire (CD-Quest)",
   acronym: "CD-Quest",
   sourceLineStart: 223,
   sourceLineEnd: 429,
@@ -252,6 +252,142 @@ export const spec: SessionSpec = {
       ],
     },
     {
+      slug: "cdquest-intro",
+      title: "The CD-Quest Grid",
+      titleKo: "CD-Quest 기준 설명",
+      type: "orientation",
+      source: [145, 155],
+      requiredFields: ["cdQuestScaleUnderstood"],
+      safetyRuleIds: CRISIS,
+      // 43:00-44:00. Frequency and intensity, each in three bands, read off a
+      // grid. The numbers themselves are pinned by mustMention in
+      // s02/task-intents.ts -- the wording is Claude's, the bands are not.
+      objective:
+        "Introduce how each pattern gets a score: how often it showed up this past week, and how strongly it was believed in the moment it occurred. Give both sets of bands, then check the bands make sense to them. Do not score anything yet and do not compute a score for them.",
+      prompts: [
+        {
+          slug: "cdquest-explain",
+          type: "explanation",
+          source: [145, 155],
+          outputFields: ["cdQuestScalePresented"],
+          patientText:
+            "For each of the fifteen patterns we'll put down two things. First, how often it came up this past week: once or twice, three to five days, or six to seven days. Second, how strongly you believed it at the moment it happened: a little (up to 30%), quite strongly (31-70%), or very strongly (over 70%). The two together give the pattern a score from 0 to 5.",
+        },
+        {
+          slug: "understanding-check",
+          type: "question",
+          source: [145, 155],
+          outputFields: ["cdQuestScaleUnderstood"],
+          validation: { kind: "boolean" },
+          patientText: "Does that make sense so far? If anything is unclear I'll go through it again.",
+        },
+      ],
+    },
+    {
+      slug: "cdquest-scoring",
+      title: "Scoring Each Pattern",
+      titleKo: "유형별 채점",
+      type: "assessment",
+      source: [145, 155],
+      requiredFields: ["cdQuestScores"],
+      safetyRuleIds: CRISIS,
+      // 44:00-49:00. The recording asked frequency, waited, then asked
+      // intensity -- two turns per pattern. A repeat_until loop runs ONE prompt
+      // per iteration, so two prompts cannot alternate fifteen times inside one
+      // node (the same constraint that removed why-distorted in stage 1). This
+      // prompt asks for both in one turn; when only one half arrives the field
+      // stays missing and the same pattern is asked again, for the missing half
+      // only (s02/dialogue-guidance.ts says so).
+      objective:
+        "Score the fifteen patterns one at a time, in the order the program gives them. For each, ask how often it came up this past week and how strongly it was believed, and take the score from those two -- never decide the score yourself. A participant who answers with a score directly is giving a complete answer.",
+      prompts: [
+        {
+          slug: "score-distortion",
+          type: "rating",
+          source: [145, 155],
+          // The turn answers ONE item, so that is the output field. The
+          // accumulated list lives in cdQuestScores, which s02/turn-rules.ts
+          // owns outright: a field named in outputFields is overwritten with
+          // the raw answer text by the shared extraction (runtime-context.ts,
+          // the expectedFields.length === 1 branch), which would wipe the list
+          // every turn. Keeping the list out of outputFields keeps it intact.
+          outputFields: ["cdQuestItemScore"],
+          validation: { kind: "cdquest_item_score", min: 0, max: 5 },
+          // Composed per pattern in s02/messages.ts, like the walkthrough.
+          patientText: "For this pattern: how often did it come up this past week, and how strongly did you believe it at the time?",
+          executionMode: "repeat_until",
+          maxIterations: 15,
+          completionCondition: { kind: "field", field: "allDistortionsScored", operator: "equals", value: true },
+        },
+      ],
+    },
+    {
+      slug: "cdquest-total",
+      title: "Total and What It Means",
+      titleKo: "총점과 의미",
+      type: "assessment",
+      source: [145, 155],
+      requiredFields: ["cdQuestReflection"],
+      safetyRuleIds: CRISIS,
+      // 49:00-51:00. The total is spoken, not asked -- s02/turn-rules.ts wrote
+      // it when the fifteenth score landed. "There is no cut-off" is the
+      // counselor's own framing at 49:20 and is pinned by mustMention.
+      objective:
+        "Say the total and what it does and does not mean: it is not a grade and there is no cut-off score. Then ask what they make of it. Do not interpret it for them and do not tell them which patterns to work on -- the next step asks them.",
+      prompts: [
+        {
+          slug: "total",
+          type: "explanation",
+          source: [145, 155],
+          patientText: "Adding those up gives your total. There is no cut-off here and no good or bad total -- it is a snapshot of this past week, and the starting point you'll measure change from.",
+        },
+        {
+          slug: "how-do-you-feel",
+          type: "question",
+          source: [145, 155],
+          outputFields: ["cdQuestReflection"],
+          // "어떤 생각이 드세요", not "어떠세요": the latter collides letter for
+          // letter with the closing recap's feedback ban pattern.
+          patientText: "Looking at this, what thoughts come up for you?",
+        },
+        {
+          // 50:10 of the recording: the participant said she had taken the
+          // anxiety as something she was simply born with. The counselor
+          // separated what is inborn from what was learned. Fires only on that
+          // signal (s02InnateAttribution, set in s02/turn-rules.ts).
+          slug: "innate-vs-learned",
+          type: "explanation",
+          source: [145, 155],
+          activationCondition: { field: "s02InnateAttribution", operator: "equals", value: true },
+          patientText:
+            "Some of what we are is simply how we were born, and that is not something we chose. But a habit of thinking is different -- nobody is born deciding to blame themselves. It is learned over time, which is also why it can change.",
+        },
+      ],
+    },
+    {
+      slug: "direction",
+      title: "What to Work On",
+      titleKo: "조정할 방향",
+      type: "question",
+      source: [145, 155],
+      requiredFields: ["cdQuestPriorityTypes"],
+      safetyRuleIds: CRISIS,
+      // 51:40. The participant names which patterns to adjust -- emotional
+      // reasoning, overgeneralizing, what-if. The guide never picks for them.
+      objective:
+        "Ask which of the patterns they would want to work on adjusting. They choose; never pick for them and never rank the list yourself.",
+      prompts: [
+        {
+          slug: "what-to-adjust",
+          type: "question",
+          source: [145, 155],
+          outputFields: ["cdQuestPriorityTypes"],
+          validation: { kind: "array" },
+          patientText: "Of these patterns, which ones would you want to work on adjusting?",
+        },
+      ],
+    },
+    {
       slug: "closing",
       title: "Recap, Practice and Closing",
       titleKo: "요약 · 과제 · 마무리",
@@ -278,7 +414,7 @@ export const spec: SessionSpec = {
           type: "closing",
           source: [388, 390],
           patientText:
-            "Here is what we did today. We looked at the practice you did over the week, and then we went through the fifteen patterns one at a time, finding where each one shows up for you.",
+            "Here is what we did today. We looked at the practice you did over the week, then went through the fifteen patterns one at a time finding where each one shows up for you, and then scored each one for how often it came up and how strongly you believed it.",
         },
         {
           // Stage 1 practice: the S01 homework continued. Stage 2 replaces
@@ -287,8 +423,10 @@ export const spec: SessionSpec = {
           type: "worksheet_instruction",
           source: [388, 390],
           outputFields: ["dailyObservationPractice"],
+          // 53:30: a blank CD-Quest form -- write the examples AND score them,
+          // so next time the two weeks can be compared.
           patientText:
-            "This week, keep the list of fifteen patterns nearby. Whenever one of these thoughts comes up, write a short example in the 'my examples' column of the pattern it fits. We'll look at them together next time.",
+            "This week, fill in a blank copy of this same form. Whenever one of these thoughts comes up, write a short example in the 'my examples' column, and at the end of the week score each pattern the way we did today. We'll compare it with today's next time.",
         },
         {
           slug: "homework-commitment",
@@ -347,6 +485,10 @@ export const spec: SessionSpec = {
     { sourceSlug: "agenda", targetSlug: "safety-pause", edgeType: "safety", source: [411, 429], label: "Crisis signal", condition: { field: "crisisSignal", operator: "equals", value: true }, priority: 0 },
     { sourceSlug: "rationale", targetSlug: "safety-pause", edgeType: "safety", source: [411, 429], label: "Crisis signal", condition: { field: "crisisSignal", operator: "equals", value: true }, priority: 0 },
     { sourceSlug: "distortion-walkthrough", targetSlug: "safety-pause", edgeType: "safety", source: [411, 429], label: "Crisis signal", condition: { field: "crisisSignal", operator: "equals", value: true }, priority: 0 },
+    { sourceSlug: "cdquest-intro", targetSlug: "safety-pause", edgeType: "safety", source: [411, 429], label: "Crisis signal", condition: { field: "crisisSignal", operator: "equals", value: true }, priority: 0 },
+    { sourceSlug: "cdquest-scoring", targetSlug: "safety-pause", edgeType: "safety", source: [411, 429], label: "Crisis signal", condition: { field: "crisisSignal", operator: "equals", value: true }, priority: 0 },
+    { sourceSlug: "cdquest-total", targetSlug: "safety-pause", edgeType: "safety", source: [411, 429], label: "Crisis signal", condition: { field: "crisisSignal", operator: "equals", value: true }, priority: 0 },
+    { sourceSlug: "direction", targetSlug: "safety-pause", edgeType: "safety", source: [411, 429], label: "Crisis signal", condition: { field: "crisisSignal", operator: "equals", value: true }, priority: 0 },
     { sourceSlug: "closing", targetSlug: "safety-pause", edgeType: "safety", source: [411, 429], label: "Crisis signal", condition: { field: "crisisSignal", operator: "equals", value: true }, priority: 0 },
   ],
 };
