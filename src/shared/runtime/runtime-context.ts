@@ -1034,7 +1034,6 @@ export async function extractRuntimeState(input: {
       // P0-4 (goal-dream-small-step gating): unchanged from the prior phase
       // -- a real distant dream is only ever identified here, at goal-dream,
       // when the answer is genuinely accepted as an item.
-      if (input.currentPromptItem.id === "tbct-s02-n07-p05-goal-dream") acceptedFields.goalDistantDreamIdentified = true;
       // S02 improvement plan (P1): same narrow, additive pattern as above --
       // see looksLikeThirdPartyControlProblem's comment.
       if (field === "problems" && looksLikeThirdPartyControlProblem(rawText)) acceptedFields.problemOutsideParticipantControl = true;
@@ -1275,7 +1274,6 @@ export async function extractRuntimeState(input: {
       // dream" candidate -- goal-dream-small-step must only fire when a
       // REAL one was named here (not "없어요"/a meta remark, both already
       // routed away before reaching this branch).
-      if (input.currentPromptItem?.id === "tbct-s02-n07-p05-goal-dream") nextFields.goalDistantDreamIdentified = true;
       // S02 improvement plan (P1): same narrow, additive pattern as above --
       // see looksLikeThirdPartyControlProblem's comment.
       if (field === "problems" && looksLikeThirdPartyControlProblem(rawText)) nextFields.problemOutsideParticipantControl = true;
@@ -1372,7 +1370,6 @@ export async function extractRuntimeState(input: {
       nextFields[field] = [...current, rawText].filter(Boolean);
       nextFields[`${field}NoMore`] = false;
       nextFields[`${field}Duplicate`] = false;
-      if (input.currentPromptItem?.id === "tbct-s02-n07-p05-goal-dream") nextFields.goalDistantDreamIdentified = true;
       // S02 improvement plan (P1): same narrow, additive pattern as above --
       // see looksLikeThirdPartyControlProblem's comment.
       if (field === "problems" && looksLikeThirdPartyControlProblem(rawText)) nextFields.problemOutsideParticipantControl = true;

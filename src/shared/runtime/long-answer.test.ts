@@ -23,8 +23,8 @@ describe("resolveLongAnswerSummaryTarget", () => {
   });
 
   it("targets the list item the answer was appended as", () => {
-    const target = resolveLongAnswerSummaryTarget({ sessionDefinitionId: "tbct-s02", locale: "ko-KR", promptItem: { id: "tbct-s02-n02-p01-problem-framing", outputFields: ["problems"] }, answerText: LONG_KO, fields: { problems: ["잠을 잘 못 자요", LONG_KO] } });
-    expect(target).toMatchObject({ field: "problems", writeField: "problems", listIndex: 1, originalValue: LONG_KO });
+    const target = resolveLongAnswerSummaryTarget({ sessionDefinitionId: "tbct-s02", locale: "ko-KR", promptItem: { id: "tbct-s02-n05-p01-review-distortion", outputFields: ["distortionExamples"] }, answerText: LONG_KO, fields: { distortionExamples: ["잠을 잘 못 자요", LONG_KO] } });
+    expect(target).toMatchObject({ field: "distortionExamples", writeField: "distortionExamples", listIndex: 1, originalValue: LONG_KO });
   });
 
   it("sends S01's situation and thought summaries to their one-line boxes", () => {

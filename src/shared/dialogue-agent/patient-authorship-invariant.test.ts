@@ -193,14 +193,17 @@ describe("Patient Authorship Invariant: worksheet provenance", () => {
   });
 
   it("projects a system-owned (participantOwned: false) field's value as system_calculated, not participant_verbatim", async () => {
-    const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s02" });
+    // Was S02's totalProblemScore until that session was redesigned
+    // (note2026_09_21_s02_cognitive_distortions); its one field is now
+    // participant-owned, so the system-owned case moves to S05.
+    const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s05" });
     await projectRuntimeFieldsToWorksheet({
       runtimeSessionId: session.id,
-      sessionDefinitionId: "tbct-s02",
-      fields: { totalProblemScore: 7 },
+      sessionDefinitionId: "tbct-s05",
+      fields: { participantParticipationRound1: 30 },
     });
-    const view = await getWorksheetView(session.id, "tbct-s02");
-    const field = view?.fields.find((item) => item.definition.canonicalFieldKey === "totalProblemScore");
+    const view = await getWorksheetView(session.id, "tbct-s05");
+    const field = view?.fields.find((item) => item.definition.canonicalFieldKey === "participantParticipationRound1");
     expect(field?.value?.provenance).toBe("system_calculated");
   });
 });

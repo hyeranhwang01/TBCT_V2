@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { resolveStaticPatientMessage } from "@/shared/runtime/runtime-static-message";
 import { promptRequiresPatientInput, resolveModelGroundingText } from "@/shared/runtime/runtime-release-normalizer";
 import { CANONICAL_PROMPT_ITEMS } from "@/shared/protocol/source-fidelity-catalog";
+import { COGNITIVE_DISTORTIONS } from "@/shared/protocol/cognitive-distortions";
 import type { PromptItem } from "@/shared/protocol/source-fidelity-types";
 
 // Regression test for a real leak a Korean patient hit in production: a
@@ -42,66 +43,51 @@ function makePromptWithFallback(id: string, fallbackPatientText: string): Prompt
   };
 }
 
-describe("resolveStaticPatientMessage: S02 CCPH/CCGH six-anchor scale text stays under the 600-char safety cap", () => {
-  // Regression test for a real bug: static-messages/s02.ts's computed
-  // six-anchor-problem-scale/six-anchor-goal-scale branches were verbose
-  // enough in English (~660-800 chars) to fail isPatientSafeFallbackText's
-  // 600-char cap in runtime-release-normalizer.ts, silently substituting the
-  // content-free generic locale line (defaultFallbackPatientText) on every
-  // English CCPH/CCGH turn -- so an English-speaking participant never saw
-  // the six colored rating anchors at all, while Korean's denser phrasing
-  // (~446-485 chars) always passed. Found via a real deterministic-fallback
-  // session run (no ANTHROPIC_API_KEY), this repo's actual default.
-  for (const [promptItemId, mustContain] of [
-    ["tbct-s02-n04-p02-six-anchor-problem-scale", ["light blue", "dark blue", "light green", "dark green", "yellow", "red"]],
-    ["tbct-s02-n08-p02-six-anchor-goal-scale", ["light blue", "dark blue", "light green", "dark green", "yellow", "red"]],
-  ] as const) {
-    it.each([
-      [{ problemScaleCardAvailable: true, goalScaleCardAvailable: true }, "card available"],
-      [{ problemScaleCardAvailable: false, goalScaleCardAvailable: false }, "no card"],
-    ])(`${promptItemId} (%s) delivers the real six-anchor scale text in English, not the generic fallback`, (fields) => {
-      const prompt = makePromptWithFallback(promptItemId, "");
-      const result = resolveStaticPatientMessage(prompt, "en-US", { fields, riskSignals: [], iterationCounts: {}, riskLevel: "low" });
+describe("resolveStaticPatientMessage: S02's per-pattern walkthrough text stays inside the safety cap", () => {
+  // The CCPH/CCGH six-anchor blocks this used to guard are gone with that
+  // session (note2026_09_21_s02_cognitive_distortions). The same defect class
+  // still applies to what replaced them: the walkthrough text is composed per
+  // pattern from the registry, so if any one of the fifteen came out over
+  // isPatientSafeFallbackText's 600-char cap -- or said "model" in English --
+  // it would be silently swapped for the content-free generic locale line, and
+  // only that one pattern would be affected.
+  const GENERIC = "We can take this one step at a time. What feels most important to share right now?";
+  for (const [index, distortion] of COGNITIVE_DISTORTIONS.entries()) {
+    it.each([["ko-KR"], ["en-US"]])(`pattern ${index + 1} (${distortion.id}) delivers its own text in %s`, (locale) => {
+      const prompt = makePromptWithFallback("tbct-s02-n05-p01-review-distortion", "");
+      const fields = { distortionExamples: Array.from({ length: index }, (_, position) => `row ${position}`) };
+      const result = resolveStaticPatientMessage(prompt, locale, { fields, riskSignals: [], iterationCounts: {}, riskLevel: "low" });
       expect(result).not.toBeNull();
-      expect(result!.patientMessage).not.toBe("We can take this one step at a time. What feels most important to share right now?");
-      for (const anchor of mustContain) expect(result!.patientMessage).toContain(anchor);
+      expect(result!.patientMessage).not.toBe(GENERIC);
+      expect(result!.patientMessage).toContain(locale.startsWith("ko") ? distortion.nameKo : distortion.nameEn[0]);
       expect(result!.patientMessage.length).toBeLessThanOrEqual(600);
+      if (!locale.startsWith("ko")) expect(result!.patientMessage).not.toMatch(/\bmodels?\b/i);
     });
   }
 });
 
-describe("resolveStaticPatientMessage: S02 rating corrections are acknowledged without replaying a stale score", () => {
-  it.each([
-    ["tbct-s02-n05-p01-reflect-problem-score", "ko-KR", { problems: ["문제A", "문제C"], problemRatings: [5], problemRatingCorrectionApplied: true }, ["제외", "문제C"]],
-    ["tbct-s02-n05-p01-reflect-problem-score", "en-US", { problems: ["Problem A", "Problem C"], problemRatings: [5], problemRatingCorrectionApplied: true }, ["removed", "Problem C"]],
-    ["tbct-s02-n09-p01-reflect-goal-score", "ko-KR", { goals: ["목표A", "목표C"], goalRatings: [5], goalRatingCorrectionApplied: true }, ["제외", "목표C"]],
-    ["tbct-s02-n09-p01-reflect-goal-score", "en-US", { goals: ["Goal A", "Goal C"], goalRatings: [5], goalRatingCorrectionApplied: true }, ["removed", "Goal C"]],
-  ] as const)("%s in %s", (promptItemId, locale, fields, mustContain) => {
-    const result = resolveStaticPatientMessage(makePromptWithFallback(promptItemId, ""), locale, { fields, riskSignals: [], iterationCounts: {}, riskLevel: "low" });
-    expect(result).not.toBeNull();
-    for (const phrase of mustContain) expect(result!.patientMessage).toContain(phrase);
-    expect(result!.patientMessage).not.toContain(locale === "ko-KR" ? "5점" : "is a 5");
-  });
+describe("S02 statements do not demand a meaningless patient reply", () => {
+  // The CCPH/CCGH acknowledgements this guarded were carried by exact ids in
+  // PASSIVE_ACKNOWLEDGMENT_PROMPT_IDS. The redesigned S02 needs no exact ids:
+  // every statement that asks nothing is typed so the generic passive branch
+  // already covers it. This pins that, because a type change on any of them
+  // would start demanding an answer the participant has no way to give.
+  for (const id of [
+    "tbct-s02-n02-p02-normalize-overlap",
+    "tbct-s02-n04-p01-distortion-concept",
+    "tbct-s02-n04-p02-research-evidence",
+    "tbct-s02-n04-p03-future-use",
+    "tbct-s02-n06-p01-session-recap",
+    "tbct-s02-n06-p04-next-preview",
+  ]) {
+    it(`${id} advances immediately after delivery`, () => {
+      const promptItem = CANONICAL_PROMPT_ITEMS.find((item) => item.id === id);
+      expect(promptItem, id).toBeDefined();
+      expect(promptRequiresPatientInput(promptItem!), id).toBe(false);
+    });
+  }
 });
 
-describe("S02 passive reflections do not demand a meaningless patient reply", () => {
-  it.each([
-    "tbct-s02-n05-p02-acknowledge-distress",
-    "tbct-s02-n05-p03-acknowledge-manageable",
-    "tbct-s02-n06-p02-problem-total-personal",
-    "tbct-s02-n09-p02-acknowledge-difficult-goal",
-    "tbct-s02-n09-p03-acknowledge-achieved-goal",
-    "tbct-s02-n10-p02-goal-total-personal",
-  ])("%s advances immediately after delivery", (promptItemId) => {
-    const promptItem = CANONICAL_PROMPT_ITEMS.find((candidate) => candidate.id === promptItemId);
-    expect(promptItem).toBeDefined();
-    expect(promptRequiresPatientInput(promptItem!)).toBe(false);
-  });
-});
-
-// S01 redesign (note2026_09_12_s01_redesign): the three-person conclusion is
-// now asked step by step and never stated first, so the old dynamic insight
-// sentence is gone. The one dynamic S01 text left is the scene.
 describe("S01 three-person scene", () => {
   const promptItemId = "tbct-s01-n10-p02-scene";
 
@@ -114,19 +100,6 @@ describe("S01 three-person scene", () => {
   it("falls back to the fixed real-session scene when none was generated", () => {
     const result = resolveStaticPatientMessage(makePromptWithFallback(promptItemId, ""), "ko-KR", { fields: {}, riskSignals: [], iterationCounts: {}, riskLevel: "low" });
     expect(result?.patientMessage).toContain("만나서 반가웠어요");
-  });
-});
-
-describe("S02 list confirmations match the duplicate state", () => {
-  it.each([
-    ["tbct-s02-n02-p06-problem-confirmation", "ko-KR", { problemsDuplicate: true }, "중복으로 추가하지는 않았어요"],
-    ["tbct-s02-n02-p06-problem-confirmation", "en-US", { problemsDuplicate: true }, "did not add it twice"],
-    ["tbct-s02-n07-p07-goal-confirmation", "ko-KR", { goalsDuplicate: true }, "중복으로 추가하지는 않았어요"],
-    ["tbct-s02-n07-p07-goal-confirmation", "en-US", { goalsDuplicate: true }, "did not add it twice"],
-  ] as const)("%s in %s does not falsely claim a duplicate was added", (promptItemId, locale, fields, expected) => {
-    const result = resolveStaticPatientMessage(makePromptWithFallback(promptItemId, ""), locale, { fields, riskSignals: [], iterationCounts: {}, riskLevel: "low" });
-    expect(result?.patientMessage).toContain(expected);
-    expect(result?.patientMessage).not.toContain(locale === "ko-KR" ? "목록에 추가할게요" : "I'll add that");
   });
 });
 

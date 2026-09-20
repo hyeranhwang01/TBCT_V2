@@ -113,17 +113,18 @@ describe("dialogue contract compiler: generic classification (S01/S02 fields)", 
     expect(contract.assistantMustNotSupply).toBe(false);
   });
 
-  it("derives a 0-5 scale from a S02 rating validation kind (max 5), not the S03 percentage scale -- and not the binding's aggregate text_list storage shape either", () => {
-    const node = CANONICAL_STAGE_NODES.find((item) => item.sessionId === "tbct-s02" && item.title.includes("Rate Each Problem"))!;
-    const promptItem = CANONICAL_PROMPT_ITEMS.find((item) => item.id.includes("reflect-problem-score"))!;
-    // reflect-problem-score's outputFields[0] is "problemRatings", which now
-    // has a tbct-s02.ts binding of valueType "text_list" (the worksheet
-    // displays every problem's accumulated score at once) -- but this
-    // PromptItem re-asks the same rating once per listed problem, so the
-    // single-turn expectation is still one 0-5 rating, not an ordered list.
+  it("derives a 0-5 scale from a rating validation kind (max 5), not the S03 percentage scale", () => {
+    // Was S02's reflect-problem-score until that session was redesigned
+    // (note2026_09_21_s02_cognitive_distortions), which also removed the only
+    // rating-kind prompt in the catalog whose field is bound as text_list --
+    // so the "not the binding's aggregate storage shape either" half of this
+    // check no longer has a case to exercise. S06's calibration anchor is the
+    // remaining rating-kind prompt with max 5.
+    const node = CANONICAL_STAGE_NODES.find((item) => item.sessionId === "tbct-s06" && item.promptItemIds.some((id) => id.includes("calibration-anchor")))!;
+    const promptItem = CANONICAL_PROMPT_ITEMS.find((item) => item.id.includes("calibration-anchor"))!;
 
     const contract = compileDialogueContract({
-      session: minimalSession({ sessionDefinitionId: "tbct-s02" }),
+      session: minimalSession({ sessionDefinitionId: "tbct-s06" }),
       node,
       sourcePromptItem: promptItem,
       runtimePromptItem: minimalRuntimePromptItem({ nodeId: node.id }),

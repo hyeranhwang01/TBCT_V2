@@ -140,7 +140,7 @@ describe("resolveRepeatedFallbackOverride: S01-only phase-aware exception", () =
 // true regression group now: still byte-identical to the original generic
 // override.
 describe("resolveRepeatedFallbackOverride: S02/S03 construct-preserving exception", () => {
-  it("RF-6: S02's problem-framing prompt gets its hand-tuned, problem-preserving rephrase", () => {
+  it("RF-6: S02's walkthrough prompt gets its hand-tuned, pattern-preserving rephrase", () => {
     const result = resolveRepeatedFallbackOverride({
       sessionDefinitionId: "tbct-s02",
       usedFallback: true,
@@ -148,10 +148,10 @@ describe("resolveRepeatedFallbackOverride: S02/S03 construct-preserving exceptio
       recentAssistantMessages: threeRepeats(APPROVED),
       lastPatientMessage: "I feel like nothing I do is good enough",
       locale: "en-US",
-      activePromptItemId: "tbct-s02-n02-p01-problem-framing",
+      activePromptItemId: "tbct-s02-n05-p01-review-distortion",
     });
     expect(result).not.toContain("specific moment");
-    expect(result).toMatch(/problem/i);
+    expect(result).toMatch(/pattern/i);
   });
 
   it("RF-6: S02 falls back to the generic, still-construct-preserving default for a prompt with no hand-tuned rephrase", () => {
@@ -162,7 +162,7 @@ describe("resolveRepeatedFallbackOverride: S02/S03 construct-preserving exceptio
       recentAssistantMessages: threeRepeats(APPROVED),
       lastPatientMessage: "힘들었어요",
       locale: "en-US",
-      activePromptItemId: "tbct-s02-n02-p01-elicit-problems",
+      activePromptItemId: "tbct-s02-n06-p04-next-preview",
     });
     expect(result).toContain(APPROVED);
     expect(result).not.toContain("specific moment");
@@ -210,7 +210,7 @@ describe("resolveRepeatedFallbackOverride: S04-S08 regression (unchanged generic
       recentAssistantMessages: ["something else entirely", "and another thing", "a third distinct message"],
       lastPatientMessage: "ok",
       locale: "en-US",
-      activePromptItemId: "tbct-s02-n02-p01-elicit-problems",
+      activePromptItemId: "tbct-s02-n06-p04-next-preview",
     });
     expect(result).toBeUndefined();
   });

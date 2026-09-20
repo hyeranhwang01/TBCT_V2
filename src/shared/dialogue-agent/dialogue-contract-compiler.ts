@@ -9,6 +9,8 @@ import { dialogueContractSchema } from "@/shared/dialogue-agent/dialogue-agent-c
 import type { WorksheetBinding, WorksheetValueType } from "@/types/worksheet";
 import { isS01SummaryCheckForbidden, s01DialogueGuidance } from "@/patient/sessions/s01/dialogue-guidance";
 import { resolveS01TaskIntent, s01TaskIntentsEnabled } from "@/patient/sessions/s01/task-intents";
+import { isS02SummaryCheckForbidden, s02DialogueGuidance } from "@/patient/sessions/s02/dialogue-guidance";
+import { resolveS02TaskIntent, s02TaskIntentsEnabled } from "@/patient/sessions/s02/task-intents";
 
 // Pattern-based, session-agnostic construct terminology. Keyed by field-NAME
 // shape rather than an exact per-session map, because the same construct
@@ -310,9 +312,11 @@ export function summaryCheckForbiddenFor(sourcePromptItem: PromptItem): boolean 
   const kind = (sourcePromptItem.validation as { kind?: unknown } | null)?.kind;
   return SUMMARY_CHECK_FORBIDDEN_PROMPT_IDS.has(sourcePromptItem.id)
     || (typeof kind === "string" && SUMMARY_CHECK_FORBIDDEN_VALIDATION_KINDS.has(kind))
-    // S01 ids are positional and were all renumbered by the S01 redesign
-    // (note2026_09_12_s01_redesign), so its forbidden steps are matched by slug.
-    || (sourcePromptItem.sessionId === "tbct-s01" && isS01SummaryCheckForbidden(sourcePromptItem.id));
+    // S01/S02 ids are positional and get renumbered by their redesigns
+    // (note2026_09_12_s01_redesign, note2026_09_21_s02_cognitive_distortions),
+    // so their forbidden steps are matched by slug.
+    || (sourcePromptItem.sessionId === "tbct-s01" && isS01SummaryCheckForbidden(sourcePromptItem.id))
+    || (sourcePromptItem.sessionId === "tbct-s02" && isS02SummaryCheckForbidden(sourcePromptItem.id));
 }
 
 /** Exported for the catalog-integrity test only (every id must exist). */
@@ -326,14 +330,34 @@ export function stepSpecificGuidanceFor(sourcePromptItem: PromptItem): string[] 
   // prompt outside the curated table still gets its rule.
   if (validation?.requiresThirdPerson && !curated.includes(THIRD_PERSON_RULE)) derived.push(THIRD_PERSON_RULE);
   if (validation?.stateScaleEveryTime) derived.push("State the scale explicitly every time you ask for this rating -- the words 'from 0 to 100' must survive your paraphrase.");
-  if (sourcePromptItem.sessionId === "tbct-s01") derived.push(...s01DialogueGuidance(sourcePromptItem.id));
+  derived.push(...(DIALOGUE_GUIDANCE_BY_SESSION[sourcePromptItem.sessionId]?.(sourcePromptItem.id) ?? []));
   const all = [...curated, ...derived];
   return all.length ? all : undefined;
 }
 
+// Per-session step guidance and task intents. Both were a hard
+// `=== "tbct-s01"` until S02 got the same treatment
+// (.claude/TASK_SCOPE.json note2026_09_21_s02_cognitive_distortions). A session
+// with no entry is unchanged: no guidance appended, and no task intent, so its
+// turns stay grounded on the approved sentence exactly as before.
+const DIALOGUE_GUIDANCE_BY_SESSION: Partial<Record<string, (promptItemId: string) => string[]>> = {
+  "tbct-s01": s01DialogueGuidance,
+  "tbct-s02": s02DialogueGuidance,
+};
+type ResolvedTaskIntent = Omit<NonNullable<DialogueContract["taskIntent"]>, "asksParticipant">;
+type SessionTaskIntentResolver = {
+  enabled: () => boolean;
+  resolve: (promptItemId: string, locale: string, context: { fields?: Record<string, unknown> }) => ResolvedTaskIntent | undefined;
+};
+const TASK_INTENTS_BY_SESSION: Partial<Record<string, SessionTaskIntentResolver>> = {
+  "tbct-s01": { enabled: s01TaskIntentsEnabled, resolve: resolveS01TaskIntent },
+  "tbct-s02": { enabled: s02TaskIntentsEnabled, resolve: resolveS02TaskIntent },
+};
+
 function taskIntentFor(sourcePromptItem: PromptItem, session: RuntimeSession, asksParticipant: boolean): DialogueContract["taskIntent"] {
-  if (sourcePromptItem.sessionId !== "tbct-s01" || !s01TaskIntentsEnabled()) return undefined;
-  const intent = resolveS01TaskIntent(sourcePromptItem.id, session.locale, session.runtimeContext);
+  const resolver = TASK_INTENTS_BY_SESSION[sourcePromptItem.sessionId];
+  if (!resolver || !resolver.enabled()) return undefined;
+  const intent = resolver.resolve(sourcePromptItem.id, session.locale, session.runtimeContext);
   return intent ? { ...intent, asksParticipant } : undefined;
 }
 

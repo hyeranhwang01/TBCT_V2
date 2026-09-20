@@ -15,8 +15,21 @@ type InputAssessmentResult = { accepted: boolean; confidence: number; reason: "m
  * "why does this field need semantic interpretation" intent is legible where
  * it's decided, not buried in a boolean expression.
  */
+const S02_COLLECTION_FIELDS = new Set([
+  // The CCPH/CCGH lists this gate was built for. The fields are gone from S02's
+  // spec since 2026-09-21 but the names stay here harmlessly, and the gate is
+  // keyed on the field name, so nothing fires for them any more.
+  "problems",
+  "goals",
+  // The redesigned S02's fifteen-pattern walkthrough
+  // (note2026_09_21_s02_cognitive_distortions). Same reason the lists needed it:
+  // a meta remark ("앞에서 말했잖아요", "무슨 질문이요?") must not be appended as
+  // if it were the participant's own example.
+  "distortionExamples",
+]);
+
 export function isS02CollectionField(input: { promptItem?: PromptItem; field: string }) {
-  return input.promptItem?.sessionId === "tbct-s02" && (input.field === "problems" || input.field === "goals");
+  return input.promptItem?.sessionId === "tbct-s02" && S02_COLLECTION_FIELDS.has(input.field);
 }
 
 /**

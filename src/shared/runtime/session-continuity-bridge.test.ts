@@ -8,15 +8,21 @@ import { DISTORTION_EXAMPLE_ENTRY_TYPE, buildDistortionExampleData } from "@/pat
 import { koreanText as s02KoreanText, resolveStaticText as resolveS02StaticText } from "@/patient/sessions/s02/messages";
 import { CANONICAL_PROMPT_ITEMS } from "@/shared/protocol/source-fidelity-catalog";
 
-// End-to-end cover for the gap session-continuity.ts closes: S02's
-// returning-participant bridge existed in the catalog but could never run,
-// because nothing ever set the `returningParticipant` field its activation
-// conditions read. These tests run a real first session to completion and then
-// open a second one for the same participant, so they fail if the seeding is
-// removed OR if the bridge prompts stop being reachable.
+// End-to-end cover for what session-continuity.ts carries from one session into
+// the next. These run a real session to completion and then open a second one
+// for the same participant, so they fail if the seeding is removed or if what
+// reads it stops being reachable.
+//
+// S02's redesign (note2026_09_21_s02_cognitive_distortions) changed what reads
+// the seed. Its opening used to branch on `returningParticipant` between a
+// first-session and a returning greeting; the redesigned session has one
+// opening, because in the protocol S02 always follows S01. The field is still
+// seeded and is now READ BY NOTHING -- recorded here and in
+// session-continuity.ts rather than removed, since the seed is cheap and a
+// later session may want it. What the seed still drives is the homework
+// question's recap, via previousS01HomeworkExampleCount.
 
-const FIRST_SESSION_OPENING = "Hi! I'm here to help you map out";
-const RETURNING_OPENING = "Welcome back";
+const S02_OPENING = "Good to see you again";
 
 async function runToCompletion(sessionId: string) {
   for (let turn = 0; turn < 200; turn += 1) {
@@ -50,7 +56,7 @@ describe("returning-participant continuity", () => {
     expect(session.runtimeContext.homeworkStatus).toBe("not_assigned");
 
     await startRuntimeSession(session.id);
-    expect(await firstAssistantMessage(session.id)).toContain(FIRST_SESSION_OPENING);
+    expect(await firstAssistantMessage(session.id)).toContain(S02_OPENING);
   }, 60_000);
 
   it("carries a completed session and its outstanding homework into the next one", async () => {
@@ -76,23 +82,25 @@ describe("returning-participant continuity", () => {
     expect(second.runtimeContext.homeworkStatus).toBe("pending");
   }, 120_000);
 
-  it("greets a returning participant with the bridge instead of the first-session opening", async () => {
+  // S02 no longer branches its greeting on returningParticipant: it opens the
+  // same way either way, because it always follows S01 in the protocol. The
+  // seed still has to arrive -- previousS01HomeworkExampleCount depends on the
+  // same computation -- which is what this checks.
+  it("seeds a returning participant without changing S02's greeting", async () => {
     const first = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s05", locale: "en-US" });
     await startRuntimeSession(first.id);
     await runToCompletion(first.id);
     await ensureHomeworkForSession((await getRuntimeSession(first.id))!.session);
 
     const second = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s02", locale: "en-US" });
+    expect(second.runtimeContext.fields.returningParticipant).toBe(true);
     await startRuntimeSession(second.id);
-
-    const opening = await firstAssistantMessage(second.id);
-    expect(opening).toContain(RETURNING_OPENING);
-    expect(opening).not.toContain(FIRST_SESSION_OPENING);
+    expect(await firstAssistantMessage(second.id)).toContain(S02_OPENING);
   }, 120_000);
 
-  // S01 redesign (note2026_09_12_s01_redesign): S02 recalls the S01 answers
-  // and homework in the participant's own words, without seeding S02 fields.
-  it("recalls the participant's S01 words and homework in S02, leaving S02's problems empty", async () => {
+  // S02 recalls the S01 homework -- what the practice was and how much of it
+  // they did -- without seeding any S02 field and without naming their answers.
+  it("recalls the S01 homework in S02, leaving S02's protected fields empty", async () => {
     const first = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s01", locale: "en-US" });
     await startRuntimeSession(first.id);
     await runToCompletion(first.id);
@@ -109,52 +117,50 @@ describe("returning-participant continuity", () => {
     for (const key of ["problems", "problemRatings", "goals", "goalRatings"]) expect(second.runtimeContext.fields[key]).toBeUndefined();
 
     await startRuntimeSession(second.id);
+    // The opening recalls the ground the last session covered, never the
+    // participant's own answers -- same rule as S01's closing recap.
     const opening = await firstAssistantMessage(second.id);
-    expect(opening.startsWith("Welcome back. Last time you named")).toBe(true);
-    expect(opening).toContain(String(s01Fields.s01RepresentativeProblem).trim());
+    expect(opening).toContain(S02_OPENING);
+    expect(opening).not.toContain(String(s01Fields.s01RepresentativeProblem).trim());
 
-    const view = await getRuntimeSession(second.id);
-    await submitPatientInput(second.id, syntheticPatientInput(view!.currentPromptItem!), { clientTurnId: `${second.id}-turn-0`, expectedSessionVersion: view!.session.version ?? 0 });
+    // The homework question is where the S01 practice and how much of it they
+    // did are recalled.
     const assistant = (await getRuntimeSession(second.id))!.messages.filter((message) => message.role === "assistant").map((message) => message.content);
     expect(assistant.some((text) => text.includes("'My examples'") && text.includes("You've written 1 so far."))).toBe(true);
   }, 180_000);
 });
 
 describe("S02 wording after S01", () => {
-  const prompt = (id: string) => CANONICAL_PROMPT_ITEMS.find((item) => item.id === id)!;
-  const opening = prompt("tbct-s02-n01-p02-returning-opening");
-  const bridge = prompt("tbct-s02-n01-p03-between-session-bridge");
-  const framing = prompt("tbct-s02-n02-p01-problem-framing");
-  const fromS01 = {
-    previousSessionDefinitionId: "tbct-s01",
-    previousS01Problems: ["불안이 심해요", "계획대로 안 되면 힘들어요", "사람들 의견이 다르면 위축돼요", "잠을 못 자요"],
-    previousS01RepresentativeProblem: "불안이 심해요",
-    previousS01Goal: "불안해도 할 일을 해내는 것",
-    previousS01HomeworkExampleCount: 2,
-  };
+  const homeworkUpdate = CANONICAL_PROMPT_ITEMS.find((item) => item.id === "tbct-s02-n02-p01-homework-update")!;
+  const fromS01 = { previousSessionDefinitionId: "tbct-s01", previousS01HomeworkExampleCount: 2 };
 
-  it("recalls the participant's own words in Korean, around the unchanged prompt text", () => {
-    expect(resolveS02StaticText(opening, fromS01, "ko-KR")).toBe(
-      "다시 만나서 반가워요. 지난 시간에는 가장 큰 어려움으로 ‘불안이 심해요’, 상담이 끝났을 때 바라는 모습으로 ‘불안해도 할 일을 해내는 것’ 이야기를 해 주셨어요. " + s02KoreanText[opening.id].replace("다시 만나서 반가워요. ", ""),
-    );
-    expect(resolveS02StaticText(bridge, fromS01, "ko-KR")).toBe(`지난 시간에 인지 왜곡 목록을 곁에 두고, 그런 생각이 들 때 ‘내 예시’ 칸에 적어 보기로 했었죠. 지금까지 2개 적어 주셨네요. ${s02KoreanText[bridge.id]}`);
-    const framingText = resolveS02StaticText(framing, fromS01, "ko-KR")!;
-    expect(framingText).toContain("(‘불안이 심해요’, ‘계획대로 안 되면 힘들어요’, ‘사람들 의견이 다르면 위축돼요’)");
-    expect(framingText).not.toContain("잠을 못 자요");
-    expect(framingText.endsWith(s02KoreanText[framing.id])).toBe(true);
+  it("recalls what the practice was and how much of it they did, in Korean", () => {
+    const text = resolveS02StaticText(homeworkUpdate, fromS01, "ko-KR")!;
+    expect(text).toContain("'내 예시' 칸에 적어 보기로 했었죠");
+    expect(text).toContain("지금까지 2개 적어 주셨네요");
+    // The question itself still follows the recap.
+    expect(text).toContain("한 주 동안 과제는 어떠셨어요");
   });
 
   it("does not mention a count of zero", () => {
-    const text = resolveS02StaticText(bridge, { ...fromS01, previousS01HomeworkExampleCount: 0 }, "ko-KR")!;
+    const text = resolveS02StaticText(homeworkUpdate, { ...fromS01, previousS01HomeworkExampleCount: 0 }, "ko-KR")!;
     expect(text).not.toMatch(/0개/);
-    expect(text).toContain("‘내 예시’");
+    expect(text).toContain("'내 예시'");
   });
 
-  it("keeps the existing wording when the previous session was not S01 or nothing was carried", () => {
-    for (const item of [opening, bridge, framing]) {
-      expect(resolveS02StaticText(item, { ...fromS01, previousSessionDefinitionId: "tbct-s03" }, "ko-KR")).toBeUndefined();
-      expect(resolveS02StaticText(item, { previousSessionDefinitionId: "tbct-s01" }, "ko-KR")).toBeUndefined();
-      expect(resolveS02StaticText(item, {}, "en-US")).toBeUndefined();
-    }
+  it("asks the plain question when the previous session was not S01 or nothing was carried", () => {
+    const plain = resolveS02StaticText(homeworkUpdate, {}, "ko-KR")!;
+    expect(plain).not.toContain("내 예시");
+    expect(plain).toContain("한 주 동안 과제는 어떠셨어요");
+    expect(resolveS02StaticText(homeworkUpdate, { previousSessionDefinitionId: "tbct-s05", previousS01HomeworkExampleCount: 3 }, "ko-KR")).toBe(plain);
+    expect(resolveS02StaticText(homeworkUpdate, { previousSessionDefinitionId: "tbct-s01" }, "ko-KR")).toBe(plain);
+  });
+
+  it("reaches Korean at runtime, which the pre-redesign recap did not", () => {
+    // The recap S02 carried before this redesign sat on prompts that also had
+    // koreanText entries, and resolvePromptLocaleText prefers those outright --
+    // so in Korean the recap only ever appeared in tests that called this
+    // function directly. homework-update has no koreanText entry for that reason.
+    expect(s02KoreanText[homeworkUpdate.id]).toBeUndefined();
   });
 });

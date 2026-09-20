@@ -35,7 +35,12 @@ export interface ComposedWorksheetProps {
 // note2026_09_12_s01_redesign -- the real first session filled two paper
 // worksheets live). Every other session keeps the value-free progress
 // checklist on the participant side.
-export const PATIENT_COMPOSED_WORKSHEET_SESSIONS: ReadonlySet<string> = new Set(["tbct-s01"]);
+// S02 joined on 2026-09-21 (note2026_09_21_s02_cognitive_distortions): its
+// session is a walkthrough of the fifteen cognitive distortions, and the
+// participant has to see their own example land in each row -- in the recorded
+// second session the participant asked to write in the table herself, and later
+// read the filled table back.
+export const PATIENT_COMPOSED_WORKSHEET_SESSIONS: ReadonlySet<string> = new Set(["tbct-s01", "tbct-s02"]);
 
 // Session-specific "recreate the figure in real HTML/CSS" worksheets --
 // each one has a genuinely different layout matching that session's own

@@ -107,10 +107,18 @@ export function computeSessionContinuitySeed(input: {
   const record = input.homeworkRecords.find((item) => item.runtimeSessionId === previous.id);
   const homeworkStatus = toContextHomeworkStatus(record);
 
-  // `returningParticipant` is the only field S02's activation conditions read.
-  // The rest are here so the bridge can name what it is asking about instead of
-  // asking a generic "how did it go" -- and so a clinician reading the runtime
-  // context can see which session this one is continuing from.
+  // `returningParticipant` used to be the one field S02's activation conditions
+  // read, to choose between a first-session and a returning greeting. S02's
+  // 2026-09-21 redesign has a single opening -- it always follows S01 in the
+  // protocol -- so as of that change NOTHING reads this field. It is kept
+  // because the seed is cheap and a later session may want it; if it is still
+  // unread when one does, delete it there rather than guessing here.
+  //
+  // The rest are read: previousSessionDefinitionId and
+  // previousS01HomeworkExampleCount are what let S02's homework question name
+  // the practice and how much of it was done instead of asking a generic "how
+  // did it go", and a clinician reading the runtime context can see which
+  // session this one continues from.
   const fields: Record<string, unknown> = {
     returningParticipant: true,
     previousSessionDefinitionId: previous.sessionDefinitionId,

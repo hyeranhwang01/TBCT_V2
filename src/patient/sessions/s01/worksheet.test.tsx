@@ -92,8 +92,12 @@ describe("S01 worksheet bindings", () => {
     expect(new Set(TBCT_S01_BINDINGS.map((binding) => binding.displayOrder)).size).toBe(TBCT_S01_BINDINGS.length);
   });
 
-  it("is the only session whose worksheet the participant sees", () => {
-    expect([...PATIENT_COMPOSED_WORKSHEET_SESSIONS]).toEqual(["tbct-s01"]);
+  // S02 joined on 2026-09-21: its session is a walkthrough of the fifteen
+  // cognitive distortions and the participant watches their own example land in
+  // each row (note2026_09_21_s02_cognitive_distortions). Every other session
+  // still shows the value-free progress checklist, which is what this pins.
+  it("is one of the two sessions whose worksheet the participant sees", () => {
+    expect([...PATIENT_COMPOSED_WORKSHEET_SESSIONS]).toEqual(["tbct-s01", "tbct-s02"]);
   });
 });
 

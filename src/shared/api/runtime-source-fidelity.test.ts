@@ -82,26 +82,29 @@ describe("canonical source-fidelity runtime", () => {
     const previousProvider = process.env.AI_PROVIDER;
     process.env.AI_PROVIDER = "mock";
     try {
-      // P0-3 (S02 redesign): first-session-opening is a one-way welcome with
-      // no patient input required (completionEffect sets openingMode
-      // deterministically), so the session auto-advances straight to
-      // elicit-problems/problem-framing -- that is the very first prompt
-      // that actually waits on the participant, not a separate check-in.
+      // The list-collecting step is where a bare acknowledgement must not be
+      // mistaken for content. Before the 2026-09-21 S02 redesign that step was
+      // the problems question; it is now the fifteen-pattern walkthrough, whose
+      // field is likewise validation.kind "array".
       const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s02", locale: "ko-KR" });
       await startRuntimeSession(session.id);
+      for (const answer of ["틈틈이 적어봤는데 어떤 유형인지 고르는 게 어려웠어요", "네"]) {
+        const view = await getRuntimeSession(session.id);
+        await submitPatientInput(session.id, view?.session.currentPromptItemId?.includes("-today-agenda") ? { kind: "boolean", value: true } : { kind: "text", value: answer });
+      }
       const before = await getRuntimeSession(session.id);
-      const problemPromptId = before?.session.currentPromptItemId;
+      const listPromptId = before?.session.currentPromptItemId;
+      expect(listPromptId).toContain("-review-distortion");
 
       await submitPatientInput(session.id, { kind: "text", value: "네 알겠습니다." });
       const afterReadiness = await getRuntimeSession(session.id);
-      expect(afterReadiness?.session.runtimeContext.fields.problems).toBeUndefined();
-      expect(afterReadiness?.session.currentPromptItemId).toBe(problemPromptId);
+      expect(afterReadiness?.session.runtimeContext.fields.distortionExamples).toBeUndefined();
+      expect(afterReadiness?.session.currentPromptItemId).toBe(listPromptId);
 
-      const actualProblem = "제 생각에는 저는 포기하는 용기가 없는 것 같아요";
-      await submitPatientInput(session.id, { kind: "text", value: actualProblem });
-      const afterProblem = await getRuntimeSession(session.id);
-      expect(afterProblem?.session.runtimeContext.fields.problems).toEqual([actualProblem]);
-      expect(afterProblem?.session.currentPromptItemId).not.toBe(problemPromptId);
+      const actualExample = "제 생각에는 저는 포기하는 용기가 없는 것 같아요";
+      await submitPatientInput(session.id, { kind: "text", value: actualExample });
+      const afterExample = await getRuntimeSession(session.id);
+      expect(afterExample?.session.runtimeContext.fields.distortionExamples).toEqual([actualExample]);
     } finally {
       if (previousProvider === undefined) delete process.env.AI_PROVIDER;
       else process.env.AI_PROVIDER = previousProvider;

@@ -1,7 +1,7 @@
 {
   "task": "TBCT Sessions 1-3 session-local enhancement work (content/flow/wording), following prompts/.claude/rules/tbct-session-manual.md",
   "createdAt": "2026-08-13",
-  "updatedAt": "2026-09-19",
+  "updatedAt": "2026-09-21",
   "allowedPaths": [
     "src/patient/pages/homework-list-page.tsx",
     "src/patient/pages/patient-list-page.tsx",
@@ -524,5 +524,59 @@
     "blastRadius": "S01 n18 only. Prompt ids are positional within a node, so n01-n17 are untouched and the ids pinned in summary-check.test.ts and runtime-orchestrator.test.ts (n05/n06/n07/n14/n16/n17) still resolve; the only renumbering is the n18 goodbye koreanText key p03 -> p04. No new field, so no worksheet binding, no projection and no change to the audit's missing-field check. No shared file is touched.",
     "manualDivergence": "REPORTED, not silently applied. The RCT prompt manual (artifacts/tbct-source-text.txt, S01 = lines 18-222) has no summary in 'Step 6 - Closing the Session', and its Tone and Style (lines 180-193) says 'Ask, do not tell ... at every point where you would be tempted to explain, describe, or summarize - ask a question instead'. This step follows the book and the recording instead. Per .claude/rules/tbct-session-manual.md section 8 the manual is left unchanged and the divergence is stated in the completion report.",
     "regressionPlan": "npx vitest run src/patient/sessions/s01; npm run type-check; npx vitest run src/shared/dialogue-agent src/shared/runtime; npm run audit:sessions; npx tsx scripts/run-local-session.ts tbct-s01. With a live key, check once that the recap does not leak the participant's own answers."
-  }
+  },
+    "note2026_09_21_s02_cognitive_distortions": {
+      "task": "S02 redesign, stage 1 of 3: replace 'Problems and Goals' (CCPH/CCGH) with the session the real second counseling session actually was -- a walkthrough of the 15 cognitive distortions with the participant's own examples -- plus the worksheet that fills in as they name them. CD-Quest scoring is stage 2; the remaining homework UI and the clinician progress panel are stage 3.",
+      "evidence": "The 2026-09-18 recording (57 min) was transcribed locally (whisper.cpp large-v3-turbo) because Zoom's own VTT was English ASR over Korean speech: 0 Hangul lines, 5,408 characters of noise. The real transcript says 왜곡 41 times and 목표/척도/색상/총점 zero times. The book this protocol comes from (Oliveira 2015) has CD-Quest as chapter 2 and its own Table C1 assigns it 'every session from Session 2 on'. CCPH/CCGH appears nowhere in that book -- not in 224 pages, not among the appendix forms. Recorded in docs/ai/TBCT_SESSION_MAPPING.md.",
+      "userDecision": "2026-09-21, by the user: follow the real counseling session. CCPH/CCGH is deleted rather than relocated, because it is absent from the book; the problems-and-goals content it carried is already in S01's problems-and-goals node (book ch.1 'Identifying the Problems' / 'Setting Therapy Goals'). Same division of labour as S01: step order, completion, storage and safety in code, all wording left to Claude. The closing recap follows S01's 2026-09-21 session-recap exactly; the feedback request stays out. The research claim is stated with a plain-language source. Work is split into stages because doing it in one pass is less careful.",
+      "stageSeam": "The 15-type walkthrough and its worksheet ship together: the participant watches the table fill in. In the recording (15:00) the participant asks to write in it herself -- 'the screen share, can I not write in it now?' -- and at 43:00 reads the filled table back. Splitting the talk from the table would ship half a step.",
+      "researchCitation": "n04 research-evidence cites de Oliveira, Osorio, Sudak, Abreu, Crippa, Powell, Landeiro & Wenzel (2011), 'Initial psychometric properties of the Cognitive Distortions Questionnaire (CD-Quest)', ABCT 45th Annual Meeting, Toronto: Federal University of Bahia, 184 university students, CD-Quest vs depression (BDI) r=0.65 and anxiety (BAI) r=0.51. It is a CORRELATIONAL study, so the intent's keep rules forbid the causal claim the recording makes ('reducing distortions lowers depression'); mustMention pins the source and the sample.",
+      "manualDivergence": "REPORTED, not silently applied (.claude/rules/tbct-session-manual.md section 8). The RCT prompt manual has no CD-Quest section at all, so the 15-type nodes cite its S01 cognitive-distortions range [145,155], where the 15-type list and the 'never name a distortion for them' rule actually live. Stage 2's CD-Quest scoring has no source range to cite and will be reported the same way. The manual is left unchanged; the proper fix is the research team adding a CD-Quest section, after which artifacts/tbct-source-text.txt is regenerated.",
+      "boundaryCrossed": "src/patient/sessions/s01/cognitive-distortions.ts carried the comment 'Deliberately NOT shared-Runtime content: S02-S08 never import this file'. S02 needs the same 15-type registry, and its order is already exactly the order of the real session. The file is promoted to src/shared/protocol/cognitive-distortions.ts and s01 re-exports it, so every existing S01 import path and test keeps working. The boundary is crossed deliberately and recorded here, not silently.",
+      "scopeWidened2026_09_21": "src/shared/runtime/testing/session-fidelity-fixtures.ts added after the first local run: the synthetic patient had no reply pool for distortionExamples, so it cycled three generic sentences and every fourth pattern was rejected as a duplicate -- the walkthrough stalled and neither the audit nor the local run actually walked all fifteen patterns. Test support only; one additive reply pool.",
+    "pastNotesLeftAlone": "note2026_09_19_s01_task_intents, note2026_09_19_s01_opening_intro and note2026_09_21_s01_closing_recap each list src/patient/sessions/s02/** under doNotTouch. Those entries record the scope of THOSE tasks and are left unchanged -- editing them would falsify what was permitted then. This note carries its own allowedPaths.",
+      "allowedPaths": [
+        ".claude/TASK_SCOPE.json",
+        "src/patient/sessions/s02/**",
+        "src/shared/protocol/cognitive-distortions.ts",
+        "src/patient/sessions/s01/cognitive-distortions.ts",
+        "src/patient/sessions/s01/distortion-table.tsx",
+        "src/shared/api/runtime-execution-api.ts",
+        "src/shared/dialogue-agent/dialogue-contract-compiler.ts",
+        "src/shared/dialogue-agent/task-intent.test.ts",
+        "src/shared/runtime/runtime-release-normalizer.ts",
+        "src/shared/runtime/runtime-context.ts",
+        "src/shared/runtime/session-continuity-bridge.test.ts",
+        "src/shared/worksheet/composed-worksheet-registry.ts",
+        "src/app/preview/worksheets/page.tsx",
+      "src/shared/runtime/testing/session-fidelity-fixtures.ts",
+        "docs/ai/TBCT_SESSION_MAPPING.md",
+        "docs/ai/TBCT_SESSIONS_1_3.md"
+      ],
+      "doNotTouch": [
+        "src/shared/protocol/tbct-source-text.generated.ts",
+        "sql/**",
+        "src/patient/sessions/s01/spec.ts",
+        "src/patient/sessions/s01/messages.ts",
+        "src/patient/sessions/s01/task-intents.ts",
+        "src/patient/sessions/s03/**",
+        "src/patient/sessions/s04/**",
+        "src/patient/sessions/s05/**",
+        "src/patient/sessions/s06/**",
+        "src/patient/sessions/s07/**",
+        "src/patient/sessions/s08/**"
+      ],
+      "whySessionLocalIsInsufficient": {
+        "src/shared/api/runtime-execution-api.ts": "applyS01TurnRules is called behind a hard sessionDefinitionId === 'tbct-s01'. S02 needs its own turn rules for the agenda-consent flow, so the hook becomes a session -> rules registry.",
+        "src/shared/dialogue-agent/dialogue-contract-compiler.ts": "taskIntentFor and stepSpecificGuidanceFor are both gated on the same literal session id. Both become registries so s02/task-intents.ts and s02/dialogue-guidance.ts can be reached. Additive: a session without an entry behaves exactly as before.",
+        "src/shared/runtime/runtime-release-normalizer.ts": "PASSIVE_ACKNOWLEDGMENT_PROMPT_IDS is an exact-id set and 10 of its 11 entries are the S02 prompts being deleted. Without the new ids a participant's bare yes after a passive acknowledgement is rejected as filler.",
+        "src/shared/runtime/runtime-context.ts": "distortionExamples accumulates one entry per distortion type and allDistortionsReviewed drives the repeat_until loop. Field extraction only happens in shared code. Also removes now-dead exact S02 prompt-id references (goal-dream, the two rating-card checks, the discomfort/distress check).",
+        "src/shared/worksheet/composed-worksheet-registry.ts": "PATIENT_COMPOSED_WORKSHEET_SESSIONS holds S01 only; the participant must see the 15-type table fill in. One entry added."
+      },
+      "blastRadius": "S02 end to end -- its spec, wording, worksheet and tests are replaced. Other sessions: the four shared changes are additive registries or exact-id sets, so a session with no registry entry behaves byte-for-byte as before. The protected field names problems/problemRatings/goals/goalRatings stay in the codebase for the clinician progress view, homework UI and score aggregation; S02 simply stops writing them, which leaves those consumers with no S02 data until stage 3.",
+      "knownGapBetweenStages": "Until stage 2, S02 assigns the S01-style homework (keep the 15-type list nearby and add examples) rather than the blank CD-Quest form the recording hands out, and the session ends after the walkthrough. Until stage 3, types/homework.ts still labels tbct-s02 'Check-in' and the clinician progress panel still lists problems/goals for it.",
+      "baseline2026_09_21": "main 47fe283 in ~/Desktop/TBCT: tsc 0 errors; vitest 82 files / 956 tests pass; audit:sessions 8/8 pass, 0 fallbacks (S01 50 participant / 61 program turns).",
+      "regressionPlan": "npx tsc --noEmit; npx vitest run src/patient/sessions/s02; npx vitest run src/shared/dialogue-agent src/shared/runtime src/shared/worksheet; npx vitest run (full, shared files changed); npm run audit:sessions; npx tsx scripts/run-local-session.ts tbct-s02; npm run lint; git diff --stat.",
+      "planFile": "/Users/hyeranhwang/.claude/plans/2-melodic-biscuit.md"
+    }
 }

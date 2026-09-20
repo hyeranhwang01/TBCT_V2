@@ -23,6 +23,7 @@ import { applyConfirmedSummaryToFields, confirmedSummaryKey, confirmedSummaryRec
 import { applyFieldCorrection, confirmedSummariesAfterCorrection } from "@/shared/runtime/field-correction";
 import { findPendingExploration, type PendingExploration } from "@/shared/runtime/conversation-steering";
 import { applyS01TurnRules } from "@/patient/sessions/s01/turn-rules";
+import { applyS02TurnRules } from "@/patient/sessions/s02/turn-rules";
 import { composeCrpPlanSummary } from "@/patient/sessions/s07/messages";
 import { composeTrialClosingSummary } from "@/patient/sessions/s08/messages";
 import type { ClinicalStageNode, PromptItem } from "@/shared/protocol/source-fidelity-types";
@@ -32,7 +33,7 @@ import { reduceRuntimeState } from "@/shared/runtime/runtime-state-reducer";
 import { assertRuntimeTransition } from "@/shared/runtime/runtime-state-machine";
 import { evaluateRuntimeCondition, resolveActiveRuntimeStep } from "@/shared/runtime/runtime-step-resolver";
 import type { ProtocolReleaseVersion } from "@/types/protocol-runtime";
-import type { PatientInput, RuntimeCycleResult, RuntimeMessage, RuntimeSession, RuntimeSessionStatus, RuntimeSessionView, SessionExecutionLog } from "@/types/runtime-session";
+import type { PatientInput, RuntimeCycleResult, RuntimeMessage, RuntimeSession, RuntimeSessionStatus, RuntimeSessionView, SessionExecutionLog, StateExtractionResult } from "@/types/runtime-session";
 
 async function submitPatientInputOnServer(sessionId: string, patientInput: PatientInput, options: { clientTurnId?: string; expectedSessionVersion?: number; locale?: string }): Promise<RuntimeCycleResult> {
   const response = await fetch("/api/runtime/turn", {
@@ -202,28 +203,18 @@ async function deliverClarificationTurn(input: {
         `방금 "저"라고 말씀하셨어요 -- 지금은 ${roleName.ko}(으)로서 피고인에 대해 이야기하시는 중이에요. 3인칭으로 다시 말씀해 주시겠어요?`,
       )
     : undefined;
-  // P1 (Session 2 manual-control recovery): "\uc798 \ubaa8\ub974\uaca0\ub294\ub370 \uc124\uba85\ud574\uc8fc\uc138\uc694" /
-  // "\ubb34\uc2a8\uc9c8\ubb38\uc774\uc694?" at the rating-card question, or during problem/goal
-  // collection, must explain what's actually being asked -- not the
-  // generic "give a short concrete example" fallback (adaptiveClarification
-  // below), which says nothing about scale cards or problems/goals at all.
-  const isS02RatingCardCheck = input.promptItem.id === "tbct-s02-n04-p01-rating-card-check" || input.promptItem.id === "tbct-s02-n08-p01-goal-rating-card-check";
-  const isS02ListCollection = missing.has("problems") || missing.has("goals");
-  const s02ExplanationClarification = (isS02RatingCardCheck || isS02ListCollection) && looksLikeS02ExplanationRequest(input.patientMessage.content)
-    ? isS02RatingCardCheck
-      ? tr(
-          "The rating scale card is a reference sheet for scoring each problem or goal from 0 to 5. It's fine if you don't have it in front of you -- I'll walk you through what each score means right after this.",
-          "\ud3c9\uac00 \ucc99\ub3c4 \uce74\ub4dc\ub294 \ubb38\uc81c\ub098 \ubaa9\ud45c\ub97c 0\uc810\ubd80\ud130 5\uc810\uae4c\uc9c0 \ud3c9\uac00\ud560 \ub54c \ucc38\uace0\ud558\ub294 \uae30\uc900\ud45c\uc608\uc694. \uce74\ub4dc\uac00 \ubc14\ub85c \ubcf4\uc774\uc9c0 \uc54a\uc544\ub3c4 \uad1c\ucc2e\uc544\uc694. \uc81c\uac00 \uac01 \uc810\uc218\uc758 \uc758\ubbf8\ub97c \uc774\uc5b4\uc11c \uc124\uba85\ud574 \ub4dc\ub9b4\uac8c\uc694.",
-        )
-      : missing.has("problems")
-        ? tr(
-            "I'm asking about something in your life right now that feels difficult or that you'd like to change. Just one thing that comes to mind is enough -- no need to think of several at once.",
-            "\uc9c0\uae08 \uc0dd\ud65c\ud558\uba74\uc11c \ud798\ub4e4\uac8c \ub290\uaef4\uc9c0\ub294 \uac83\uc774\ub098 \ubc14\uafb8\uace0 \uc2f6\uc740 \uac83\uc5d0 \ub300\ud574 \uc5ec\uc5b4\ubcf4\ub294 \uac70\uc608\uc694. \ud55c \ubc88\uc5d0 \uc5ec\ub7ec \uac1c\ub97c \ub5a0\uc62c\ub9ac\uc9c0 \uc54a\uc73c\uc154\ub3c4 \ub418\uace0, \uac00\uc7a5 \uba3c\uc800 \uc0dd\uac01\ub098\ub294 \uac83 \ud558\ub098\uba74 \ucda9\ubd84\ud574\uc694.",
-          )
-        : tr(
-            "I'm asking about something you'd like therapy to help you work toward. Just one thing that comes to mind is enough for now.",
-            "\uce58\ub8cc\ub97c \ud1b5\ud574 \uc774\ub8e8\uace0 \uc2f6\uc740 \uac83\uc5d0 \ub300\ud574 \uc5ec\uc5b4\ubcf4\ub294 \uac70\uc608\uc694. \uc9c0\uae08\uc740 \ub5a0\uc624\ub974\ub294 \uac83 \ud558\ub098\ub9cc \ub9d0\uc500\ud574 \uc8fc\uc154\ub3c4 \ub3fc\uc694.",
-          )
+  // "잘 모르겠는데 설명해주세요" / "무슨질문이요?" during S02's fifteen-pattern
+  // walkthrough must explain what is actually being asked -- not the generic
+  // "give a short concrete example" fallback (adaptiveClarification below),
+  // which says nothing about the patterns at all. Retargeted from the CCPH/CCGH
+  // rating-card and problem/goal steps when S02 was redesigned
+  // (.claude/TASK_SCOPE.json note2026_09_21_s02_cognitive_distortions).
+  const isS02Walkthrough = input.promptItem.id === "tbct-s02-n05-p01-review-distortion" || missing.has("distortionExamples");
+  const s02ExplanationClarification = isS02Walkthrough && looksLikeS02ExplanationRequest(input.patientMessage.content)
+    ? tr(
+        "We're going through fifteen common thinking patterns one at a time. For the one we're on, I'm asking whether you've had a thought like that yourself recently -- and if nothing comes to mind for this one, saying so is a complete answer.",
+        "생각이 왜곡될 수 있는 열다섯 가지 패턴을 하나씩 살펴보고 있어요. 지금 보고 있는 패턴에 대해, 최근에 그런 생각을 하신 적이 있는지 여쭤보는 거예요. 떠오르지 않으면 없다고 말씀하시는 것도 온전한 답이에요.",
+      )
     : undefined;
   const sourceSpecificClarification = thirdPersonCorrection ?? s02ExplanationClarification ?? (input.promptItem.id === "tbct-s08-n01-p04-distressing-situation"
     ? missing.has("distressingSituation") && !missing.has("automaticThought")
@@ -567,30 +558,35 @@ async function deliverLanguageSwitchTurn(input: {
 // falls through to the normal extraction/clarification pipeline unchanged).
 const PROCESS_CLARIFICATION_SESSIONS = new Set(["tbct-s01", "tbct-s02", "tbct-s03"]);
 
+// Per-session deterministic turn rules, run once per patient turn right after
+// extractRuntimeState (see the call in submitPatientInput). Was a hard
+// `=== "tbct-s01"` until S02 needed its own rules for the agenda-consent flow
+// and the fifteen-pattern walkthrough
+// (.claude/TASK_SCOPE.json note2026_09_21_s02_cognitive_distortions).
+// A session with no entry here behaves exactly as before: no rules run.
+// The input carries S01's superset of fields; S02's function reads the subset
+// it needs.
+type SessionTurnRulesInput = {
+  extracted: StateExtractionResult;
+  promptItem: PromptItem;
+  rawText: string;
+  locale: string;
+  sessionId: string;
+  turnId: string;
+  clarificationAttemptCount?: number;
+};
+type SessionTurnRulesOutput = { extracted: StateExtractionResult; logs: Array<{ summary: string; output: Record<string, unknown> }> };
+const TURN_RULES_BY_SESSION: Partial<Record<string, (input: SessionTurnRulesInput) => Promise<SessionTurnRulesOutput>>> = {
+  "tbct-s01": applyS01TurnRules,
+  "tbct-s02": applyS02TurnRules,
+};
+
 // Deliberately narrow, like detectLanguageSwitchRequest above: only fires
 // when the entire message is essentially just the clarification request, so
 // a longer message that happens to start with a confused word but also
 // carries real clinical content is never silently short-circuited out of
 // the normal pipeline.
 const PROCESS_CLARIFICATION_MAX_LENGTH = 60;
-
-// CCPH/CCGH scale UX pass: "잘 모르겠어요" / "색깔이 무슨 뜻이에요?" / "4점이랑
-// 5점이 뭐가 달라요?" said in answer to the scale-comprehension check must be
-// treated as a request to re-explain the scale, not an invalid boolean
-// answer -- but this uncertainty phrasing ("잘 모르겠어요") is deliberately
-// NOT added to the general-purpose looksLikeMeaningClarificationRequest
-// above: that function runs for every S01-S03 prompt, and "잘 모르겠어요" is
-// often a genuine, acceptable uncertain clinical answer elsewhere (see
-// FIELDS_ACCEPTING_UNCERTAINTY in runtime-context.ts). Scoped narrowly to
-// the two scale-comprehension prompts instead, where it can only ever mean
-// "I don't understand the scale."
-const SCALE_COMPREHENSION_PROMPT_IDS = new Set(["tbct-s02-n04-p03-discomfort-distress-distinction"]);
-function looksLikeScaleComprehensionUncertainty(normalized: string) {
-  return /^(?:잘\s*)?모르겠어요\??$/.test(normalized) // "(잘) 모르겠어요"
-    || /색(?:깔|상)?이?\s*무슨\s*(?:뜻|의미)/.test(normalized) // "색깔이 무슨 뜻이에요?"
-    || /점(?:이|들이)?\s*무슨\s*(?:뜻|의미)/.test(normalized) // "점이 무슨 뜻이에요?"
-    || /\d\s*점.{0,10}\d\s*점.{0,10}(?:달라|다른가요|차이)/.test(normalized); // "4점이랑 5점이 뭐가 달라요?"
-}
 
 function detectProcessClarificationRequest(sessionDefinitionId: string, rawText: string, activePromptId?: string): "rationale" | "meaning" | null {
   if (!PROCESS_CLARIFICATION_SESSIONS.has(sessionDefinitionId)) return null;
@@ -599,7 +595,6 @@ function detectProcessClarificationRequest(sessionDefinitionId: string, rawText:
   const normalized = normalizeText(trimmed);
   if (looksLikeMetaQuestionAboutTheProcess(normalized)) return "rationale";
   if (looksLikeMeaningClarificationRequest(normalized)) return "meaning";
-  if (activePromptId && SCALE_COMPREHENSION_PROMPT_IDS.has(activePromptId) && looksLikeScaleComprehensionUncertainty(normalized)) return "meaning";
   return null;
 }
 
@@ -1809,10 +1804,11 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
   // fields so this same turn's conditions, worksheet projection and commit
   // all see them. Skipped for a reply to a pending summary check (not an
   // answer to the prompt) and, inside, for any turn carrying risk signals.
-  let s01Rules = initialSession.sessionDefinitionId === "tbct-s01" && !repliesToConversation
-    ? await applyS01TurnRules({ extracted: baseExtracted, promptItem: currentPromptItem, rawText: patientMessage.content, locale: turnLocale, sessionId, turnId: clientTurnId, clarificationAttemptCount: initialSession.runtimeContext.clarificationAttemptCount ?? 0 })
+  const sessionTurnRules = TURN_RULES_BY_SESSION[initialSession.sessionDefinitionId];
+  let turnRules = sessionTurnRules && !repliesToConversation
+    ? await sessionTurnRules({ extracted: baseExtracted, promptItem: currentPromptItem, rawText: patientMessage.content, locale: turnLocale, sessionId, turnId: clientTurnId, clarificationAttemptCount: initialSession.runtimeContext.clarificationAttemptCount ?? 0 })
     : null;
-  let extracted = s01Rules ? s01Rules.extracted : baseExtracted;
+  let extracted = turnRules ? turnRules.extracted : baseExtracted;
   // Off-topic answers (.claude/TASK_SCOPE.json note2026_09_14_off_topic_answers):
   // before a typed answer to a free-text question is stored (worksheet
   // projection just below, the commit further down), Claude checks that it
@@ -1851,10 +1847,10 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
   if (answerRelevance?.checked && answerRelevance.verdict === "stop" && isListAnswer) {
     const stopText = turnLocale.toLowerCase().startsWith("ko") ? "없어요" : "none";
     const stopExtracted = await extractRuntimeState({ patientInput: { kind: "text", value: stopText }, currentNode, currentPromptItem, currentContext: initialSession.runtimeContext, locale: turnLocale, pendingReflectionCheck: false });
-    s01Rules = initialSession.sessionDefinitionId === "tbct-s01"
-      ? await applyS01TurnRules({ extracted: stopExtracted, promptItem: currentPromptItem, rawText: stopText, locale: turnLocale, sessionId, turnId: clientTurnId })
+    turnRules = sessionTurnRules
+      ? await sessionTurnRules({ extracted: stopExtracted, promptItem: currentPromptItem, rawText: stopText, locale: turnLocale, sessionId, turnId: clientTurnId })
       : null;
-    extracted = s01Rules ? s01Rules.extracted : stopExtracted;
+    extracted = turnRules ? turnRules.extracted : stopExtracted;
   }
   // Not an answer at all: small talk (off_topic) or a request to change an
   // earlier answer (correction_request). Neither is stored.
@@ -1932,7 +1928,7 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
   void saveRuntimeLog(makeLog(sessionId, "input", "completed", "Patient input received", { nodeId: currentNode.id, input: { kind: patientInput.kind } })).catch(() => {});
   void saveRuntimeLog(makeLog(sessionId, "state_extraction", "completed", "State extracted", { nodeId: currentNode.id, output: extracted as unknown as Record<string, unknown> })).catch(() => {});
   void saveRuntimeLog(makeLog(sessionId, "safety_check", "completed", safetyResult.triggered ? `Safety triggered: ${safetyResult.action}` : "Safety check passed", { nodeId: currentNode.id, output: safetyResult as unknown as Record<string, unknown> })).catch(() => {});
-  for (const log of s01Rules?.logs ?? []) void saveRuntimeLog(makeLog(sessionId, "language_generation", "completed", log.summary, { nodeId: currentNode.id, output: log.output })).catch(() => {});
+  for (const log of turnRules?.logs ?? []) void saveRuntimeLog(makeLog(sessionId, "language_generation", "completed", log.summary, { nodeId: currentNode.id, output: log.output })).catch(() => {});
   if (extracted.riskSignals.includes("ambiguous_safety_language") && !safetyResult.triggered) {
     const clarification = await deliverClarificationTurn({ session, node: currentNode, promptItem: currentPromptItem, runtimePromptItem: activeStep.promptItem, release: view.release, runtimeState, patientMessage, reason: "safety_clarification", missingFields: extracted.missingFields, recentAssistantMessages: view.messages.filter((message) => message.role === "assistant").map((message) => message.content) });
     void saveRuntimeLog(makeLog(sessionId, "safety_check", "completed", "Ambiguous safety language requires neutral clarification", { nodeId: currentNode.id, output: { signals: extracted.riskSignals } })).catch(() => {});

@@ -421,17 +421,16 @@ const IMMEDIATE_COMPLETION_EFFECTS = new Set(["pause_session", "complete_session
 // example. tbct-s03-n11-p03-full-conclusion-readback is NOT listed here: it
 // is a real yes/no question that was missing validation.kind: "boolean",
 // fixed at its own declaration in s03.ts instead.
+// The ten S02 entries this set used to carry were the CCPH/CCGH prompts, all
+// removed with that session (.claude/TASK_SCOPE.json
+// note2026_09_21_s02_cognitive_distortions). The redesigned S02 needs none:
+// every one of its statements that asks nothing is typed `explanation`,
+// `closing`, `worksheet_instruction` or `instruction`, which already fall
+// through the PASSIVE_PROMPT_TYPES branch below, so no exact id is required.
+// Keep it that way -- a `confirmation`- or `reflection`-typed statement added
+// to any session must be listed here or the participant's bare "네" after it is
+// rejected as filler.
 const PASSIVE_ACKNOWLEDGMENT_PROMPT_IDS = new Set([
-  "tbct-s02-n11-p02-recorded-summary",
-  "tbct-s02-n02-p06-problem-confirmation",
-  "tbct-s02-n03-p02-acknowledge-private-placeholder",
-  "tbct-s02-n07-p07-goal-confirmation",
-  "tbct-s02-n05-p02-acknowledge-distress",
-  "tbct-s02-n05-p03-acknowledge-manageable",
-  "tbct-s02-n06-p02-problem-total-personal",
-  "tbct-s02-n09-p02-acknowledge-difficult-goal",
-  "tbct-s02-n09-p03-acknowledge-achieved-goal",
-  "tbct-s02-n10-p02-goal-total-personal",
   "tbct-s03-n08-p04-cycle-note",
 ]);
 

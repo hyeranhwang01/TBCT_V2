@@ -19,6 +19,28 @@ const SUM_TO_100_PAIR_KINDS = new Set(["consensus_weights"]);
 // a real patient repeating themselves turn after turn, which is exactly
 // the fidelity-check noise this fixture exists to avoid.
 const CONTENT_POOLS: Array<{ pattern: RegExp; replies: string[] }> = [
+  // S02's fifteen-pattern walkthrough asks once per pattern
+  // (note2026_09_21_s02_cognitive_distortions), so it needs fifteen DISTINCT
+  // replies: the generic fallback cycles three sentences, and isDuplicateListEntry
+  // rejects the repeats, which stalled the loop from the fourth pattern on.
+  // First in the list because /problem/i and /emotion/i would otherwise match it.
+  { pattern: /distortionExamples/i, replies: [
+    "I decided one slip meant the whole thing was ruined.",
+    "I was sure the presentation would go badly and I would never recover.",
+    "When the feedback was good I told myself they were only being polite.",
+    "I felt uneasy, so I took that as proof something bad was coming.",
+    "I called myself hopeless after one mistake.",
+    "One small error felt huge and the rest of the work felt like nothing.",
+    "I kept replaying the one critical sentence and forgot the rest.",
+    "I assumed they were thinking I was not competent.",
+    "One cold reply meant they are always like that with me.",
+    "The clerk seemed annoyed and I took it as being about me.",
+    "I told myself everything has to be perfect, no matter what.",
+    "They did not reply for a day, so I concluded they were done with me.",
+    "When the project slipped I decided it was entirely my fault.",
+    "What if I get there and cannot do any of it?",
+    "Next to someone further along, my own work looks like nothing.",
+  ] },
   { pattern: /situation/i, replies: [
     "My manager criticized my report in front of the whole team yesterday.",
     "My partner sent a text saying we needed to talk, and I started spiraling.",

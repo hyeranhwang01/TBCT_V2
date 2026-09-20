@@ -91,11 +91,23 @@ describe("the contract", () => {
     expect(compile("tbct-s01", "-first-emotion").taskIntent?.mustMention).toEqual([]);
   });
 
-  it("has no intent in other sessions, or when switched off", () => {
-    const s02 = CANONICAL_PROMPT_ITEMS.find((item) => item.sessionId === "tbct-s02" && item.outputFields.length > 0);
-    expect(compile("tbct-s02", s02!.id).taskIntent).toBeUndefined();
+  // S02 got the same treatment on 2026-09-21
+  // (note2026_09_21_s02_cognitive_distortions), so it has intents too; the
+  // registry in dialogue-contract-compiler.ts is what both go through.
+  it("reaches S02 through the same registry", () => {
+    const intent = compile("tbct-s02", "-homework-update").taskIntent;
+    expect(intent?.obtain).toContain("practice");
+    expect(intent?.asksParticipant).toBe(true);
+  });
+
+  it("has no intent in a session without an entry, or when switched off", () => {
+    // S03 has no task intents, so its turns stay grounded on the approved sentence.
+    const s03 = CANONICAL_PROMPT_ITEMS.find((item) => item.sessionId === "tbct-s03" && item.outputFields.length > 0);
+    expect(compile("tbct-s03", s03!.id).taskIntent).toBeUndefined();
     vi.stubEnv("S01_TASK_INTENTS", "off");
     expect(compile("tbct-s01", "-first-emotion-intensity").taskIntent).toBeUndefined();
+    vi.stubEnv("S02_TASK_INTENTS", "off");
+    expect(compile("tbct-s02", "-homework-update").taskIntent).toBeUndefined();
   });
 });
 
