@@ -406,7 +406,10 @@ class AnthropicAssessmentModel extends BaseAssessmentModel {
       body: JSON.stringify({
         model: this.model,
         max_tokens: 700,
-        temperature: 0,
+        // No temperature. The other providers pin it to 0 for determinism, but
+        // the current Claude models reject the parameter outright -- "`temperature`
+        // is deprecated for this model" -- and every assessment call 400'd
+        // because of it. The dialogue agent has never sent one either.
         system: systemInstruction(),
         messages: [{ role: "user", content: JSON.stringify(payload) }],
         tools: [{ name: "submit_assessment", description: "Submit the structured assessment of this patient input.", input_schema: schema }],

@@ -80,8 +80,10 @@ describe("the Anthropic assessment provider", () => {
     expect(url).toBe("https://api.anthropic.com/v1/messages");
     const body = JSON.parse((init as { body: string }).body);
     expect(body.tool_choice).toEqual({ type: "tool", name: "submit_assessment", disable_parallel_tool_use: true });
-    expect(body.temperature).toBe(0);
     expect(body.model).toBe("claude-test");
+    // No temperature: the current Claude models reject the parameter, and
+    // sending it 400'd every assessment call in production.
+    expect(body).not.toHaveProperty("temperature");
   });
 
   it("redacts the patient's words before they leave, unless that is switched off", async () => {
