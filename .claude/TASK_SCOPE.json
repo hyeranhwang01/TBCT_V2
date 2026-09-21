@@ -1,4 +1,15 @@
 {
+  "note2026_09_21_anthropic_assessment_provider": {
+    "task": "The semantic gate had no model behind it in production, so \"네 있었어요\" was still filed as a cognitive-distortion example after the gate was supposedly restored.",
+    "finding": "ASSESSMENT_PROVIDER defaults to \"deterministic\" and the providers on offer were groq / ollama / gemini -- none of which is configured on the deployment, which carries ANTHROPIC_API_KEY only. So every answer was judged by DeterministicAssessmentModel: nonAnswer = an eleven-word English stop list, valid = !nonAnswer && length > 1. \"네 이썼어요\" passes both. Restoring the collection path (note2026_09_21_s02_model_judges_the_answer) moved the decision from my keyword list to a shared keyword list; it never reached a model. The dialogue agent was fine throughout -- it asked for the detail correctly -- because that is a different model call on a different key.",
+    "fix": "AnthropicAssessmentModel in assessment-providers.ts, selected by ASSESSMENT_PROVIDER=anthropic, reading ANTHROPIC_API_KEY / ANTHROPIC_MODEL.",
+    "whyAnthropicAndNotAKey": "Chosen over configuring Groq or Gemini because the participant's sentence already goes to Anthropic on every turn to be phrased. No new recipient of patient text, no new credential, and nothing new for the study's ethics paperwork to cover.",
+    "structuredOutput": "A forced tool call, like the dialogue agent. The Messages API has no JSON-schema response format, and parsing prose for JSON is how markup reached a participant once already (note2026_09_21_structured_output_leak). A truncated or unstructured reply throws rather than being read as an answer.",
+    "cloudSwitchRespected": "allowCloudPatientAssessment is honoured, not waived, even though this vendor already sees the text -- it is a deliberate switch and not mine to weaken. That makes ALLOW_CLOUD_PATIENT_ASSESSMENT=true a second required variable; without it every walkthrough answer throws, and assessRuntimePatientInput fails CLOSED, so the step would re-ask forever. Set both or neither.",
+    "unchangedByDefault": "ASSESSMENT_PROVIDER unset still selects deterministic, so nothing changes until the deployment is switched over. Pinned by a test.",
+    "stillOpen": "DeterministicAssessmentModel remains an English stop list and is still the fallback whenever the provider fails. It would accept \"네 있었어요\" again. Hardening it was the other half of the recommendation and has not been done.",
+    "allowedPaths": [".claude/TASK_SCOPE.json", "src/shared/assessment/**"]
+  },
   "note2026_09_21_s02_ask_for_the_moment": {
     "task": "The walkthrough asked a yes/no question and stored the answer as a list item. Reworded to ask for the moment itself.",
     "why": "\"최근에 이런 생각을 하신 적이 있으신가요? 떠오르지 않으면 없다고 말씀해 주셔도 괜찮아요\" invites \"네 있었어요\" -- and the way-out sentence at the end hands them the mirror of itself. The shape of the question and what the answer gets stored as did not match. The model-judged gate (note2026_09_21_s02_model_judges_the_answer) handles it when it happens; this removes a cause.",

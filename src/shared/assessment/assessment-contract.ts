@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const assessmentProviderNames = ["groq", "ollama", "gemini", "deterministic"] as const;
+export const assessmentProviderNames = ["anthropic", "groq", "ollama", "gemini", "deterministic"] as const;
 export type AssessmentProviderName = typeof assessmentProviderNames[number];
 
 export const assessmentRequestSchema = z.object({

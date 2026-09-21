@@ -356,10 +356,89 @@ class GeminiAssessmentModel extends BaseAssessmentModel {
   protected async invoke(request: AssessmentRequest) { const config = getAssessmentConfig(); if (!config.allowCloudPatientAssessment) throw new Error("Cloud patient assessment is disabled; select Ollama or deterministic processing."); const health = await this.healthCheck(); if (!health.ok) throw new Error(health.message); const started = performance.now(); const body = { systemInstruction: { parts: [{ text: systemInstruction() }] }, contents: [{ role: "user", parts: [{ text: JSON.stringify(config.redactCloudInput ? safeRequest(request) : request) }] }], generationConfig: { temperature: 0, responseMimeType: "application/json", responseJsonSchema: schema } }; const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(this.model)}:generateContent?key=${this.apiKey}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }); if (!r.ok) throw new Error(`Gemini assessment failed (${r.status})`); const json = await r.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>; usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number } }; const text = json.candidates?.[0]?.content?.parts?.[0]?.text; if (!text) throw new Error("Gemini returned no JSON content"); return { data: JSON.parse(text), usage: { prompt_tokens: json.usageMetadata?.promptTokenCount, completion_tokens: json.usageMetadata?.candidatesTokenCount, total_tokens: json.usageMetadata?.totalTokenCount }, latencyMs: Math.round(performance.now() - started) }; }
 }
 
+/**
+ * The semantic gate, run on the model the session is already talking to.
+ *
+ * Added 2026-09-21 (note2026_09_21_anthropic_assessment_provider). Everything
+ * downstream was written as "the model decides whether this is a real answer",
+ * but with no ASSESSMENT_PROVIDER configured that decision fell to
+ * DeterministicAssessmentModel below -- an eleven-word English stop list -- so a
+ * Korean "네 있었어요" was filed as somebody's cognitive-distortion example while
+ * the guide was, correctly, asking them what the example actually was.
+ *
+ * Anthropic rather than a second vendor: the participant's sentence is already
+ * sent there on every turn to be phrased (anthropic-dialogue-agent.ts), so this
+ * adds no new recipient of patient text and no new credential. It reuses
+ * ANTHROPIC_API_KEY / ANTHROPIC_MODEL.
+ *
+ * Structured output through a forced tool call, the same way the dialogue agent
+ * gets its decision -- the Messages API has no JSON-schema response format, and
+ * parsing prose for JSON is how malformed markup reached a participant once
+ * already.
+ */
+class AnthropicAssessmentModel extends BaseAssessmentModel {
+  constructor(private readonly apiKey: string, private readonly model: string) { super(); }
+
+  getProviderMetadata(): AssessmentProviderMetadata {
+    return { provider: "anthropic", model: this.model || undefined, privacyBoundary: "cloud" };
+  }
+
+  async healthCheck(): Promise<AssessmentProviderHealth> {
+    if (!this.apiKey || !this.model) {
+      return { ok: false, provider: "anthropic", model: this.model || undefined, message: "ANTHROPIC_API_KEY and ANTHROPIC_MODEL are required" };
+    }
+    return { ok: true, provider: "anthropic", model: this.model };
+  }
+
+  protected async invoke(request: AssessmentRequest) {
+    const config = getAssessmentConfig();
+    // Same gate the other cloud providers respect. It is a deliberate switch,
+    // so it is not waived here just because this vendor already sees the text.
+    if (!config.allowCloudPatientAssessment) throw new Error("Cloud patient assessment is disabled; select Ollama or deterministic processing.");
+    const health = await this.healthCheck();
+    if (!health.ok) throw new Error(health.message);
+    const started = performance.now();
+    const payload = config.redactCloudInput ? safeRequest(request) : request;
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      signal: AbortSignal.timeout(Math.min(8000, Math.max(1000, Number(process.env.ASSESSMENT_TIMEOUT_MS ?? 6000)))),
+      headers: { "content-type": "application/json", "x-api-key": this.apiKey, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({
+        model: this.model,
+        max_tokens: 700,
+        temperature: 0,
+        system: systemInstruction(),
+        messages: [{ role: "user", content: JSON.stringify(payload) }],
+        tools: [{ name: "submit_assessment", description: "Submit the structured assessment of this patient input.", input_schema: schema }],
+        tool_choice: { type: "tool", name: "submit_assessment", disable_parallel_tool_use: true },
+      }),
+    });
+    if (!response.ok) throw new Error(`Anthropic assessment failed (${response.status})`);
+    const json = await response.json() as {
+      content?: Array<{ type?: string; name?: string; input?: unknown }>;
+      stop_reason?: string;
+      usage?: { input_tokens?: number; output_tokens?: number };
+    };
+    if (json.stop_reason === "max_tokens") throw new Error("Anthropic assessment truncated (stop_reason=max_tokens)");
+    const toolInput = json.content?.find((item) => item.type === "tool_use" && item.name === "submit_assessment")?.input;
+    if (!toolInput) throw new Error(`Anthropic returned no structured assessment (stop_reason=${json.stop_reason ?? "unknown"})`);
+    return {
+      data: toolInput,
+      usage: {
+        prompt_tokens: json.usage?.input_tokens,
+        completion_tokens: json.usage?.output_tokens,
+        total_tokens: json.usage?.input_tokens !== undefined && json.usage.output_tokens !== undefined ? json.usage.input_tokens + json.usage.output_tokens : undefined,
+      },
+      latencyMs: Math.round(performance.now() - started),
+    };
+  }
+}
+
 let cached: AssessmentModel | undefined;
 export function getAssessmentModel(): AssessmentModel {
   if (cached) return cached; const config = getAssessmentConfig();
-  if (config.provider === "groq") cached = new OpenAICompatibleAssessmentModel("groq", "https://api.groq.com/openai/v1", config.groq.apiKey, config.groq.model);
+  if (config.provider === "anthropic") cached = new AnthropicAssessmentModel(config.anthropic.apiKey, config.anthropic.model);
+  else if (config.provider === "groq") cached = new OpenAICompatibleAssessmentModel("groq", "https://api.groq.com/openai/v1", config.groq.apiKey, config.groq.model);
   else if (config.provider === "ollama") cached = new OpenAICompatibleAssessmentModel("ollama", `${config.ollama.baseUrl.replace(/\/$/, "")}/v1`, "", config.ollama.model);
   else if (config.provider === "gemini") cached = new GeminiAssessmentModel(config.gemini.apiKey, config.gemini.model);
   else cached = new DeterministicAssessmentModel();
