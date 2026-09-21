@@ -364,7 +364,13 @@ function walkthroughDiscussIntent(index: number, fields: Record<string, unknown>
         `Point to the part of what THEY said that this pattern shows up in, and say in one line why that part is out of balance -- what actually happened, and what they concluded from it. If the pattern does not really show in what they said, say that instead.`,
     keep: [
       `Talk about this pattern only: ${name}. Do not introduce the next pattern in this turn.`,
-      "Use their own words for the part you point at, and put it as something they can agree or disagree with, never as a verdict.",
+      // The counselor does not read a thin example -- he collects the detail
+      // first. At 578-596 he asks how many times, then what was said, then
+      // "그런데 늘 그런 건 아니죠?", and only then names it. Asked to find the
+      // pattern in whatever is in front of it, a model finds one anyway, which
+      // is the documented failure of this prompting shape.
+      "If you cannot see the part where this pattern shows, do not guess at one. Ask a single question that would give you that detail -- what actually happened, or what went through their mind right then -- and read it on a later turn.",
+      "Use their own words for the part you point at, and put it as something they can agree or disagree with, never as a verdict: say what you see and ask whether it feels that way to them.",
       "Offer a reading once. If they do not see it, take that and let it go -- never argue them into it.",
       "You may say that other patterns show through in the same example, and that one example can belong to several at once. Never say it belongs to a different pattern instead of this one, and never move it: the row stays where they put it.",
       "If a different example of THEIR OWN would fit this pattern better, you may say so and ask for it. You never supply one yourself.",

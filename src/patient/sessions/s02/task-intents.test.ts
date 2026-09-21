@@ -104,6 +104,17 @@ describe("S02 task intents", () => {
       expect(resolved.obtain).toContain("예시 15");
     });
 
+    // Prompt-level only: this is an instruction Claude receives, not a gate.
+    // The test pins that it reaches the contract, which is as far as an offline
+    // test can go -- whether it is followed shows only in a live session.
+    it("tells the guide to collect the missing detail instead of guessing at one", () => {
+      const resolved = discussing(1);
+      expect(resolved.keep.join(" ")).toMatch(/cannot see the part|do not guess/i);
+      expect(resolved.keep.join(" ")).toMatch(/single question/i);
+      // And when it can point at it, the reading is offered, not pronounced.
+      expect(resolved.keep.join(" ")).toMatch(/ask whether it feels that way/i);
+    });
+
     it("gives the guide a way out when the pattern does not show in what they said", () => {
       expect(discussing(1).obtain).toMatch(/does not really show|say that instead/i);
     });

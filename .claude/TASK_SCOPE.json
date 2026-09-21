@@ -1,4 +1,13 @@
 {
+  "note2026_09_21_ask_before_reading": {
+    "task": "The discussion turn read every example, however thin it was. It now collects the missing detail first when it cannot see where the pattern shows.",
+    "promptOnly": "Two keep lines in walkthroughDiscussIntent, nothing else. The user asked for the prompt first and no code. This is an instruction, not a guarantee -- the same layer that already failed once, when the catastrophizing turn dropped half its definition despite that definition being in the prompt.",
+    "whyThePromptIsTheRightLayerHere": "Whether an example is thin enough to need a question is the judgement the model exists for. Code could only approximate it by length, which is what addsSomethingNew already does and is the weakest part of that design. The choice is 'instruct it' or 'do not do it', not 'code it precisely'.",
+    "notExplorationOnPurpose": "conversationMove: explore would be the obvious mechanism and is wrong here. MAX_EXPLORATION_TURNS_PER_SESSION is 6, counted over the whole session (recentMessages is view.messages, not a window), and the walkthrough alone has fifteen patterns. It would work six times and then REJECT the turn (exploration_not_held) and ship the approved text, which is worse than never doing it. The discussion turn already asks and waits, so the question is simply the turn's own question, conversationMove advance, no budget involved and no shared file touched. Note explorationTurnsInStep is hardcoded to 0 in runtime-orchestrator.ts, so the per-step cap never binds.",
+    "knownGap": "s02/turn-rules.ts decides how long a discussion runs from the length of the reply, so a question the guide asks can be answered and then cut off as the loop moves to the next pattern. The fix discussed was to hold one more turn when the previous discussion turn ended in a question; deferred at the user's request until the prompt alone is seen in a live session.",
+    "verificationLimit": "Offline this can only be pinned as 'the instruction reaches the contract'. Whether it is followed shows only in a live session.",
+    "allowedPaths": [".claude/TASK_SCOPE.json", "src/patient/sessions/s02/**"]
+  },
   "note2026_09_21_distortion_definitions_audit": {
     "task": "All fifteen registry definitions checked line by line against the recorded second session, after the catastrophizing turn came out missing its point.",
     "result": "Nine matched. One real omission and four partial ones, all amended. The rest of the audit is recorded here so it does not have to be redone.",
