@@ -409,11 +409,16 @@ function scoringIntent(fields: Record<string, unknown>, korean: boolean): S02Tas
   const distortion = COGNITIVE_DISTORTIONS[index];
   const name = korean ? distortion.nameKo : distortion.nameEn[0];
   return {
-    obtain: `For pattern ${index + 1} of 15, "${name}": how often it came up this past week, and how strongly they believed it at the moment it happened.`,
+    obtain: `For pattern ${index + 1} of 15, "${name}": what it scores. The grid is on their screen beside the conversation, so they can read the score off it themselves -- ask what they make it, and take either the score or the two halves it is made of.`,
     keep: [
       `Name this pattern, and only this pattern: ${name}.`,
-      "Ask for both halves in one turn. If they give only one of them, ask for the other one alone next time -- never re-ask the half you already have.",
-      "Never decide the score yourself. If they state a score outright, take it.",
+      // The recording's counselor put the form up and pointed at it -- "요
+      // 매트릭스에 의해서" (985) -- and she answered "2점인 것 같아요" as often as
+      // she gave the two halves. Reciting six bands every turn for fifteen
+      // patterns is what made this read as a questionnaire.
+      "The grid is on screen, so point at it rather than reciting the bands: ask what they would make this one. Do not list all six bands again -- the step before this explained them.",
+      "Take whichever they give: a score, or how often plus how strongly. If only one half arrives, ask for the other one alone -- never re-ask the half you already have.",
+      "Never decide the score yourself.",
       "Do not read their example for this pattern back to them, and do not comment on what the score says about them.",
       "If it did not come up at all this week, that is a score of 0 and a complete answer.",
     ],

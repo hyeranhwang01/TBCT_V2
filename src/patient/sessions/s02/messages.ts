@@ -109,10 +109,13 @@ function composeScoreDistortion(fields: Record<string, unknown>, isKorean: boole
   const index = Math.min(scored, COGNITIVE_DISTORTIONS.length - 1);
   const distortion = COGNITIVE_DISTORTIONS[index];
   const ordinal = index + 1;
+  // Points at the grid beside the conversation rather than reciting six bands
+  // fifteen times over, which is how the recording ran it (985) and what the
+  // participant answered from.
   if (isKorean) {
-    return `${ordinal}번째, '${distortion.nameKo}'입니다. 지난 한 주 동안 이런 생각이 얼마나 자주 있었나요 — 한두 번, 3~5일, 아니면 6~7일 정도였을까요? 그리고 그럴 때 그 생각을 얼마나 믿었나요 — 약간(30% 이하), 꽤(31~70%), 아주 강하게(70% 이상) 중에서요.`;
+    return `${ordinal}번째, '${distortion.nameKo}'입니다. 옆의 점수판을 보시고, 지난 한 주 기준으로 몇 점쯤 될 것 같으세요? 점수로 말씀하셔도 되고, 며칠 정도였고 얼마나 믿었는지로 말씀하셔도 괜찮아요.`;
   }
-  return `Pattern ${ordinal}, "${distortion.nameEn[0]}". How often did this come up over the past week -- once or twice, three to five days, or six to seven days? And how strongly did you believe it at the time -- a little (up to 30%), quite strongly (31-70%), or very strongly (over 70%)?`;
+  return `Pattern ${ordinal}, "${distortion.nameEn[0]}". Looking at the grid beside this, what would you make it for this past week? A score is fine, and so is telling me how often and how strongly.`;
 }
 
 /** The total, spoken not asked. s02/turn-rules.ts wrote cdQuestTotal when the

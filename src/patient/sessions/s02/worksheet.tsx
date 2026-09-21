@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button, textareaClass } from "@/shared/components/ui/primitives";
 import { ScoreChip, SessionSignals } from "@/patient/components/worksheet-renderers/shared";
 import { COGNITIVE_DISTORTIONS } from "@/shared/protocol/cognitive-distortions";
-import { NO_EXAMPLE_MARKER } from "@/patient/sessions/s02/turn-rules";
+import { NO_EXAMPLE_MARKER, cdQuestScore, type CdQuestGrade } from "@/patient/sessions/s02/turn-rules";
 import type { WorksheetFieldView, WorksheetView } from "@/types/worksheet";
 
 // Session 2's worksheet: the Cognitive Distortions List (book appendix Table
@@ -39,6 +39,76 @@ const FREQUENCY_LABELS = ["—", "1–2일", "3–5일", "6–7일"] as const;
 const FREQUENCY_LABELS_EN = ["—", "1-2 days", "3-5 days", "6-7 days"] as const;
 const INTENSITY_LABELS = ["—", "약간", "꽤", "아주 강함"] as const;
 const INTENSITY_LABELS_EN = ["—", "a little", "quite", "very much"] as const;
+
+/** The steps that introduce the grid, so it is on screen while it is explained. */
+const CDQUEST_INTRO_FIELDS = new Set(["cdQuestScalePresented", "cdQuestScaleUnderstood"]);
+
+const FREQUENCY_COLUMNS = [
+  { grade: 0 as CdQuestGrade, ko: "없었음", en: "Not at all" },
+  { grade: 1 as CdQuestGrade, ko: "1~2일", en: "1-2 days" },
+  { grade: 2 as CdQuestGrade, ko: "3~5일", en: "3-5 days" },
+  { grade: 3 as CdQuestGrade, ko: "6~7일", en: "6-7 days" },
+];
+const INTENSITY_ROWS = [
+  { grade: 1 as CdQuestGrade, ko: "약간 (30% 이하)", en: "A little (up to 30%)" },
+  { grade: 2 as CdQuestGrade, ko: "꽤 (31~70%)", en: "Quite (31-70%)" },
+  { grade: 3 as CdQuestGrade, ko: "아주 강하게 (70% 넘게)", en: "Very much (over 70%)" },
+];
+
+/**
+ * The CD-Quest matrix, on screen while the scoring runs.
+ *
+ * In the recording the counselor put the form up and pointed at it -- "요
+ * 매트릭스에 의해서" (985) -- and the participant then read her own score off it,
+ * answering "2점인 것 같아요" as often as she gave the two halves. Reading a
+ * number off a visible table is a different, easier task than holding six bands
+ * in your head while someone recites them.
+ *
+ * Cell values come from cdQuestScore, never from a literal table here, so the
+ * grid a participant reads and the arithmetic the session records cannot drift
+ * apart.
+ */
+function CdQuestGrid({ korean }: { korean: boolean }) {
+  return (
+    <div className="rounded-panel border border-border bg-surface p-3 sm:p-4" data-testid="s02-cdquest-grid">
+      <div className="text-sm font-semibold text-text-primary">{korean ? "점수판" : "How the score works"}</div>
+      <p className="mt-0.5 text-xs text-text-secondary">
+        {korean ? "지난 한 주 기준으로, 얼마나 자주 있었는지와 그때 얼마나 믿었는지가 만나는 칸이 그 유형의 점수예요." : "Where how often it came up this past week meets how strongly you believed it, that cell is the score."}
+      </p>
+      <div className="mt-2 overflow-x-auto">
+        <table className="w-full min-w-[320px] border-collapse text-center text-xs">
+          <caption className="sr-only">{korean ? "빈도와 강도로 점수를 정하는 표" : "Score by frequency and intensity"}</caption>
+          <thead>
+            <tr>
+              <th scope="col" className="p-1.5 text-left font-semibold text-text-muted">
+                {korean ? "강도 ＼ 빈도" : "Strength ＼ How often"}
+              </th>
+              {FREQUENCY_COLUMNS.map((column) => (
+                <th key={column.grade} scope="col" className="p-1.5 font-semibold text-text-secondary">
+                  {korean ? column.ko : column.en}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {INTENSITY_ROWS.map((row) => (
+              <tr key={row.grade} className="border-t border-border">
+                <th scope="row" className="p-1.5 text-left font-medium text-text-secondary">
+                  {korean ? row.ko : row.en}
+                </th>
+                {FREQUENCY_COLUMNS.map((column) => (
+                  <td key={column.grade} className="p-1.5">
+                    <ScoreChip score={cdQuestScore(column.grade, row.grade)} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 function rowsOf(field?: WorksheetFieldView): string[] {
   const value = field?.value?.value;
@@ -76,8 +146,16 @@ export function S02Worksheet({
   // The two halves the score was built from.
   const frequencies = numbersOf(view.fields.find((item) => item.binding.canonicalFieldKey === "cdQuestFrequency"));
   const intensities = numbersOf(view.fields.find((item) => item.binding.canonicalFieldKey === "cdQuestIntensity"));
-  const active = activeCanonicalFieldKey === "distortionExamples";
-  const scoringActive = activeCanonicalFieldKey === "cdQuestScores";
+  // The active key is the PROMPT's output field (patient-session-page.tsx), and
+  // both loops answer into a scratch scalar rather than into the list they build
+  // -- so the list's own name never appears here and both pointers have to match
+  // the scratch name too.
+  const active = activeCanonicalFieldKey === "distortionExamples" || activeCanonicalFieldKey === "distortionTurnAnswer";
+  const scoringActive = activeCanonicalFieldKey === "cdQuestScores" || activeCanonicalFieldKey === "cdQuestItemScore";
+  // The grid comes out when it is about to be used, as it did in the recording
+  // at 43:00 -- not during the walkthrough, where it would be one more thing to
+  // read while trying to think of an example.
+  const gridVisible = scoringActive || scores.length > 0 || CDQUEST_INTRO_FIELDS.has(activeCanonicalFieldKey ?? "");
   // The pattern currently being asked about: the row after the last stored one.
   // During scoring the pointer follows the scores instead of the examples.
   const currentIndex = Math.min(scoringActive ? scores.length : rows.length, COGNITIVE_DISTORTIONS.length - 1);
@@ -102,6 +180,7 @@ export function S02Worksheet({
           { label: korean ? "총점" : "Total", value: totalField?.value?.displayValue ?? "—" },
         ]}
       />
+      {gridVisible && <CdQuestGrid korean={korean} />}
       <div className={`rounded-panel border p-3 sm:p-4 transition ${active ? "ring-2 ring-clinical-blue border-clinical-blue" : "border-border bg-surface"}`}>
         <div className="mb-3 text-sm font-semibold text-text-primary">{korean ? "인지왜곡 목록과 내 예시" : "Cognitive distortions and my examples"}</div>
         <ol className="space-y-2" data-testid="s02-distortion-rows">

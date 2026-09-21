@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { COGNITIVE_DISTORTIONS } from "@/shared/protocol/cognitive-distortions";
+import { cdQuestScore } from "@/patient/sessions/s02/turn-rules";
 import { S02Worksheet } from "@/patient/sessions/s02/worksheet";
 import { NO_EXAMPLE_MARKER } from "@/patient/sessions/s02/turn-rules";
 import { TBCT_S02_BINDINGS } from "@/patient/sessions/s02/worksheet-binding";
@@ -126,6 +127,56 @@ describe("S02 worksheet", () => {
     renderWorksheet(Array.from({ length: 15 }, (_, index) => `예시 ${index + 1}`), { activeCanonicalFieldKey: "cdQuestScores" }, { cdQuestScores: [2, 2, 2] });
     expect(screen.getByTestId("s02-distortion-row-4")).toHaveAttribute("aria-current", "step");
     expect(screen.getByTestId("s02-distortion-row-3")).not.toHaveAttribute("aria-current");
+  });
+
+  // ------------------------------------------------------------ the grid
+  //
+  // In the recording the counselor put the form up and pointed at it -- "요
+  // 매트릭스에 의해서" (985) -- and the participant read her own score off it,
+  // answering "2점인 것 같아요" as often as she gave the two halves.
+
+  it("puts the grid on screen while the scoring runs, and not before", () => {
+    renderWorksheet(["예시 하나"]);
+    expect(screen.queryByTestId("s02-cdquest-grid")).toBeNull();
+    cleanup();
+
+    // From the step that explains it onward.
+    renderWorksheet(["예시 하나"], { activeCanonicalFieldKey: "cdQuestScalePresented" });
+    expect(screen.getByTestId("s02-cdquest-grid")).toBeInTheDocument();
+    cleanup();
+
+    renderWorksheet(["예시 하나"], { activeCanonicalFieldKey: "cdQuestItemScore" });
+    expect(screen.getByTestId("s02-cdquest-grid")).toBeInTheDocument();
+  });
+
+  it("stays on screen once there are scores to read it against", () => {
+    renderWorksheet(["예시 하나"], {}, { cdQuestScores: [2] });
+    expect(screen.getByTestId("s02-cdquest-grid")).toBeInTheDocument();
+  });
+
+  // The cells come from cdQuestScore rather than a table typed out here, so what
+  // the participant reads and what the session records cannot drift apart.
+  it("shows every cell of the book's matrix, from the same arithmetic the session uses", () => {
+    renderWorksheet(["예시 하나"], { activeCanonicalFieldKey: "cdQuestItemScore" });
+    const grid = screen.getByTestId("s02-cdquest-grid");
+    const cells = within(grid).getAllByText(/^[0-5]$/).map((node) => node.textContent);
+    const expected: string[] = [];
+    for (const intensity of [1, 2, 3] as const) for (const frequency of [0, 1, 2, 3] as const) expected.push(String(cdQuestScore(frequency, intensity)));
+    expect(cells).toEqual(expected);
+    // Both axes are labelled, so the reader knows which way round it is.
+    expect(grid.textContent).toContain("3~5일");
+    expect(grid.textContent).toContain("꽤 (31~70%)");
+  });
+
+  // The active key is the PROMPT's output field, and both loops answer into a
+  // scratch scalar -- so matching only the list's name left both pointers dead.
+  it("marks the current row from the scratch field the loops actually answer into", () => {
+    renderWorksheet(["첫 번째 예시"], { activeCanonicalFieldKey: "distortionTurnAnswer" });
+    expect(screen.getByTestId("s02-distortion-row-2")).toHaveAttribute("aria-current", "step");
+    cleanup();
+
+    renderWorksheet(Array.from({ length: 15 }, (_, index) => `예시 ${index + 1}`), { activeCanonicalFieldKey: "cdQuestItemScore" }, { cdQuestScores: [2, 2, 2] });
+    expect(screen.getByTestId("s02-distortion-row-4")).toHaveAttribute("aria-current", "step");
   });
 
   it("counts the patterns looked at and the examples actually given", () => {

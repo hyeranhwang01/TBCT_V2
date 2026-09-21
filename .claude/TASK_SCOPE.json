@@ -1,4 +1,12 @@
 {
+  "note2026_09_21_cdquest_grid_on_screen": {
+    "task": "There was no scoring grid anywhere in the session: the bands were recited in words, fifteen times over, and the worksheet only displayed the result. The grid is now beside the conversation and the turn points at it.",
+    "fromTheRecording": "The counselor put the form up and pointed at it -- '여기에는 빈도가 있고요 여기 밑에는 강도가 있습니다' (967-968), '요 매트릭스에 의해서' (985) -- and the participant then read her own score off it, answering '2점인 것 같아요' as often as she gave the two halves. readCdQuestAnswer already accepted a stated score; nothing had ever shown her the table it comes from.",
+    "cellsAreComputed": "CdQuestGrid renders cdQuestScore(frequency, intensity) per cell rather than a table typed into the component, so the grid a participant reads and the arithmetic the session records cannot drift apart. Pinned by a test that rebuilds the expected cells from the same function.",
+    "whenItShows": "From the step that explains it (cdQuestScalePresented / cdQuestScaleUnderstood) through the scoring, and whenever scores exist. Not during the walkthrough, where it would be one more thing to read while trying to think of an example -- the recording brought it out at 43:00 for the same reason.",
+    "pointerRegressionFound": "activeCanonicalFieldKey is the PROMPT's outputFields[0] (patient-session-page.tsx:473). Both loops now answer into a scratch scalar (distortionTurnAnswer, cdQuestItemScore) rather than the list they build, so the worksheet -- which matched only the list names -- had had NO current-row highlight since that change, and the scoring pointer had never once activated. Both now match the scratch name too, with a test.",
+    "allowedPaths": [".claude/TASK_SCOPE.json", "src/patient/sessions/s02/**"]
+  },
   "note2026_09_21_ask_before_reading": {
     "task": "The discussion turn read every example, however thin it was. It now collects the missing detail first when it cannot see where the pattern shows.",
     "promptOnly": "Two keep lines in walkthroughDiscussIntent, nothing else. The user asked for the prompt first and no code. This is an instruction, not a guarantee -- the same layer that already failed once, when the catastrophizing turn dropped half its definition despite that definition being in the prompt.",
