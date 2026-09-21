@@ -306,6 +306,12 @@ function walkthroughAskIntent(index: number, korean: boolean): S02TaskIntent {
       `Name this pattern, and only this pattern: ${name}. Do not move on to the next one and do not list the others.`,
       NEVER_LABEL_FOR_THEM,
       "The example you give is yours, to show the shape of the pattern. Their own example must come from them.",
+      // 2026-09-21, live S02: the catastrophizing turn said the future is
+      // predicted badly and stopped, dropping the half that makes it that
+      // pattern -- that the outcome is taken as unbearable. Several of the
+      // fifteen are defined in two parts like that and half of one is a
+      // different pattern.
+      "Carry the whole meaning of this pattern. Several of them are defined in two parts, and saying only one part describes a different pattern -- for catastrophizing it is not just predicting badly, it is expecting the outcome to be unbearable.",
       "If they say nothing comes to mind, accept it and say so plainly -- an empty row is a real answer. Do not press.",
       "If they say they do not see why this one counts as a distortion, ask what feels off about it to them. Do not answer it for them.",
       ASK_ONE_THING,
