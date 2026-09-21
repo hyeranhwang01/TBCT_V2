@@ -66,10 +66,15 @@ function composeReviewDistortion(fields: Record<string, unknown>, isKorean: bool
   if (fields.s02PatternPhase === "discuss") return composeDiscussDistortion(fields, isKorean);
   const { index, distortion } = currentDistortion(fields);
   const ordinal = index + 1;
+  // Asks for the moment, not for a yes or no. The closed form ("이런 생각을 하신
+  // 적이 있으신가요?") invited "네 있었어요", which the step then had to file as
+  // somebody's example -- the question's shape and what the answer is stored as
+  // did not match. The way out stays, because having no example for a pattern is
+  // a real answer, but phrased so it does not hand them the mirror of itself.
   if (isKorean) {
-    return `${ordinal}번째 유형은 '${distortion.nameKo}'입니다. ${distortion.descriptionKo} 예를 들면 "${distortion.exampleKo[0]}" 같은 생각이에요. 최근에 이런 생각을 하신 적이 있으신가요? 떠오르지 않으면 없다고 말씀해 주셔도 괜찮아요.`;
+    return `${ordinal}번째 유형은 '${distortion.nameKo}'입니다. ${distortion.descriptionKo} 예를 들면 "${distortion.exampleKo[0]}" 같은 생각이에요. 최근 한 주 동안 이런 생각이 들었던 순간이 있었다면, 어떤 상황이었는지 한 가지만 말씀해 주세요. 떠오르지 않으면 그렇게 말씀해 주셔도 괜찮아요.`;
   }
-  return `Pattern ${ordinal} is "${distortion.nameEn[0]}". ${distortion.descriptionEn} For instance: "${distortion.exampleEn[0]}" Have you had a thought like that recently? If nothing comes to mind, it's fine to say so.`;
+  return `Pattern ${ordinal} is "${distortion.nameEn[0]}". ${distortion.descriptionEn} For instance: "${distortion.exampleEn[0]}" If a thought like that came up for you this past week, tell me about one moment it did. If none comes to mind, just say so.`;
 }
 
 /**

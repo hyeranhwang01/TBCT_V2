@@ -350,6 +350,22 @@ describe("S02 redesign: real second session replay", () => {
     expect(Object.keys(view.session.runtimeContext.fields)).not.toContain("s02SessionRecap");
   }, 120_000);
 
+  // The step-specific clarification for "무슨 질문이요?" used to re-ask the closed
+  // form ("…하신 적이 있는지 여쭤보는 거예요"), which handed back the same yes/no
+  // the question had just been reworded away from.
+  it("explains the step by asking for the moment, not by re-asking a yes or no", async () => {
+    const session = await startSession();
+    await driveUntil(session.id, "review-distortion");
+    await submitPatientInput(session.id, { kind: "text", value: "무슨 질문이요?" });
+
+    const said = assistantTexts(await currentView(session.id)).at(-1) ?? "";
+    expect(said).toMatch(/열다섯 가지 패턴/);
+    expect(said).not.toMatch(/하신 적이 있는지|있으신가요|있나요/);
+    expect(said).toMatch(/어떤 상황|순간/);
+    // The way out is still offered.
+    expect(said).toMatch(/떠오르지 않으면/);
+  }, 90_000);
+
   // ------------------------------------------------------- the discussion turn
   //
   // Two thirds of the real session was talking about the examples, not

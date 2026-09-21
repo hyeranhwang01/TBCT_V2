@@ -272,7 +272,7 @@ export const spec: SessionSpec = {
           // Patient-facing text is composed per type in s02/messages.ts
           // (currentDistortionName / currentDistortionIndex). This text is the
           // last-resort fallback only, which is why it names no type.
-          patientText: "Do you have an example of your own for this pattern? It's fine if none comes to mind.",
+          patientText: "Tell me about one moment from this past week when a thought like this came up. If none comes to mind, just say so.",
           executionMode: "repeat_until",
           // The budget is per TURN, not per pattern: runtime-state-reducer.ts
           // counts accepted patient turns. Worst case is four turns on a pattern

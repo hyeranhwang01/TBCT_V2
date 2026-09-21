@@ -212,8 +212,8 @@ async function deliverClarificationTurn(input: {
   const isS02Walkthrough = input.promptItem.id === "tbct-s02-n05-p01-review-distortion" || missing.has("distortionExamples");
   const s02ExplanationClarification = isS02Walkthrough && looksLikeS02ExplanationRequest(input.patientMessage.content)
     ? tr(
-        "We're going through fifteen common thinking patterns one at a time. For the one we're on, I'm asking whether you've had a thought like that yourself recently -- and if nothing comes to mind for this one, saying so is a complete answer.",
-        "생각이 왜곡될 수 있는 열다섯 가지 패턴을 하나씩 살펴보고 있어요. 지금 보고 있는 패턴에 대해, 최근에 그런 생각을 하신 적이 있는지 여쭤보는 거예요. 떠오르지 않으면 없다고 말씀하시는 것도 온전한 답이에요.",
+        "We're going through fifteen common thinking patterns one at a time. For the one we're on, I'm asking you to tell me about a moment from your week when a thought like that came up -- and if nothing comes to mind for this one, saying so is a complete answer.",
+        "생각이 왜곡될 수 있는 열다섯 가지 패턴을 하나씩 살펴보고 있어요. 지금 보고 있는 패턴에 대해, 최근에 그런 생각이 들었던 순간이 어떤 상황이었는지 여쭤보는 거예요. 떠오르지 않으면 그렇게 말씀하시는 것도 온전한 답이에요.",
       )
     : undefined;
   const sourceSpecificClarification = thirdPersonCorrection ?? s02ExplanationClarification ?? (input.promptItem.id === "tbct-s08-n01-p04-distressing-situation"

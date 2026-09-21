@@ -10,6 +10,8 @@ import { koreanText, resolveStaticText } from "@/patient/sessions/s02/messages";
 const S02_PROMPTS = CANONICAL_PROMPT_ITEMS.filter((item) => item.sessionId === "tbct-s02");
 // Composed per pattern in resolveStaticText, so it deliberately has no
 // koreanText entry -- one there would override all fifteen.
+const REVIEW_DISTORTION_ID = "tbct-s02-n05-p01-review-distortion";
+
 const DYNAMIC_IDS = new Set([
   "tbct-s02-n05-p01-review-distortion",
   // Composed in full so the S01 homework recap reaches Korean -- see the
@@ -61,6 +63,31 @@ describe("S02 fallback wording", () => {
       expect(resolveStaticText(prompt, fields, "ko-KR"), distortion.id).toContain(distortion.nameKo);
       expect(resolveStaticText(prompt, fields, "en-US"), distortion.id).toContain(distortion.nameEn[0]);
     }
+  });
+
+  // The closed form invited "네 있었어요", which the step then had to file as
+  // somebody's example for a pattern -- the shape of the question and what the
+  // answer gets stored as did not match.
+  it("asks for the moment rather than for a yes or no", () => {
+    const prompt = S02_PROMPTS.find((item) => item.id === REVIEW_DISTORTION_ID)!;
+    for (const [index] of COGNITIVE_DISTORTIONS.entries()) {
+      const fields = { distortionExamples: Array.from({ length: index }, () => "row") };
+      const ko = resolveStaticText(prompt, fields, "ko-KR") ?? "";
+      const en = resolveStaticText(prompt, fields, "en-US") ?? "";
+      expect(ko, `ko ${index}`).not.toMatch(/있으신가요|있으세요\?|있나요|있을까요/);
+      expect(en, `en ${index}`).not.toMatch(/\b(?:have you had|do you have|was there)\b/i);
+      // It asks for the situation instead.
+      expect(ko, `ko ${index}`).toMatch(/어떤 상황|순간/);
+      expect(en, `en ${index}`).toMatch(/moment/i);
+    }
+  });
+
+  // Having no example for a pattern stays a real answer -- the step reads that
+  // reply (hasNoExampleForPattern) to record an empty row and move on.
+  it("still offers the way out", () => {
+    const prompt = S02_PROMPTS.find((item) => item.id === REVIEW_DISTORTION_ID)!;
+    expect(resolveStaticText(prompt, {}, "ko-KR") ?? "").toMatch(/떠오르지 않으면/);
+    expect(resolveStaticText(prompt, {}, "en-US") ?? "").toMatch(/none comes to mind/i);
   });
 
   it("does not run off the end of the registry once every pattern has a row", () => {

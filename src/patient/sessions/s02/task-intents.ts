@@ -301,10 +301,13 @@ function walkthroughAskIntent(index: number, korean: boolean): S02TaskIntent {
   const definition = korean ? distortion.descriptionKo : distortion.descriptionEn;
   const example = korean ? distortion.exampleKo[0] : distortion.exampleEn[0];
   return {
-    obtain: `Pattern ${index + 1} of 15 is "${name}". Say what it is in your own words -- it means: ${definition} -- give one short everyday example of it (for instance: "${example}"), and then ask whether they have an example of their own from their week.`,
+    obtain: `Pattern ${index + 1} of 15 is "${name}". Say what it is in your own words -- it means: ${definition} -- give one short everyday example of it (for instance: "${example}"), and then ask them for one moment from their week when it came up -- what was happening.`,
     keep: [
       `Name this pattern, and only this pattern: ${name}. Do not move on to the next one and do not list the others.`,
       NEVER_LABEL_FOR_THEM,
+      // The closed form filed "네 있었어요" as somebody's example for a pattern
+      // while the guide was, correctly, asking what the example actually was.
+      "Ask for the moment itself, not for a yes or no. \"Was there a time when...?\" invites \"yes\", and then there is nothing to write down.",
       "The example you give is yours, to show the shape of the pattern. Their own example must come from them.",
       // 2026-09-21, live S02: the catastrophizing turn said the future is
       // predicted badly and stopped, dropping the half that makes it that
