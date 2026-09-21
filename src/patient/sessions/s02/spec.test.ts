@@ -686,6 +686,25 @@ describe("S02 redesign: real second session replay", () => {
 // every node, so all 24 prompts were excluded and the whole session ran on its
 // approved text -- which is what "it reads like a questionnaire" turned out to
 // be (note2026_09_21_s02_safety_ids_disabled_claude).
+// The semantic gate decides whether a reply is written into the worksheet, and
+// it reads this text as expectedAnswerDescription. Without it the gate had only
+// a generic system prompt to go on and accepted "네 말할수있습니다" as somebody's
+// example, while the guide said in the same turn that it had not heard the
+// situation yet -- two model calls judging the same thing, one of them uninformed.
+describe("what the gate is told counts as an answer", () => {
+  it("gives the walkthrough step its own standard", () => {
+    const prompt = CANONICAL_PROMPT_ITEMS.find((item) => item.id === "tbct-s02-n05-p01-review-distortion");
+    const guidance = prompt?.modelGuidance ?? "";
+    expect(guidance.length).toBeGreaterThan(100);
+    // A bare confirmation is not the example.
+    expect(guidance).toMatch(/네 있었어요|bare confirmation/i);
+    expect(guidance).toMatch(/clarification_request/);
+    // Having none is a real answer, and a different one.
+    expect(guidance).toMatch(/collection_stop/);
+    expect(guidance).toMatch(/딱히 없어요|떠오르지 않아요/);
+  });
+});
+
 describe("S02 and the dialogue agent", () => {
   const S02_PROMPTS = CANONICAL_PROMPT_ITEMS.filter((item) => item.sessionId === "tbct-s02");
 

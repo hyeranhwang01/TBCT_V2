@@ -69,6 +69,19 @@ export type PromptSpec = {
   completionEffect?: Record<string, unknown> | null;
   restrictions?: string[];
   safetyRuleIds?: string[];
+  /**
+   * What counts as a real answer to THIS step, for the semantic gate that
+   * decides whether a reply is stored (runtime-input-assessment.ts reads it as
+   * expectedAnswerDescription). Never patient-facing.
+   *
+   * Added 2026-09-21: without it the gate had only the generic system prompt
+   * and the step's source text to go on, so it accepted "네 말할수있습니다" as a
+   * participant's cognitive-distortion example while the guide was, in the same
+   * turn, correctly saying it had not heard the situation yet -- two model
+   * calls judging the same thing and disagreeing because only one of them had
+   * been told the standard.
+   */
+  modelGuidance?: string;
   /** Re-asks the same PromptItem (accumulating into its list/rating field)
    * until `completionCondition` is met or `maxIterations` is reached, instead
    * of moving on after a single turn. Used for "rate every item in a list
@@ -222,6 +235,7 @@ function buildSessionSeed(spec: SessionSpec): SourceFidelitySessionSeed {
         verbatimText: promptText.text,
         editableText: promptText.text || sourceText(prompt.source),
         aiInstruction: shortAiMsg,
+        modelGuidance: prompt.modelGuidance,
         fallbackPatientText: prompt.patientText,
         markerHint: prompt.marker,
         activationCondition: prompt.activationCondition ?? null,

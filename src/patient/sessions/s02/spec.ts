@@ -269,6 +269,11 @@ export const spec: SessionSpec = {
           // what the example actually was.
           outputFields: ["distortionExamples"],
           validation: { kind: "array" },
+          // The standard the semantic gate judges against, so the decision to
+          // write a row and what the guide says in the same turn come from the
+          // same understanding of what was asked.
+          modelGuidance:
+            "A valid answer is a concrete moment the participant actually had, or the thought that went through their mind in it -- something that could be written in a worksheet cell as their own example. A bare confirmation that they have one is NOT the example: \"네\", \"네 있었어요\", \"있어요\", \"네 말할 수 있습니다\", \"yes I have\" and the like are clarification_request, because the situation itself has not been given yet. If they mean they have no example for this pattern -- \"딱히 없어요\", \"떠오르지 않아요\", \"없습니다\", \"none comes to mind\" -- that is collection_stop, not a clarification.",
           // Patient-facing text is composed per type in s02/messages.ts
           // (currentDistortionName / currentDistortionIndex). This text is the
           // last-resort fallback only, which is why it names no type.
