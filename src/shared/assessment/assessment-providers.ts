@@ -413,7 +413,13 @@ class AnthropicAssessmentModel extends BaseAssessmentModel {
         tool_choice: { type: "tool", name: "submit_assessment", disable_parallel_tool_use: true },
       }),
     });
-    if (!response.ok) throw new Error(`Anthropic assessment failed (${response.status})`);
+    if (!response.ok) {
+      // Carry the provider's own reason. A bare status turns a one-line
+      // configuration mistake into a guessing game, which is exactly what a 400
+      // here cost once already.
+      const detail = await response.text().catch(() => "");
+      throw new Error(`Anthropic assessment failed (${response.status})${detail ? `: ${detail.slice(0, 300)}` : ""}`);
+    }
     const json = await response.json() as {
       content?: Array<{ type?: string; name?: string; input?: unknown }>;
       stop_reason?: string;
