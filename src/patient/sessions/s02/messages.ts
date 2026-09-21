@@ -60,12 +60,45 @@ function currentDistortion(fields: Record<string, unknown>) {
 /** The walkthrough's fallback text, composed per pattern from the registry so
  * fifteen explanations are data rather than fifteen prompts. */
 function composeReviewDistortion(fields: Record<string, unknown>, isKorean: boolean): string {
+  // The discussion turn (s02PatternPhase === "discuss") talks about the example
+  // just given, so the pattern it is on is the LAST stored row rather than the
+  // pointer, which has already moved on.
+  if (fields.s02PatternPhase === "discuss") return composeDiscussDistortion(fields, isKorean);
   const { index, distortion } = currentDistortion(fields);
   const ordinal = index + 1;
   if (isKorean) {
     return `${ordinal}번째 유형은 '${distortion.nameKo}'입니다. ${distortion.descriptionKo} 예를 들면 "${distortion.exampleKo[0]}" 같은 생각이에요. 최근에 이런 생각을 하신 적이 있으신가요? 떠오르지 않으면 없다고 말씀해 주셔도 괜찮아요.`;
   }
   return `Pattern ${ordinal} is "${distortion.nameEn[0]}". ${distortion.descriptionEn} For instance: "${distortion.exampleEn[0]}" Have you had a thought like that recently? If nothing comes to mind, it's fine to say so.`;
+}
+
+/**
+ * Last-resort wording for the discussion turn. It cannot do what the turn is
+ * for -- pointing at the part of the participant's own sentence -- because that
+ * needs a live model, so it does the one thing a fixed sentence can do without
+ * asserting anything about their words: name the pattern, leave the reading to
+ * them, and invite agreement or disagreement. That is deliberately weaker than
+ * the real turn rather than a confident guess about their example.
+ */
+function composeDiscussDistortion(fields: Record<string, unknown>, isKorean: boolean): string {
+  const stored = Array.isArray(fields.distortionExamples) ? fields.distortionExamples.length : 0;
+  const index = Math.max(0, Math.min(stored - 1, COGNITIVE_DISTORTIONS.length - 1));
+  const distortion = COGNITIVE_DISTORTIONS[index];
+  const name = isKorean ? distortion.nameKo : distortion.nameEn[0];
+  // The discussion can run to three turns when the participant keeps adding
+  // (s02/turn-rules.ts). One sentence repeated three times reads as a broken
+  // program, so each turn has its own -- the same reason
+  // REPEATED_FALLBACK_REPHRASE exists, which does not apply here because these
+  // turns are all accepted rather than a prompt being stuck.
+  const spent = typeof fields.s02PatternDiscussTurns === "number" ? fields.s02PatternDiscussTurns : 0;
+  if (isKorean) {
+    if (spent >= 2) return `이 부분은 여기까지 보고 다음 유형으로 넘어가 볼게요. '${name}'에 대해 더 덧붙이고 싶은 게 있으세요?`;
+    if (spent === 1) return `방금 덧붙여 주신 부분을 조금 더 볼게요. 그때 실제로 있었던 일과, 거기서 내리신 결론을 나눠 보면 어떻게 될까요?`;
+    return `말씀해 주신 내용에서 '${name}'가 어디쯤에서 나타나는 것 같으세요? 이 유형은 ${distortion.descriptionKo} 아니라고 느껴지시면 그렇게 말씀해 주셔도 괜찮아요.`;
+  }
+  if (spent >= 2) return `Let's leave this one here and move to the next pattern. Anything else you want to add about "${name}"?`;
+  if (spent === 1) return `Let's stay with what you just added for a moment. If you separate what actually happened from what you concluded from it, how does that look?`;
+  return `Where in what you just described do you think "${name}" shows up? This pattern is: ${distortion.descriptionEn} If it doesn't feel like it fits, it's fine to say so.`;
 }
 
 /** The scoring question, per pattern. Asks for both halves in one turn -- a

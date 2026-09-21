@@ -232,21 +232,44 @@ export const spec: SessionSpec = {
       // is the order the recording used. The per-type wording is composed in
       // s02/messages.ts from the registry, so nothing here hardcodes fifteen
       // explanations.
+      // Each pattern takes at least two turns, as the recording did: ask, then
+      // talk about the answer. s02/turn-rules.ts holds which of the two the loop
+      // is on (s02PatternPhase) and only advances to the next pattern once the
+      // discussion is done, so the discussion is a turn of its own rather than
+      // something squeezed onto the end of the next pattern's explanation. The
+      // discussion runs one turn unless the participant keeps giving content
+      // instead of agreeing, in which case it follows them for up to three --
+      // the shape of the overgeneralization exchange at 578-596 of the
+      // transcript.
       objective:
-        "Go through the fifteen patterns one at a time, in the order the program gives them. For each: say what the pattern is in your own words, give one short everyday example of it, and ask whether they have an example of their own from their week. Never tell them which pattern their example belongs to, and never suggest an example for them. One pattern per turn. If they say they do not see why this one counts as a distortion, ask them what feels off about it rather than explaining it yourself.",
+        "Go through the fifteen patterns one at a time, in the order the program gives them. Each pattern takes at least two turns: first say what the pattern is in your own words, give one short everyday example of it, and ask whether they have one of their own; then, once they answer, talk about what they said before the next pattern. Never suggest an example for them, and never file their example under a different pattern -- what you may change is which of their own examples fills this pattern, never which pattern it belongs to.",
       prompts: [
         {
           slug: "review-distortion",
           type: "question",
           source: [145, 155],
-          outputFields: ["distortionExamples"],
-          validation: { kind: "array" },
+          // A scratch scalar, not the accumulated list: a field named in
+          // outputFields is overwritten with the raw answer text by the shared
+          // extraction, and the two-turn rhythm needs the list and the pointer
+          // to be owned by s02/turn-rules.ts alone (same reason as
+          // cdQuestItemScore in the scoring loop).
+          outputFields: ["distortionTurnAnswer"],
           // Patient-facing text is composed per type in s02/messages.ts
           // (currentDistortionName / currentDistortionIndex). This text is the
           // last-resort fallback only, which is why it names no type.
           patientText: "Do you have an example of your own for this pattern? It's fine if none comes to mind.",
           executionMode: "repeat_until",
-          maxIterations: 15,
+          // The budget is per TURN, not per pattern: runtime-state-reducer.ts
+          // counts accepted patient turns. Worst case is four turns on a pattern
+          // (one ask plus the three the discussion may run to), so fifteen
+          // patterns can spend sixty, and a re-ask can spend more. The
+          // eight-session audit measures exactly sixty here, because its
+          // synthetic participant answers every discussion turn with something
+          // substantive; a real one mostly agrees and the walkthrough is nearer
+          // thirty. Generous on purpose -- completionCondition is what actually
+          // ends the loop, while reaching this cap force-completes it and would
+          // silently cut the walkthrough short with nothing reported anywhere.
+          maxIterations: 80,
           completionCondition: { kind: "field", field: "allDistortionsReviewed", operator: "equals", value: true },
         },
       ],

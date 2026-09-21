@@ -75,6 +75,66 @@ describe("S02 task intents", () => {
     });
   });
 
+  // The second turn on each pattern (note2026_09_21_s02_walkthrough_discussion).
+  // What it is allowed to claim is the whole point: it confirms the ONE pattern
+  // the loop named, and may say others show through too, but never re-files the
+  // example and never issues a verdict.
+  describe("talking about the example just given", () => {
+    const id = "tbct-s02-n05-p01-review-distortion";
+
+    function discussing(count: number, rows?: string[]) {
+      return intent(id, {
+        s02PatternPhase: "discuss",
+        distortionExamples: rows ?? Array.from({ length: count }, (_, index) => `예시 ${index + 1}`),
+      })!;
+    }
+
+    it("is about the pattern just answered, not the next one", () => {
+      const resolved = discussing(1);
+      expect(resolved.obtain).toContain(COGNITIVE_DISTORTIONS[0].nameKo);
+      expect(resolved.obtain).not.toContain(COGNITIVE_DISTORTIONS[1].nameKo);
+      // Their own example is put in front of the guide, so it has something to
+      // point at rather than inventing one.
+      expect(resolved.obtain).toContain("예시 1");
+    });
+
+    it("points at the fifteenth pattern on the fifteenth, where the ask pointer has already clamped", () => {
+      const resolved = discussing(COGNITIVE_DISTORTIONS.length);
+      expect(resolved.obtain).toContain(COGNITIVE_DISTORTIONS[14].nameKo);
+      expect(resolved.obtain).toContain("예시 15");
+    });
+
+    it("gives the guide a way out when the pattern does not show in what they said", () => {
+      expect(discussing(1).obtain).toMatch(/does not really show|say that instead/i);
+    });
+
+    it("requires the pattern's name and rejects a turn that only talks about the example", () => {
+      const taskIntent = { ...discussing(1), asksParticipant: true };
+      expect(taskIntentGaps("방금 말씀하신 부분이 좀 극단적으로 들리네요.", taskIntent)).toHaveLength(1);
+      expect(taskIntentGaps(`방금 말씀하신 '싫어할 거야' 부분이 ${COGNITIVE_DISTORTIONS[0].nameKo}에 해당한다고 볼 수 있겠죠?`, taskIntent)).toEqual([]);
+    });
+
+    // An evaluation of an LLM cognitive-restructuring chatbot found users read
+    // "a classic example" as being judged.
+    it("rejects calling it a classic example", () => {
+      const taskIntent = { ...discussing(1), asksParticipant: true };
+      const judged = `이건 ${COGNITIVE_DISTORTIONS[0].nameKo}의 전형적인 예예요.`;
+      expect(taskIntentGaps(judged, taskIntent).length).toBeGreaterThan(0);
+    });
+
+    it("rejects re-filing the example under a different pattern, but allows saying others show through", () => {
+      const taskIntent = { ...discussing(1), asksParticipant: true };
+      const refiled = `이건 ${COGNITIVE_DISTORTIONS[0].nameKo} 유형이 아니라 다른 쪽에 가까워요.`;
+      expect(taskIntentGaps(refiled, taskIntent).length).toBeGreaterThan(0);
+      // What the recording's counselor actually said, and what must stay allowed.
+      const plural = `${COGNITIVE_DISTORTIONS[0].nameKo}가 보이고, 다른 유형도 조금 비치네요. 어떤 유형에 속할지는 나중에 같이 보기로 해요.`;
+      expect(taskIntentGaps(plural, taskIntent)).toEqual([]);
+      // And the way out itself: saying this pattern does not show is not a verdict.
+      const doesNotFit = `말씀해 주신 내용에서는 ${COGNITIVE_DISTORTIONS[0].nameKo}가 잘 안 보이네요. 다음으로 가볼게요.`;
+      expect(taskIntentGaps(doesNotFit, taskIntent)).toEqual([]);
+    });
+  });
+
   describe("the CD-Quest grid explanation", () => {
     const id = S02_PROMPTS.find((item) => item.id.endsWith("-cdquest-explain"))!.id;
 

@@ -201,10 +201,105 @@ function looksLikeInnateAttribution(text: string) {
   return INNATE_PATTERNS.some((pattern) => pattern.test(value));
 }
 
+// "네 알겠습니다" answers the explanation, not the question. Mirrors
+// runtime-context.ts's own isListAcknowledgementOnly, which used to cover this
+// step while distortionExamples was a validation.kind "array" output field; the
+// two-turn rhythm took the field out of outputFields, so the guard has to live
+// here now. Only the ASK turn needs it -- on the discussion turn an
+// acknowledgement is a complete answer.
+const ACKNOWLEDGEMENT_ONLY =
+  /^(?:yes|yes i am|yes i'?m ready|ok|okay|got it|understood|i understand|ready|네|예|응|네 알겠습니다|알겠습니다|이해했습니다|이해했어요|준비됐어요|준비되었습니다|좋습니다|좋아요)$/;
+export function isAcknowledgementOnly(text: string): boolean {
+  return ACKNOWLEDGEMENT_ONLY.test(normalize(text).replace(/[.!?。！？，,]/g, "").trim());
+}
+
+// Swapping one's own example for a better one is something the participant does,
+// not the guide. At lines 150-159 of the transcript she volunteers a different
+// example than the one she had written down for this pattern: "숙제에 적어놓은
+// 거랑 지금 다른 예시가 생각이 나는데, 제가 잘못 적은 것 같기도 했고 ... 근데
+// 지금 생각이 드는 거는 [다른 예시]". There it happens inside her first answer,
+// so the text simply IS the example; this path covers the same move arriving one
+// turn later, after the guide has said something about the first one.
+//
+// To be accurate about the evidence: the transcript does NOT show a replacement
+// on a discussion turn. The nearest moment, at 313-327, is the counselor naming
+// a doubt ("다른 유형에 속하지 않을까 하는 생각이 듭니다") and then keeping her
+// example anyway ("좋은 예예요, 그 예를 좀 써봅시다"). So this is an
+// accommodation of a real participant behaviour rather than a transcribed
+// exchange -- and either way the row is rewritten in place, never moved to
+// another pattern.
+//
+// Only a reply long enough to BE an example counts; a bare agreement is not one.
+const REPLACEMENT_HINTS = [
+  "그것보다", "그거보다", "이것보다", "차라리", "오히려", "다른 예", "다시 생각해보니", "다시 생각하니", "이게 더", "이런 예",
+  "instead", "rather than that", "a better example", "actually", "on second thought",
+];
+export function offersReplacementExample(text: string): boolean {
+  const value = normalize(text);
+  if (value.length < 12) return false;
+  if (isBareYesNo(text)) return false;
+  return REPLACEMENT_HINTS.some((hint) => value.includes(hint));
+}
+
 /** The empty row: a pattern the participant had no example for. Stored rather
  * than skipped so the pointer stays aligned with the registry and the worksheet
  * shows the pattern as looked at. */
 export const NO_EXAMPLE_MARKER = "—";
+
+// Ending the discussion on a disagreement is as important as ending it on an
+// agreement: "그건 아닌 것 같은데요" is not an acknowledgement, so without this
+// the loop would hand the guide another turn on the same pattern and invite
+// exactly the arguing the guidance forbids. An evaluation of an LLM cognitive-
+// restructuring chatbot found insisting on a reading was what participants
+// experienced as being brushed aside.
+const DISAGREEMENT_CONTAINS = [
+  "아닌 것 같", "아닌것 같", "그건 아니", "그렇지는 않", "잘 모르겠", "모르겠어", "글쎄", "동의가 안", "공감이 안", "다르게 느껴",
+  "don't think so", "do not think so", "not really", "i disagree", "doesn't feel", "does not feel", "not sure",
+];
+function looksLikeDisagreement(text: string) {
+  const value = normalize(text);
+  return isBareNo(text) || DISAGREEMENT_CONTAINS.some((phrase) => value.includes(phrase));
+}
+
+/**
+ * Whether the discussion reply carried something NEW, which is the only reason
+ * to stay on a pattern for another turn.
+ *
+ * This is a heuristic and the weakest part of the two-turn design, so it is
+ * written to fail towards the recording's dominant shape. In the transcript most
+ * patterns got ONE short reaction -- pattern 7 got a single sentence ("네 ...
+ * 이렇게 되겠죠, 그죠?" at 483-503) -- and only overgeneralization ran long
+ * (578-596). There the counselor kept going because HE chose to probe, not
+ * because her answers were long; they were short ("많지는 않은 것 같습니다").
+ * Nothing in the turn's input can see that choice: turn-rules gets the
+ * participant's text, not the guide's question. So the rule is "did they add
+ * content", and when it is wrong it ends the discussion one turn early rather
+ * than holding every pattern open for three.
+ *
+ * A leading agreement is stripped first, because "네, 그런 것 같아요" is agreement
+ * with nothing added while "네, 근데 그때는 확인을 안 해봤어요" is not.
+ */
+const AGREEMENT_PREFIX = /^(?:네|예|응|어|맞아요|맞습니다|그렇죠|그러네요|그렇네요|아\s*네|음+|yes|yeah|right|true|ok|okay)[\s,.!~…]*/;
+const VAGUE_AGREEMENT = /^(?:그런\s*것\s*같아요|그런것같아요|그런\s*듯해요|맞는\s*것\s*같아요|그렇네요|그러네요|이해했어요|알겠어요|그럴\s*수도\s*있겠네요|i\s*think\s*so|that\s*makes\s*sense|i\s*see)[\s,.!~…]*$/;
+// The threshold is per SCRIPT, not per locale: Hangul syllable blocks carry the
+// same content in far fewer characters than Latin words, so one number would
+// either let "Yes, straight there." through as new content or throw away
+// "많지는 않은 것 같습니다" -- which is a real added answer, and exactly what the
+// participant said at 583 of the transcript before the counselor kept going.
+const MIN_NEW_CONTENT_HANGUL = 12;
+const MIN_NEW_CONTENT_LATIN = 30;
+function addsSomethingNew(text: string): boolean {
+  const remainder = normalize(text).replace(AGREEMENT_PREFIX, "").trim();
+  if (!remainder || VAGUE_AGREEMENT.test(remainder)) return false;
+  const threshold = /[\uac00-\ud7a3]/.test(remainder) ? MIN_NEW_CONTENT_HANGUL : MIN_NEW_CONTENT_LATIN;
+  return remainder.length >= threshold;
+}
+
+/** The ceiling on one pattern's discussion. Three is what the recording's
+ * longest exchange came to (578-596, overgeneralization); most patterns took a
+ * single short reaction, and one was a sentence ("네 ... 이렇게 되겠죠, 그죠?"
+ * at 483-503). */
+const MAX_DISCUSS_TURNS = 3;
 
 const BARE_YES_NO_SLUGS = new Set(["today-agenda", "agenda-continue", "understanding-check", "homework-commitment"]);
 
@@ -248,33 +343,83 @@ export async function applyS02TurnRules(input: S02TurnRulesInput): Promise<S02Tu
   }
 
   if (slug === "review-distortion") {
-    const before = stringList(extracted.fields.distortionExamples);
-    const stored = stringList(fields.distortionExamples);
-    // "없어요" is a real answer for this pattern -- the row stays empty and the
-    // loop moves on. Two shapes have to be handled, because the shared list path
-    // decides first and its stop-word set is not the same as ours: either it
-    // recognized the phrase and appended nothing, or it did not and appended the
-    // phrase itself as though it were an example.
-    if (hasNoExampleForPattern(text)) {
-      const rows = stored.length > before.length ? [...before, NO_EXAMPLE_MARKER] : [...stored, NO_EXAMPLE_MARKER];
-      accept(rows);
-      log("no example for this pattern; empty row recorded", { distortionExamples: rows });
-    } else if (looksLikeDistortionUnclear(text)) {
-      // Not an example: they do not see why this one is a distortion yet. The
-      // row is not written and the field stays missing, so the engine treats the
-      // turn as a clarification and asks about the same pattern again -- where
-      // the step's guidance tells Claude to ask what feels off rather than
-      // explain. No flag is set: a turn the engine does not accept never commits
-      // its fields, so a flag here would be discarded anyway.
+    // Two turns per pattern, as the recording ran it (note2026_09_21_s02
+    // _walkthrough_discussion): "ask" puts the pattern and collects their
+    // example, "discuss" talks about what they said. Only the second advances
+    // the pointer, so the discussion is a turn of its own.
+    //
+    // distortionExamples is reliable here because it is not this prompt's
+    // output field any more -- the shared extraction never touches it.
+    const rows = stringList(extracted.fields.distortionExamples);
+    const discussing = extracted.fields.s02PatternPhase === "discuss";
+
+    if (discussing) {
+      // Whatever they say back -- agreement, a correction, a different example
+      // -- is a whole answer here. Accepting unconditionally is what lets a bare
+      // "네" count, which it must: the discussion turn asks them to look at their
+      // own example, not to produce a new one.
+      accept(text);
+
+      // A replacement example offered in this turn belongs to the SAME pattern:
+      // the counselor did exactly this at line 325 of the transcript ("그것보다는
+      // ... 좋은 예예요, 그 예를 좀 써봅시다"). The row is rewritten, never moved.
+      if (rows.length && !hasNoExampleForPattern(text) && offersReplacementExample(text)) {
+        const replaced = [...rows];
+        replaced[replaced.length - 1] = text.trim();
+        fields.distortionExamples = replaced;
+        log("a better-fitting example for the same pattern replaced the row", { index: replaced.length });
+      }
+
+      // How long the discussion runs is decided here rather than by the guide,
+      // because step order belongs to the program in this codebase. The rule
+      // follows the recording: at 578-596 the counselor kept going while the
+      // participant kept giving content ("많지는 않은 것 같습니다", "말투가
+      // 친절하지 않았을 것 같습니다") and stopped when she simply agreed. So the
+      // discussion ends on an acknowledgement, and otherwise follows them -- to
+      // a hard ceiling, so no single pattern can hold the session open.
+      const spent = (typeof extracted.fields.s02PatternDiscussTurns === "number" ? extracted.fields.s02PatternDiscussTurns : 0) + 1;
+      const settled = isAcknowledgementOnly(text) || looksLikeDisagreement(text) || !addsSomethingNew(text);
+      const keepTalking = spent < MAX_DISCUSS_TURNS && !settled;
+      if (keepTalking) {
+        fields.s02PatternDiscussTurns = spent;
+        log("the participant is still giving content; staying on this pattern", { discussTurns: spent });
+      } else {
+        fields.s02PatternPhase = "ask";
+        fields.s02PatternDiscussTurns = 0;
+        log("pattern discussed; moving to the next one", { reviewed: rows.length, discussTurns: spent });
+      }
+    } else if (hasNoExampleForPattern(text)) {
+      // "없어요" is a real answer. The row stays empty and there is nothing to
+      // discuss, so this pattern takes one turn rather than two.
+      const next = [...rows, NO_EXAMPLE_MARKER];
+      accept(text);
+      fields.distortionExamples = next;
+      fields.s02PatternPhase = "ask";
+      fields.s02PatternDiscussTurns = 0;
+      log("no example for this pattern; empty row recorded", { distortionExamples: next });
+    } else if (looksLikeDistortionUnclear(text) || isAcknowledgementOnly(text)) {
+      // Not an example: either they do not see why this one is a distortion yet,
+      // or they only acknowledged the explanation. Either way the field stays
+      // missing, so the engine asks about this same pattern again -- where the
+      // step's guidance tells Claude to ask what feels off. No flag is set: a
+      // turn the engine does not accept never commits its fields.
       if (targetField && !missingFields.includes(targetField)) missingFields.push(targetField);
-      if (before.length) fields.distortionExamples = before;
-      else delete fields.distortionExamples;
-      log("participant does not yet see why this pattern is a distortion", { distortionExamples: before });
+      log("not an example for this pattern; asking again", { reviewed: rows.length });
+    } else {
+      const next = [...rows, text.trim()];
+      accept(text);
+      fields.distortionExamples = next;
+      fields.s02PatternPhase = "discuss";
+      fields.s02PatternDiscussTurns = 0;
+      log("example recorded; next turn discusses it", { distortionExamples: next });
     }
-    const rows = stringList(fields.distortionExamples);
-    const done = rows.length >= COGNITIVE_DISTORTIONS.length;
+
+    // Not complete until the fifteenth pattern has also been discussed --
+    // otherwise the loop would exit before its own last discussion turn.
+    const stored = stringList(fields.distortionExamples);
+    const done = stored.length >= COGNITIVE_DISTORTIONS.length && fields.s02PatternPhase !== "discuss";
     fields.allDistortionsReviewed = done;
-    if (done) log("every pattern has a row; walkthrough complete", { allDistortionsReviewed: true });
+    if (done) log("every pattern has a row and has been talked about", { allDistortionsReviewed: true });
   }
 
   if (slug === "score-distortion") {

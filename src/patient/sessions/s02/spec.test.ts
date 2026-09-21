@@ -58,6 +58,11 @@ const REAL_SCORE_ANSWERS = [
 ];
 const REAL_SCORES = [2, 2, 2, 3, 2, 2, 2, 3, 3, 1, 1, 2, 3, 4, 2];
 
+// What the participant says back once the guide has pointed at part of their own
+// example. Deliberately short: the discussion turn must accept it as a whole
+// answer and move on.
+const DISCUSSION_REPLY = "네, 그런 것 같아요";
+
 const BOOLEAN_SLUGS = new Set(["today-agenda", "agenda-continue", "understanding-check", "homework-commitment"]);
 const FAILED_OUTCOMES = new Set(["clarification", "fallback", "safety_override", "rejected_duplicate"]);
 
@@ -90,6 +95,10 @@ async function startSession(locale = "ko-KR") {
 
 function answerFor(slug: string, view: RuntimeSessionView, overrides: Record<string, string>): PatientInput {
   if (slug === "review-distortion" && overrides["review-distortion"] === undefined) {
+    // Two turns per pattern. On the discussion turn the participant is
+    // responding to what the guide said about their example, not giving a new
+    // one, so a short acknowledgement is the realistic answer.
+    if (view.session.runtimeContext.fields.s02PatternPhase === "discuss") return { kind: "text", value: DISCUSSION_REPLY };
     // One example per pattern, in registry order -- the row count is the index.
     const index = Math.min(storedRows(view).length, OWN_EXAMPLES.length - 1);
     return { kind: "text", value: OWN_EXAMPLES[index] };
@@ -118,7 +127,7 @@ function answerFor(slug: string, view: RuntimeSessionView, overrides: Record<str
 
 /** Answers the script until the active prompt's slug is `target`, or until the
  * session leaves the waiting state when target is null. */
-async function driveUntil(sessionId: string, target: string | null, overrides: Record<string, string> = {}, maxTurns = 45) {
+async function driveUntil(sessionId: string, target: string | null, overrides: Record<string, string> = {}, maxTurns = 90) {
   const visited: string[] = [];
   for (let turn = 0; turn < maxTurns; turn += 1) {
     const view = await currentView(sessionId);
@@ -172,8 +181,9 @@ describe("S02 redesign: real second session replay", () => {
     expect(rows).toHaveLength(COGNITIVE_DISTORTIONS.length);
     expect(rows[0]).toContain("싫어하는");
     expect(rows[13]).toContain("어떡하지");
-    // The walkthrough is one turn per pattern, not one turn for all fifteen.
-    expect(visited.filter((slug) => slug === "review-distortion")).toHaveLength(COGNITIVE_DISTORTIONS.length);
+    // Two turns per pattern -- ask, then talk about the answer -- which is what
+    // the recording did and what the first build of this step left out.
+    expect(visited.filter((slug) => slug === "review-distortion")).toHaveLength(COGNITIVE_DISTORTIONS.length * 2);
     // And so is the scoring: the grid is explained once, then fifteen turns.
     expect(visited.filter((slug) => slug === "score-distortion")).toHaveLength(COGNITIVE_DISTORTIONS.length);
     // Every pattern is looked at before any of them is scored -- the recording
@@ -201,8 +211,14 @@ describe("S02 redesign: real second session replay", () => {
       const asked = assistantTexts(view).at(-1) ?? "";
       expect(asked, `pattern ${index + 1}`).toContain(distortion.nameKo);
       await submitPatientInput(session.id, { kind: "text", value: OWN_EXAMPLES[index] });
+      // The discussion turn for this same pattern comes next; answering it is
+      // what moves the walkthrough on to the following pattern.
+      const discussing = await currentView(session.id);
+      expect(discussing.session.runtimeContext.fields.s02PatternPhase, `pattern ${index + 1}`).toBe("discuss");
+      expect(assistantTexts(discussing).at(-1) ?? "", `pattern ${index + 1} discussion`).toContain(distortion.nameKo);
+      await submitPatientInput(session.id, { kind: "text", value: DISCUSSION_REPLY });
     }
-  }, 90_000);
+  }, 120_000);
 
   it("takes 'nothing comes to mind' as a real answer, records an empty row and moves on", async () => {
     const session = await startSession();
@@ -277,6 +293,158 @@ describe("S02 redesign: real second session replay", () => {
     // An assistant recap is never written to a field or projected.
     expect(Object.keys(view.session.runtimeContext.fields)).not.toContain("s02SessionRecap");
   }, 120_000);
+
+  // ------------------------------------------------------- the discussion turn
+  //
+  // Two thirds of the real session was talking about the examples, not
+  // collecting them (note2026_09_21_s02_walkthrough_discussion). The first build
+  // of this step stored the answer and moved straight on, which made the
+  // walkthrough read as a form being filled in.
+
+  it("spends a second turn on each pattern, talking about the example just given", async () => {
+    const session = await startSession();
+    await driveUntil(session.id, "review-distortion");
+    await submitPatientInput(session.id, { kind: "text", value: OWN_EXAMPLES[0] });
+
+    const view = await currentView(session.id);
+    // The example is already stored, and the pointer has NOT moved on.
+    expect(storedRows(view)).toEqual([OWN_EXAMPLES[0]]);
+    expect(view.session.runtimeContext.fields.s02PatternPhase).toBe("discuss");
+    expect(currentSlug(view)).toBe("review-distortion");
+    // Still the first pattern: the second one has not been introduced.
+    const said = assistantTexts(view).at(-1) ?? "";
+    expect(said).toContain(COGNITIVE_DISTORTIONS[0].nameKo);
+    expect(said).not.toContain(COGNITIVE_DISTORTIONS[1].nameKo);
+
+    // Answering the discussion is what moves it on.
+    await submitPatientInput(session.id, { kind: "text", value: DISCUSSION_REPLY });
+    const next = await currentView(session.id);
+    expect(next.session.runtimeContext.fields.s02PatternPhase).toBe("ask");
+    expect(assistantTexts(next).at(-1) ?? "").toContain(COGNITIVE_DISTORTIONS[1].nameKo);
+  }, 90_000);
+
+  it("takes a bare 'yes' as a whole answer on the discussion turn", async () => {
+    const session = await startSession();
+    await driveUntil(session.id, "review-distortion");
+    await submitPatientInput(session.id, { kind: "text", value: OWN_EXAMPLES[0] });
+    const result = await submitPatientInput(session.id, { kind: "text", value: "네" });
+    expect(FAILED_OUTCOMES.has(result.turnOutcome ?? "")).toBe(false);
+    expect(storedRows(await currentView(session.id))).toHaveLength(1);
+  }, 90_000);
+
+  // The participant swapping her own example for a better one is a real move:
+  // at lines 150-159 of the transcript she volunteers a different example than
+  // the one she had written down. The replacement text below is her own fuller
+  // wording for this pattern, from lines 94-97 ("나를 못 봐서 인사를 안 했지만,
+  // 인사를 안 했기 때문에 나를 싫어할 거야"); only the "그것보다는" cue is added,
+  // to put it on the discussion turn rather than the first answer.
+  // The pattern never changes; only which of her examples fills the row.
+  it("replaces the row when the participant offers a better example for the same pattern", async () => {
+    const session = await startSession();
+    await driveUntil(session.id, "review-distortion");
+    await submitPatientInput(session.id, { kind: "text", value: OWN_EXAMPLES[0] });
+    await submitPatientInput(session.id, {
+      kind: "text",
+      value: "그것보다는, 저를 못 봐서 인사를 안 했을 수도 있는데 인사를 안 했기 때문에 저를 싫어할 거라고 생각한 게 더 맞아요",
+    });
+
+    const view = await currentView(session.id);
+    const rows = storedRows(view);
+    // Still one row -- the first pattern's -- and it now holds the later example.
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toContain("못 봐서 인사를 안 했을 수도");
+    // A replacement is new content, so the pattern stays open one more turn to
+    // talk about the example that replaced it -- which is what the recording did
+    // at line 325 ("좋은 예예요, 그 예를 좀 써봅시다").
+    expect(view.session.runtimeContext.fields.s02PatternPhase).toBe("discuss");
+    expect(assistantTexts(view).at(-1) ?? "").not.toContain(COGNITIVE_DISTORTIONS[1].nameKo);
+
+    // Agreeing then moves it on.
+    await submitPatientInput(session.id, { kind: "text", value: DISCUSSION_REPLY });
+    const next = await currentView(session.id);
+    expect(storedRows(next)).toHaveLength(1);
+    expect(assistantTexts(next).at(-1) ?? "").toContain(COGNITIVE_DISTORTIONS[1].nameKo);
+  }, 90_000);
+
+  // 578-596 of the transcript: the counselor stayed on overgeneralization while
+  // the participant kept adding, and stopped when she simply agreed. How long it
+  // runs is the program's decision, not the guide's -- step order belongs to the
+  // program here -- with a hard ceiling so no pattern can hold the session open.
+  it("stays on a pattern while the participant keeps adding, up to a ceiling", async () => {
+    const session = await startSession();
+    await driveUntil(session.id, "review-distortion");
+    await submitPatientInput(session.id, { kind: "text", value: OWN_EXAMPLES[0] });
+
+    // Two substantive replies in a row: still the same pattern both times.
+    for (const reply of ["그때는 사실 확인을 해본 게 아니었어요", "생각해보면 인사를 못 본 걸 수도 있어요"]) {
+      await submitPatientInput(session.id, { kind: "text", value: reply });
+      const view = await currentView(session.id);
+      expect(assistantTexts(view).at(-1) ?? "", reply).not.toContain(COGNITIVE_DISTORTIONS[1].nameKo);
+    }
+    // The third exhausts the ceiling, so it moves on even though they added more.
+    await submitPatientInput(session.id, { kind: "text", value: "다른 사람들한테도 비슷하게 생각한 적이 있어요" });
+    const after = await currentView(session.id);
+    expect(after.session.runtimeContext.fields.s02PatternPhase).toBe("ask");
+    expect(storedRows(after)).toHaveLength(1);
+    expect(assistantTexts(after).at(-1) ?? "").toContain(COGNITIVE_DISTORTIONS[1].nameKo);
+  }, 90_000);
+
+  it("lets go of a reading the participant does not agree with, instead of pressing it", async () => {
+    const session = await startSession();
+    await driveUntil(session.id, "review-distortion");
+    await submitPatientInput(session.id, { kind: "text", value: OWN_EXAMPLES[0] });
+    // A disagreement is not an acknowledgement, but it must still end the
+    // discussion -- otherwise the guide gets another turn to argue.
+    await submitPatientInput(session.id, { kind: "text", value: "그건 아닌 것 같은데요" });
+
+    const view = await currentView(session.id);
+    expect(view.session.runtimeContext.fields.s02PatternPhase).toBe("ask");
+    // The example they gave is kept; disagreeing with a reading is not
+    // withdrawing the example.
+    expect(storedRows(view)).toEqual([OWN_EXAMPLES[0]]);
+    expect(assistantTexts(view).at(-1) ?? "").toContain(COGNITIVE_DISTORTIONS[1].nameKo);
+  }, 90_000);
+
+  // The explanation that opens each pattern invites a "네 알겠습니다", which
+  // answers the explanation and not the question. While distortionExamples was
+  // the prompt's own output field the shared list path caught this; the two-turn
+  // rhythm moved the field out of outputFields, so s02/turn-rules.ts catches it.
+  it("does not record an acknowledgement of the explanation as the participant's example", async () => {
+    const session = await startSession();
+    await driveUntil(session.id, "review-distortion");
+    await submitPatientInput(session.id, { kind: "text", value: "네 알겠습니다." });
+
+    const view = await currentView(session.id);
+    expect(storedRows(view)).toHaveLength(0);
+    expect(view.session.runtimeContext.fields.s02PatternPhase).not.toBe("discuss");
+    // Still the first pattern.
+    expect(assistantTexts(view).at(-1) ?? "").not.toContain(COGNITIVE_DISTORTIONS[1].nameKo);
+  }, 90_000);
+
+  it("skips the discussion when there was no example to talk about", async () => {
+    const session = await startSession();
+    await driveUntil(session.id, "review-distortion");
+    await submitPatientInput(session.id, { kind: "text", value: "딱히 없어요" });
+
+    const view = await currentView(session.id);
+    expect(view.session.runtimeContext.fields.s02PatternPhase).toBe("ask");
+    expect(storedRows(view)).toEqual([NO_EXAMPLE_MARKER]);
+    // Straight on to the second pattern: one turn, not two.
+    expect(assistantTexts(view).at(-1) ?? "").toContain(COGNITIVE_DISTORTIONS[1].nameKo);
+  }, 90_000);
+
+  // The repeat budget counts accepted patient turns, not patterns
+  // (runtime-state-reducer.ts). At the old value of fifteen the loop
+  // force-completed around the eighth pattern and the walkthrough was silently
+  // cut short, with no error anywhere.
+  it("gets through all fifteen patterns without the repeat budget cutting it short", async () => {
+    const session = await startSession();
+    const { view } = await driveUntil(session.id, "cdquest-explain");
+    expect(storedRows(view)).toHaveLength(COGNITIVE_DISTORTIONS.length);
+    expect(view.session.runtimeContext.fields.allDistortionsReviewed).toBe(true);
+    // The fifteenth pattern was talked about too, not just recorded.
+    expect(view.session.runtimeContext.fields.s02PatternPhase).toBe("ask");
+  }, 180_000);
 
   // ------------------------------------------------------------- CD-Quest
   //
@@ -408,6 +576,8 @@ describe("S02 redesign: real second session replay", () => {
     const session = await startSession();
     await driveUntil(session.id, "review-distortion");
     await submitPatientInput(session.id, { kind: "text", value: OWN_EXAMPLES[0] });
+    // The discussion turn for the first pattern, then the second pattern.
+    await submitPatientInput(session.id, { kind: "text", value: DISCUSSION_REPLY });
     await submitPatientInput(session.id, { kind: "text", value: "딱히 없어요" });
 
     const worksheet = await getWorksheetView(session.id, "tbct-s02");

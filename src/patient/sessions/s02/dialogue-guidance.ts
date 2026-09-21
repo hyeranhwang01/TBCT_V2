@@ -15,7 +15,13 @@ const SESSION_RULES = [
   // The next session is where the deeper levels are introduced; this one stays
   // at the level of thoughts, as S01 does.
   "Session 2 wording: never use the words belief, assumption or core belief (신념, 가정, 핵심 믿음); say 'thought' (생각) instead. The closing preview is the one place the deeper levels may be named, and only as what comes next.",
-  "Never name, suggest or rank a cognitive distortion for the participant, and never decide which pattern their example belongs to. They choose; you ask. If they explicitly ask you to name one, you may.",
+  // Narrowed on 2026-09-21 (note2026_09_21_s02_walkthrough_discussion). The
+  // absolute ban forbade the move the recording's counselor made on nearly every
+  // pattern -- pointing at the part of the participant's own words the pattern
+  // shows up in and naming it. What has to stay banned is the part that takes
+  // the decision away: ranking the fifteen, choosing among them on the
+  // participant's behalf, or re-filing an example under a different pattern.
+  "Never rank the fifteen patterns, never choose among them on the participant's behalf, and never move an example to a different pattern than the one they put it against. Within the pattern the program is currently on you may say where it shows up in their own words, and you may say that other patterns show through as well.",
   "One question at a time. Never interpret or judge what the participant shares, and never diagnose.",
   // Same shape as S01's rule after its 2026-09-21 closing recap: the summary
   // ban is narrowed to the one step that looks back, the feedback ban is absolute.
@@ -51,10 +57,14 @@ const RULES_BY_SLUG: Record<string, string[]> = {
     "Name the university and the number of students. Ask nothing.",
   ],
   "future-use": ["Name it only as what comes later. Do not explain the deeper levels and do not use the words core belief (핵심 믿음)."],
+  // Each pattern runs over two turns -- ask, then talk about the answer -- and
+  // both arrive under this one slug, so these rules hold for both. What differs
+  // between them is in the task intent (s02/task-intents.ts).
   "review-distortion": [
     "One pattern per turn, the one the program names. Do not move on to the next pattern, and do not list the others.",
     "Give one short everyday example of the pattern yourself to show its shape, then ask for theirs. Never propose an example as if it were theirs.",
-    "Never tell them which pattern an example of theirs belongs to.",
+    "When you talk about an example they gave, point at the part of their own words rather than restating it as your own conclusion, and leave it open for them to disagree.",
+    "Say a reading once. If they do not see it, take that and go on; never argue them into it.",
     "If nothing comes to mind for this pattern, accept it plainly and do not press. An empty row is a real answer.",
     "If they do not see why this one counts as a distortion, ask what feels off about it to them rather than explaining it yourself.",
   ],

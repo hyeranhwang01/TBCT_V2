@@ -54,6 +54,15 @@ describe("S02 fallback wording", () => {
     }
   });
 
+  it("asks about the pattern just answered on the discussion turn, in both languages", () => {
+    const prompt = S02_PROMPTS.find((item) => item.id === "tbct-s02-n05-p01-review-distortion")!;
+    for (const [index, distortion] of COGNITIVE_DISTORTIONS.entries()) {
+      const fields = { s02PatternPhase: "discuss", distortionExamples: Array.from({ length: index + 1 }, () => "예시") };
+      expect(resolveStaticText(prompt, fields, "ko-KR"), distortion.id).toContain(distortion.nameKo);
+      expect(resolveStaticText(prompt, fields, "en-US"), distortion.id).toContain(distortion.nameEn[0]);
+    }
+  });
+
   it("does not run off the end of the registry once every pattern has a row", () => {
     const prompt = S02_PROMPTS.find((item) => item.id === "tbct-s02-n05-p01-review-distortion");
     const fields = { distortionExamples: COGNITIVE_DISTORTIONS.map((_, index) => `example ${index}`) };

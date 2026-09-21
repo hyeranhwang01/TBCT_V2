@@ -40,27 +40,47 @@ const CONTENT_POOLS: Array<{ pattern: RegExp; replies: string[] }> = [
     "Six to seven days, very strongly.",
     "One or two days, and quite strongly.",
   ] },
-  // S02's fifteen-pattern walkthrough asks once per pattern
-  // (note2026_09_21_s02_cognitive_distortions), so it needs fifteen DISTINCT
-  // replies: the generic fallback cycles three sentences, and isDuplicateListEntry
-  // rejects the repeats, which stalled the loop from the fourth pattern on.
-  // First in the list because /problem/i and /emotion/i would otherwise match it.
-  { pattern: /distortionExamples/i, replies: [
+  // S02's fifteen-pattern walkthrough takes TWO turns per pattern
+  // (note2026_09_21_s02_walkthrough_discussion): an example, then a reply to what
+  // the guide said about it. The pool alternates the two, so the synthetic
+  // participant answers each turn with something that fits it -- thirty distinct
+  // replies, because the generic fallback cycles three sentences and the repeats
+  // read as a participant saying the same thing over and over. The discussion
+  // replies are short agreements on purpose: s02/turn-rules.ts keeps a pattern
+  // open while the participant ADDS something, so long synthetic answers would
+  // spend the full three-turn discussion on all fifteen patterns, which no real
+  // session does.
+  { pattern: /distortionTurnAnswer/i, replies: [
     "I decided one slip meant the whole thing was ruined.",
+    "Yes, that was it.",
     "I was sure the presentation would go badly and I would never recover.",
+    "Yes, that sounds right.",
     "When the feedback was good I told myself they were only being polite.",
+    "Right, I see it.",
     "I felt uneasy, so I took that as proof something bad was coming.",
+    "Yes, that's the part.",
     "I called myself hopeless after one mistake.",
+    "Yes, I can see that.",
     "One small error felt huge and the rest of the work felt like nothing.",
+    "Yes, that's fair.",
     "I kept replaying the one critical sentence and forgot the rest.",
+    "Yes, fairly often.",
     "I assumed they were thinking I was not competent.",
+    "Yes, I suppose so.",
     "One cold reply meant they are always like that with me.",
+    "Yes, it does.",
     "The clerk seemed annoyed and I took it as being about me.",
+    "Yes, no real reason.",
     "I told myself everything has to be perfect, no matter what.",
+    "Yes, I think so.",
     "They did not reply for a day, so I concluded they were done with me.",
+    "Right, that part.",
     "When the project slipped I decided it was entirely my fault.",
+    "Yes, straight there.",
     "What if I get there and cannot do any of it?",
+    "Yes, that's the one.",
     "Next to someone further along, my own work looks like nothing.",
+    "Yes, that was it.",
   ] },
   { pattern: /situation/i, replies: [
     "My manager criticized my report in front of the whole team yesterday.",

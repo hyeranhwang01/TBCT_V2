@@ -271,15 +271,36 @@ export function currentDistortionIndex(fields: Record<string, unknown>): number 
 /** The walkthrough intent, built for whichever pattern the loop is on. The
  * registry supplies the name, the definition and one everyday example, so the
  * fifteen explanations live in data rather than in fifteen prompts. */
-function walkthroughIntent(fields: Record<string, unknown>, korean: boolean): S02TaskIntent {
-  const index = currentDistortionIndex(fields);
+// What the guide may NOT say when it talks about an example. Both come from the
+// evidence rather than from caution: an evaluation of an LLM cognitive-
+// restructuring chatbot found participants read phrases like "a classic
+// example" as being judged, and that insisting on a reading -- rather than
+// naming it once -- was what felt invalidating ("brushing aside my concerns in
+// favour of what it deemed to be reality").
+const NO_VERDICT_WORDING: S02MustMention = {
+  describe: "calling it a classic or textbook example, which reads as being judged",
+  ko: "전형적|교과서적|딱\\s*그\\s*경우",
+  en: "classic (?:example|case)|textbook (?:example|case)|typical example",
+};
+// Three things have to stay possible here, which is why the pattern below is
+// narrow. "다른 유형도 비쳐요" is allowed -- the recording's counselor said it.
+// "이 유형으로는 잘 안 보이네요" is allowed, and is the way out the discussion
+// turn needs when a pattern genuinely does not fit. What is banned is only the
+// re-filing verdict: not this one BUT that one. The giveaway is the named
+// alternative, not the negation, so the pattern matches the pair.
+const NO_REFILING: S02MustMention = {
+  describe: "saying the example belongs to a different pattern instead of this one",
+  ko: "아니(라|고)\\s*(다른|저|그)\\s*(유형|쪽)|다른\\s*유형(으로|에)\\s*(옮|넣|들어가)",
+  en: "(?:instead of|rather than) this pattern|belongs (?:instead )?(?:to|under) (?:a )?different pattern",
+};
+
+function walkthroughAskIntent(index: number, korean: boolean): S02TaskIntent {
   const distortion = COGNITIVE_DISTORTIONS[index];
   const name = korean ? distortion.nameKo : distortion.nameEn[0];
   const definition = korean ? distortion.descriptionKo : distortion.descriptionEn;
   const example = korean ? distortion.exampleKo[0] : distortion.exampleEn[0];
-  const ordinal = index + 1;
   return {
-    obtain: `Pattern ${ordinal} of 15 is "${name}". Say what it is in your own words -- it means: ${definition} -- give one short everyday example of it (for instance: "${example}"), and then ask whether they have an example of their own from their week.`,
+    obtain: `Pattern ${index + 1} of 15 is "${name}". Say what it is in your own words -- it means: ${definition} -- give one short everyday example of it (for instance: "${example}"), and then ask whether they have an example of their own from their week.`,
     keep: [
       `Name this pattern, and only this pattern: ${name}. Do not move on to the next one and do not list the others.`,
       NEVER_LABEL_FOR_THEM,
@@ -290,6 +311,76 @@ function walkthroughIntent(fields: Record<string, unknown>, korean: boolean): S0
     ],
     mustMention: [{ describe: `this pattern's name, "${name}"`, ko: escapeRegExp(distortion.nameKo), en: escapeRegExp(distortion.nameEn[0]) }],
   };
+}
+
+/**
+ * The second turn on a pattern: talk about the example they just gave, which is
+ * what two thirds of the real session actually consisted of and what the first
+ * build of this step left out entirely (note2026_09_21_s02_walkthrough
+ * _discussion).
+ *
+ * Shaped after the three moves the recording's counselor used -- point at the
+ * part of THEIR words, separate what happened from what they concluded, then
+ * name the pattern in it: "그만두었는데 사람들은 내가 끈기가 없어서 그만두었다고
+ * 생각한다 ... 내가 그 사람들의 마음을 읽은 거죠 ... 이게 mind reading입니다".
+ * That is the published Diagnosis-of-Thought shape (subjectivity assessment ->
+ * contrastive reasoning -> naming), whose documented failure is over-diagnosis:
+ * asked to find the pattern, a model finds one even when there is none. Hence
+ * the explicit way out below -- across fifteen patterns some genuinely will not
+ * fit.
+ *
+ * The classification stays inside what the participant already decided: they
+ * put this example against this pattern, so the guide is confirming one named
+ * pattern, never choosing among fifteen. It may say other patterns show through
+ * too -- one example belonging to several is the counselor's own answer to the
+ * difficulty reported in the homework review -- but never that it belongs
+ * somewhere else instead, and it never moves the row.
+ */
+function walkthroughDiscussIntent(index: number, fields: Record<string, unknown>, korean: boolean): S02TaskIntent {
+  const distortion = COGNITIVE_DISTORTIONS[index];
+  const name = korean ? distortion.nameKo : distortion.nameEn[0];
+  const rows = Array.isArray(fields.distortionExamples) ? fields.distortionExamples : [];
+  const own = typeof rows[index] === "string" ? (rows[index] as string) : "";
+  // The discussion can run to a second or third turn when the participant keeps
+  // giving content (s02/turn-rules.ts decides). On those turns the reading has
+  // already been offered, so repeating it is the wrong move -- follow what they
+  // just said instead, which is what the counselor did over 578-596.
+  const spent = typeof fields.s02PatternDiscussTurns === "number" ? fields.s02PatternDiscussTurns : 0;
+  const following = spent > 0;
+  return {
+    obtain: following
+      ? `Still on pattern ${index + 1} of 15, "${name}". They have just answered what you said about their own example` +
+        (own ? ` ("${own}")` : "") +
+        `. Take what they have just added and go one step further with it -- towards what actually happened versus what they concluded. Do not repeat the reading you already gave.`
+      : `They have just given an example of their own for pattern ${index + 1} of 15, "${name}"` +
+        (own ? `: "${own}". ` : ". ") +
+        `Point to the part of what THEY said that this pattern shows up in, and say in one line why that part is out of balance -- what actually happened, and what they concluded from it. If the pattern does not really show in what they said, say that instead.`,
+    keep: [
+      `Talk about this pattern only: ${name}. Do not introduce the next pattern in this turn.`,
+      "Use their own words for the part you point at, and put it as something they can agree or disagree with, never as a verdict.",
+      "Offer a reading once. If they do not see it, take that and let it go -- never argue them into it.",
+      "You may say that other patterns show through in the same example, and that one example can belong to several at once. Never say it belongs to a different pattern instead of this one, and never move it: the row stays where they put it.",
+      "If a different example of THEIR OWN would fit this pattern better, you may say so and ask for it. You never supply one yourself.",
+      "At most one question, and only if it helps them see their own example more clearly.",
+      "Do not reassure, do not praise the answer, and do not tell them it will get better.",
+    ],
+    mustMention: [{ describe: `this pattern's name, "${name}"`, ko: escapeRegExp(distortion.nameKo), en: escapeRegExp(distortion.nameEn[0]) }],
+    mustNotMention: [NO_VERDICT_WORDING, NO_REFILING],
+  };
+}
+
+function walkthroughIntent(fields: Record<string, unknown>, korean: boolean): S02TaskIntent {
+  // s02/turn-rules.ts sets the phase: "discuss" means their example for this
+  // pattern is already stored, so the pattern being talked about is the LAST
+  // stored row -- not currentDistortionIndex, which has already moved on to the
+  // next one (and which clamps at fourteen, so it would point at the wrong
+  // pattern on the fifteenth).
+  if (fields.s02PatternPhase === "discuss") {
+    const stored = Array.isArray(fields.distortionExamples) ? fields.distortionExamples.length : 0;
+    const index = Math.max(0, Math.min(stored - 1, COGNITIVE_DISTORTIONS.length - 1));
+    return walkthroughDiscussIntent(index, fields, korean);
+  }
+  return walkthroughAskIntent(currentDistortionIndex(fields), korean);
 }
 
 function escapeRegExp(text: string) {
