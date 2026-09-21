@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getParticipant, saveParticipant } from "@/shared/data/repositories/participant-repository";
 import { CANONICAL_PROMPT_ITEMS, CANONICAL_STAGE_NODES } from "@/shared/protocol/source-fidelity-catalog";
 import { compileDialogueContract } from "@/shared/dialogue-agent/dialogue-contract-compiler";
 import { createCanonicalTestRuntimeSession, getRuntimeSession } from "@/shared/api/runtime-session-api";
@@ -36,27 +37,54 @@ afterEach(() => {
 });
 
 describe("policy resolution", () => {
-  it("is disabled by default -- no intervention change before the PI decides", () => {
+  it("has no off switch: the shipped default already carries memory", () => {
     expect(resolveLongitudinalMemoryPolicy()).toEqual(DEFAULT_LONGITUDINAL_MEMORY_POLICY);
-    expect(DEFAULT_LONGITUDINAL_MEMORY_POLICY.enabled).toBe(false);
+    expect(Object.keys(DEFAULT_LONGITUDINAL_MEMORY_POLICY)).not.toContain("enabled");
+    // Every scope the schema accepts injects on SOME turn, so no setting
+    // can switch the feature off (clinical decision 2026-09-21).
+    const everyTurnShape = [
+      { participantOwned: true, nodeRequiresProtectedField: false },
+      { participantOwned: false, nodeRequiresProtectedField: true },
+      { participantOwned: false, nodeRequiresProtectedField: false },
+    ];
+    for (const scope of MEMORY_INJECTION_SCOPES) {
+      expect(everyTurnShape.some((turn) => memoryAllowedOnTurn(scope, turn))).toBe(true);
+    }
   });
 
   it("merges a partial override over the default and validates it", () => {
-    setPolicy({ version: "rct-v1", enabled: true, injectionScope: "unprotected_nodes", maxItemsPerNode: 3, allowedMemoryTypes: ["treatment_goal", "homework_assignment"], crossSessionConsentDefault: false });
-    expect(resolveLongitudinalMemoryPolicy()).toEqual({ version: "rct-v1", enabled: true, injectionScope: "unprotected_nodes", maxItemsPerNode: 3, allowedMemoryTypes: ["treatment_goal", "homework_assignment"], crossSessionConsentDefault: false });
-    setPolicy({ enabled: true });
-    expect(resolveLongitudinalMemoryPolicy()).toEqual({ ...DEFAULT_LONGITUDINAL_MEMORY_POLICY, enabled: true });
+    setPolicy({ version: "rct-v1", injectionScope: "unprotected_nodes", maxItemsPerNode: 3, allowedMemoryTypes: ["treatment_goal", "homework_assignment"], crossSessionConsentDefault: false });
+    expect(resolveLongitudinalMemoryPolicy()).toEqual({ version: "rct-v1", injectionScope: "unprotected_nodes", maxItemsPerNode: 3, allowedMemoryTypes: ["treatment_goal", "homework_assignment"], crossSessionConsentDefault: false });
+    setPolicy({ injectionScope: "all_turns" });
+    expect(resolveLongitudinalMemoryPolicy()).toEqual({ ...DEFAULT_LONGITUDINAL_MEMORY_POLICY, injectionScope: "all_turns" });
   });
 
   it("never lets an invalid setting change the intervention silently: falls back to the default and warns", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    setPolicy('{"enabled": true, "injectionScope": "everywhere"}');
+    setPolicy('{"injectionScope": "everywhere"}');
     expect(resolveLongitudinalMemoryPolicy()).toEqual(DEFAULT_LONGITUDINAL_MEMORY_POLICY);
     setPolicy("not json");
     expect(resolveLongitudinalMemoryPolicy()).toEqual(DEFAULT_LONGITUDINAL_MEMORY_POLICY);
-    setPolicy({ enabled: true, maxItemsPerNode: -1 });
+    setPolicy({ maxItemsPerNode: -1 });
     expect(resolveLongitudinalMemoryPolicy()).toEqual(DEFAULT_LONGITUDINAL_MEMORY_POLICY);
     expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("rejects the settings that would be an off switch in disguise", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // The retired "none" scope, a zero item cap, and an empty type list
+    // each used to mean "inject nothing". All three are now invalid, so a
+    // deployment cannot quietly withdraw the feature.
+    setPolicy({ injectionScope: "none" as never });
+    expect(resolveLongitudinalMemoryPolicy()).toEqual(DEFAULT_LONGITUDINAL_MEMORY_POLICY);
+    setPolicy({ maxItemsPerNode: 0 });
+    expect(resolveLongitudinalMemoryPolicy()).toEqual(DEFAULT_LONGITUDINAL_MEMORY_POLICY);
+    setPolicy({ allowedMemoryTypes: [] });
+    expect(resolveLongitudinalMemoryPolicy()).toEqual(DEFAULT_LONGITUDINAL_MEMORY_POLICY);
+    // An unknown key (such as a stale "enabled": false) is dropped, not honoured.
+    setPolicy('{"enabled": false}');
+    expect(resolveLongitudinalMemoryPolicy()).toEqual(DEFAULT_LONGITUDINAL_MEMORY_POLICY);
     warn.mockRestore();
   });
 
@@ -64,8 +92,7 @@ describe("policy resolution", () => {
     const owned = { participantOwned: true, nodeRequiresProtectedField: false };
     const protectedNode = { participantOwned: false, nodeRequiresProtectedField: true };
     const administrative = { participantOwned: false, nodeRequiresProtectedField: false };
-    expect(MEMORY_INJECTION_SCOPES).toEqual(["none", "administrative_only", "unprotected_nodes", "all_turns"]);
-    expect([owned, protectedNode, administrative].map((turn) => memoryAllowedOnTurn("none", turn))).toEqual([false, false, false]);
+    expect(MEMORY_INJECTION_SCOPES).toEqual(["administrative_only", "unprotected_nodes", "all_turns"]);
     expect([owned, protectedNode, administrative].map((turn) => memoryAllowedOnTurn("administrative_only", turn))).toEqual([false, false, true]);
     expect([owned, protectedNode, administrative].map((turn) => memoryAllowedOnTurn("unprotected_nodes", turn))).toEqual([true, false, true]);
     expect([owned, protectedNode, administrative].map((turn) => memoryAllowedOnTurn("all_turns", turn))).toEqual([true, true, true]);
@@ -94,7 +121,6 @@ describe("the contract follows the decided scope", () => {
   // S01 candidate-one-emotion: participant-owned turn in a protected node.
   // S02 problem-framing (problems): participant-owned, node not protected.
   const cases: Array<[string, string, string, boolean]> = [
-    ["none", "-preview", "tbct-s01", false],
     ["administrative_only", "-preview", "tbct-s01", true],
     ["administrative_only", "problem-framing", "tbct-s02", false],
     ["unprotected_nodes", "problem-framing", "tbct-s02", true],
@@ -102,15 +128,27 @@ describe("the contract follows the decided scope", () => {
     ["all_turns", "candidate-one-emotion", "tbct-s01", true],
   ];
   it.each(cases)("scope %s: %s (%s) carries memory = %s", (scope, prompt, sessionId, expected) => {
-    setPolicy({ enabled: true, injectionScope: scope as LongitudinalMemoryPolicy["injectionScope"] });
+    setPolicy({ injectionScope: scope as LongitudinalMemoryPolicy["injectionScope"] });
     expect(compile(prompt, sessionId).participantMemory !== undefined).toBe(expected);
   });
 
-  it("carries nothing while the policy is disabled, whatever the scope says", () => {
-    setPolicy({ enabled: false, injectionScope: "all_turns" });
-    expect(compile("-preview", "tbct-s01").participantMemory).toBeUndefined();
+  it("carries memory on the shipped default config, with no setting at all", () => {
     setPolicy(undefined);
-    expect(compile("-preview", "tbct-s01").participantMemory).toBeUndefined();
+    expect(compile("-preview", "tbct-s01").participantMemory).toEqual(ITEMS);
+  });
+
+  it("never mixes memory into confirmedState, in any scope", () => {
+    // The scope decides where memory APPEARS; it can never make memory
+    // quotable. confirmedState is message-composition.ts's quote-source pool,
+    // so keeping memory out of it is what stops the assistant presenting a
+    // prior-session summary as the participant's own words -- and that holds
+    // even at all_turns, where every turn carries memory.
+    for (const scope of MEMORY_INJECTION_SCOPES) {
+      setPolicy({ injectionScope: scope });
+      for (const [prompt, sessionId] of [["-preview", "tbct-s01"], ["automatic-thought", "tbct-s03"], ["problem-framing", "tbct-s02"]] as const) {
+        expect(JSON.stringify(compile(prompt, sessionId).confirmedState)).not.toContain("산책");
+      }
+    }
   });
 });
 
@@ -127,16 +165,36 @@ describe("retrieval follows the decision", () => {
     });
   });
 
-  it("does not retrieve at all while disabled (no run, no memory on the session)", async () => {
+  it("retrieves on the shipped default config, with no setting at all", async () => {
+    setPolicy(undefined);
     const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s01", locale: "ko-KR" });
     await saveLongitudinalMemory(approved(session.participantId, "MEM-1", "treatment_goal", "RET-GOAL"));
     await startRuntimeSession(session.id);
-    expect(await listMemoryRetrievalRuns(session.id)).toEqual([]);
-    expect((await getRuntimeSession(session.id))?.session.runtimeContext.longitudinalMemory).toBeUndefined();
+    const runs = await listMemoryRetrievalRuns(session.id);
+    expect(runs.length).toBeGreaterThan(0);
+    expect(runs.every((run) => run.selectedMemoryIds.includes("MEM-1"))).toBe(true);
+    expect((await getRuntimeSession(session.id))?.session.runtimeContext.longitudinalMemory?.items).toEqual([
+      { id: "MEM-1", type: "treatment_goal", content: "content MEM-1" },
+    ]);
   });
 
-  it("applies maxItemsPerNode and allowedMemoryTypes once enabled", async () => {
-    setPolicy({ enabled: true, maxItemsPerNode: 1, allowedMemoryTypes: ["homework_assignment"] });
+  it("still withholds everything from a participant who has not consented -- the one remaining gate", async () => {
+    const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s01", locale: "ko-KR" });
+    const participant = (await getParticipant(session.participantId))!;
+    await saveParticipant({ ...participant, consent: { ...participant.consent, crossSessionUseAllowed: false } });
+    await saveLongitudinalMemory(approved(session.participantId, "MEM-1", "treatment_goal", "RET-GOAL"));
+
+    await startRuntimeSession(session.id);
+
+    const view = await getRuntimeSession(session.id);
+    expect(view?.session.runtimeContext.longitudinalMemory).toBeUndefined();
+    expect(await listMemoryRetrievalRuns(session.id)).toEqual([]);
+    // Logged as skipped, not as a failure -- declining consent is expected.
+    expect(view?.logs.some((log) => log.status === "skipped" && log.summary.includes("cross-session use not consented"))).toBe(true);
+  });
+
+  it("applies maxItemsPerNode and allowedMemoryTypes", async () => {
+    setPolicy({ maxItemsPerNode: 1, allowedMemoryTypes: ["homework_assignment"] });
     const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s01", locale: "ko-KR" });
     await saveLongitudinalMemory(approved(session.participantId, "MEM-goal", "treatment_goal", "RET-GOAL"));
     await saveLongitudinalMemory(approved(session.participantId, "MEM-hw-1", "homework_assignment", "RET-HW-ASG"));

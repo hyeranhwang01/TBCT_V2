@@ -1397,12 +1397,14 @@ export async function executeCurrentNode(sessionId: string, prefetchedView?: Run
   if (!node) throw new Error("Current node is missing");
   const activePromptItem = view.promptItems.find((item) => item.id === activeStep.promptItem.sourcePromptItemId);
   if (!activePromptItem) throw new Error("Current source PromptItem is missing");
-  // Whether cross-session memory is part of the intervention at all, and how
-  // much of it, is the PI's decision -- read from memory-policy.ts, never
-  // fixed here. Disabled (the default until that decision) means no
-  // retrieval, no run/usage log, and an unchanged runtimeContext.
+  // Cross-session memory is always part of the intervention (clinical
+  // decision 2026-09-21, see memory-policy.ts) -- retrieval runs on every
+  // node. How much and which types is still the PI's call, read from the
+  // policy rather than fixed here. A participant who has not consented is
+  // turned away inside runMemoryRetrieval, and lands in the skipped branch
+  // below, not here.
   const memoryPolicy = resolveLongitudinalMemoryPolicy();
-  const retrieval = !memoryPolicy.enabled ? null : await runMemoryRetrieval({
+  const retrieval = await runMemoryRetrieval({
     participantId: session.participantId,
     runtimeSessionId: session.id,
     protocolId: session.protocolId,

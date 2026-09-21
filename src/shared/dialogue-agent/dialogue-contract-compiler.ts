@@ -165,7 +165,7 @@ function confirmedStateFor(session: RuntimeSession, node: ClinicalStageNode, tar
  * smoothed from. Whatever the scope, memory never enters confirmedState. */
 function participantMemoryFor(session: RuntimeSession, participantOwned: boolean, nodeRequiresProtectedField: boolean) {
   const policy = resolveLongitudinalMemoryPolicy();
-  if (!policy.enabled || !memoryAllowedOnTurn(policy.injectionScope, { participantOwned, nodeRequiresProtectedField })) return undefined;
+  if (!memoryAllowedOnTurn(policy.injectionScope, { participantOwned, nodeRequiresProtectedField })) return undefined;
   const items = session.runtimeContext.longitudinalMemory?.items ?? [];
   const usable = items.filter((item) => item.id && item.content.trim());
   return usable.length ? usable.map((item) => ({ id: item.id, type: item.type, content: item.content })) : undefined;

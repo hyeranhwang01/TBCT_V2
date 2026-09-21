@@ -50,11 +50,12 @@ function approvedMemory(participantId: string, id: string, content: string): Lon
   };
 }
 
-// The policy defaults to DISABLED until the PI decides (memory-policy.ts);
-// these tests exercise the enabled pipeline with the strict default scope.
+// No policy setup here on purpose: cross-session memory is always on
+// (memory-policy.ts), so the shipped default config is what these tests
+// exercise. If an off switch is ever reintroduced, these fail.
 const savedPolicyEnv = process.env.LONGITUDINAL_MEMORY_POLICY;
-beforeEach(() => { process.env.LONGITUDINAL_MEMORY_POLICY = JSON.stringify({ version: "test-enabled", enabled: true }); });
-afterEach(() => { if (savedPolicyEnv === undefined) delete process.env.LONGITUDINAL_MEMORY_POLICY; else process.env.LONGITUDINAL_MEMORY_POLICY = savedPolicyEnv; });
+beforeEach(() => { delete process.env.LONGITUDINAL_MEMORY_POLICY; });
+afterEach(() => { if (savedPolicyEnv !== undefined) process.env.LONGITUDINAL_MEMORY_POLICY = savedPolicyEnv; });
 
 let savedIndexedDb: unknown;
 

@@ -1,7 +1,7 @@
 {
   "task": "TBCT Sessions 1-3 session-local enhancement work (content/flow/wording), following prompts/.claude/rules/tbct-session-manual.md",
   "createdAt": "2026-08-13",
-  "updatedAt": "2026-09-13",
+  "updatedAt": "2026-09-21",
   "allowedPaths": [
     "src/patient/pages/homework-list-page.tsx",
     "src/patient/pages/patient-list-page.tsx",
@@ -340,5 +340,19 @@
     "authTradeoff": "/api/participants/store's isDeniedForPatient is extended for the new ops: a patient may read only their own summaries/usage logs/tracking records; candidate, review-decision and retrieval-run ops are clinician-only from the browser. Server-side turn writes bypass the route in-process exactly like the existing participant ops (see runtime-request-context.ts's auth note).",
     "regressionPlan": "npm run type-check && npx vitest run src/shared/memory src/shared/dialogue-agent src/shared/api && npm test (full; baseline 848 passed / 70 files on main f0682ce).",
     "regressionResult": "tsc clean; next lint: 3 pre-existing warnings only; vitest 74 files / 882 tests pass (baseline main f0682ce: 70 / 848; +4 files / +34 tests, all new: memory-pipeline, memory-pipeline-server-path, memory-policy, participant-memory-injection); the 'vitest-worker: Timeout calling onTaskUpdate' RPC error is present on the baseline run; the logged 'Invalid URL: /api/notifications/safety-alert' console.error comes from the unchanged fire-and-forget relative fetch in runtime-execution-api.ts's safety path (caught, never fails a test) and is unrelated to this change; audit:sessions 8/8 pass, fallbackCount 0, providerErrorCount 0."
+  },
+  "note2026_09_21_memory_always_on": {
+    "task": "Clinical decision (asked of the clinical lead in TBCT_V2_종단메모리_임상보고_2026-09-14.md question 1, answered 2026-09-21): cross-session longitudinal memory is a REQUIRED part of the intervention, not an optional arm. Remove the on/off switch so the feature is structurally always on.",
+    "whySessionLocalIsInsufficient": "Continuation of note2026_09_13_ari_memory_pipeline_plumbing; the same shared files. Nothing in src/patient/sessions/* is involved.",
+    "change": [
+      "memory-policy.ts: `enabled` removed from the schema, the type and the default. The retired 'none' injection scope is gone, maxItemsPerNode now has min 1 instead of min 0, and allowedMemoryTypes rejects an empty list -- each of those three was an off switch in disguise. Version bumped to 2026-09-21-always-on. An unknown key such as a stale {\"enabled\": false} is dropped by the schema, not honoured.",
+      "runtime-execution-api.ts: memory retrieval always runs for a node; only maxItemsPerNode / allowedMemoryTypes still come from the policy.",
+      "dialogue-contract-compiler.ts: participantMemoryFor no longer consults an enabled flag, only injectionScope."
+    ],
+    "whatStillWithholdsMemory": "Two gates remain and are deliberately NOT global switches: a participant whose consent.crossSessionUseAllowed is false never has memory retrieved (logged as skipped, not failed), and RET-SAFE keeps safety_relevant / clinician_note out of runtime injection. The Patient Authorship Invariant is unchanged: memory never enters confirmedState, so it can never be quoted as the participant's words, at any scope.",
+    "whyNoEmergencyToggle": "Withdrawing cross-session memory mid-trial is an intervention change. Making it a code change plus a version bump is the correct process for a frozen intervention -- an env var that silently changes what patients receive would be the larger risk. memoryPolicyVersion is recorded on every turn that carried memory.",
+    "stillOpen": "The clinical lead has NOT yet answered question 2 (injection scope). The default stays administrative_only, which fires on only about one turn per session (S01 n10 preview, S02 returning-opening). 'Always on' is therefore structurally true but clinically thin until that scope decision arrives.",
+    "regressionPlan": "npm run type-check && npx vitest run && npm run audit:sessions.",
+    "regressionResult": "tsc clean; next lint 3 pre-existing warnings only; vitest 74 files / 884 tests pass (previous commit c872958: 74 / 882); audit:sessions 8/8 pass, fallbackCount 0, providerErrorCount 0."
   }
 }

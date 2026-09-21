@@ -2,14 +2,26 @@ import { z } from "zod";
 import type { MemoryType } from "@/types/longitudinal-memory";
 
 // The longitudinal-memory rules that are the PI's decision, in one place
-// (.claude/TASK_SCOPE.json note2026_09_13_ari_memory_pipeline_plumbing,
-// PDF "TBCT_V2 RAG 채울부분" 3장 ①): whether cross-session memory is part
-// of the intervention at all, on which turns it may appear, how many items
-// per node, which memory types, and what a new participant's cross-session
-// consent defaults to. These are part of the intervention and must be
-// frozen with the model snapshot and prompts, so the resolved policy has a
-// version that is recorded on every turn that used it (see
-// dialogue-agent-orchestrator.ts memoryPolicyVersion).
+// (.claude/TASK_SCOPE.json note2026_09_13_ari_memory_pipeline_plumbing and
+// note2026_09_21_memory_always_on, PDF "TBCT_V2 RAG 채울부분" 3장 ①): on
+// which turns cross-session memory may appear, how many items per node,
+// which memory types, and what a new participant's cross-session consent
+// defaults to. These are part of the intervention and must be frozen with
+// the model snapshot and prompts, so the resolved policy has a version that
+// is recorded on every turn that used it (see dialogue-agent-orchestrator.ts
+// memoryPolicyVersion).
+//
+// ALWAYS ON (clinical decision, 2026-09-21): cross-session memory is a
+// required part of the intervention, so there is deliberately no on/off
+// switch here -- no `enabled` flag, no "inject nowhere" scope, and no
+// zero-item cap. Every value below shapes HOW memory is used, never WHETHER.
+// Two gates that are not a global switch still stand and must keep standing:
+// a participant who has not consented to cross-session use
+// (consent.crossSessionUseAllowed) never has memory retrieved, and
+// safety_relevant / clinician_note memories are never injected (RET-SAFE in
+// retention-policies.ts). Withdrawing the feature mid-trial would be an
+// intervention change, so it takes a code change and a version bump --
+// deliberately not an environment variable someone can flip silently.
 //
 // Precedence: the LONGITUDINAL_MEMORY_POLICY environment variable (a JSON
 // object with any subset of the fields below) is merged over
@@ -17,14 +29,8 @@ import type { MemoryType } from "@/types/longitudinal-memory";
 // mechanism as ANTHROPIC_MODEL, so the two AI arms of the RCT get one
 // identical rule set from one setting. An invalid value never changes the
 // intervention silently: it is logged once and the default applies.
-//
-// Default: DISABLED. Until the PI decides, no memory reaches the dialogue
-// model; the pipeline's other stages (summary -> candidates -> clinician
-// approval) keep running so nothing is lost when it is switched on.
 
 export const MEMORY_INJECTION_SCOPES = [
-  // Never put memory on the contract (stage 4 off; retrieval still runs when enabled).
-  "none",
   // Only on turns that ask for no participant-owned content AND whose node
   // has no protected field -- the strict reading of the PDF (2-C), and the
   // most conservative option under the Patient Authorship Invariant.
@@ -58,18 +64,18 @@ const MEMORY_TYPES = [
 export const longitudinalMemoryPolicySchema = z.object({
   /** Bumped whenever any value below changes -- the frozen-intervention id. */
   version: z.string().min(1),
-  /** PI decision ①: is cross-session memory part of the intervention? When
-   * false, no retrieval runs and nothing reaches the contract; summaries,
-   * candidates and clinician review continue unchanged. */
-  enabled: z.boolean(),
-  /** On which turns memory may appear on the dialogue contract. */
+  /** On which turns memory may appear on the dialogue contract. Every scope
+   * puts memory on SOME turn: there is no "nowhere" option, by design (see
+   * the ALWAYS ON note above). */
   injectionScope: z.enum(MEMORY_INJECTION_SCOPES),
-  /** Retrieval cap per node ("몇 개"). 0 disables injection without disabling retrieval logging. */
-  maxItemsPerNode: z.number().int().min(0).max(50),
+  /** Retrieval cap per node ("몇 개"). At least 1 -- a zero cap would be an
+   * off switch wearing a number. */
+  maxItemsPerNode: z.number().int().min(1).max(50),
   /** Restrict retrieval to these types ("무엇을"); absent = every type the
    * retention policies allow. safety_relevant / clinician_note stay excluded
-   * by RET-SAFE regardless of what is listed here. */
-  allowedMemoryTypes: z.array(z.enum(MEMORY_TYPES)).optional(),
+   * by RET-SAFE regardless of what is listed here. An empty list is rejected
+   * rather than silently read as "no restriction". */
+  allowedMemoryTypes: z.array(z.enum(MEMORY_TYPES)).min(1).optional(),
   /** consent.crossSessionUseAllowed for a NEWLY created participant. The RCT
    * consent form item (pilot-study-api.ts crossSessionMemoryAllowed) is the
    * intended source of truth; this is the value before that is wired. */
@@ -78,8 +84,7 @@ export const longitudinalMemoryPolicySchema = z.object({
 export type LongitudinalMemoryPolicy = z.infer<typeof longitudinalMemoryPolicySchema>;
 
 export const DEFAULT_LONGITUDINAL_MEMORY_POLICY: LongitudinalMemoryPolicy = {
-  version: "2026-09-13-default-disabled",
-  enabled: false,
+  version: "2026-09-21-always-on",
   injectionScope: "administrative_only",
   maxItemsPerNode: 5,
   crossSessionConsentDefault: true,
@@ -108,11 +113,11 @@ export function resolveLongitudinalMemoryPolicy(env: NodeJS.ProcessEnv = process
   }
 }
 
-/** Whether a turn with these ownership facts may carry memory under `scope`. */
+/** Whether a turn with these ownership facts may carry memory under `scope`.
+ * Every scope returns true for at least one kind of turn -- the feature is
+ * always on, and this function only shapes where it lands. */
 export function memoryAllowedOnTurn(scope: MemoryInjectionScope, turn: { participantOwned: boolean; nodeRequiresProtectedField: boolean }): boolean {
   switch (scope) {
-    case "none":
-      return false;
     case "administrative_only":
       return !turn.participantOwned && !turn.nodeRequiresProtectedField;
     case "unprotected_nodes":
