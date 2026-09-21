@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { COGNITIVE_DISTORTIONS } from "@/shared/protocol/cognitive-distortions";
 import { cdQuestScore } from "@/patient/sessions/s02/turn-rules";
+import { vi } from "vitest";
+import { LocaleProvider } from "@/shared/i18n/context";
 import { S02Worksheet } from "@/patient/sessions/s02/worksheet";
 import { NO_EXAMPLE_MARKER } from "@/patient/sessions/s02/turn-rules";
 import { TBCT_S02_BINDINGS } from "@/patient/sessions/s02/worksheet-binding";
@@ -46,6 +48,14 @@ function renderWorksheet(rows: string[], overrides: Partial<Parameters<typeof S0
       {...overrides}
     />,
   );
+}
+
+/** The value shown under one Session Signals label. Scoped to that block: the
+ * row labels and the grid cells repeat the same short strings. */
+function signalValue(label: string): string {
+  const block = screen.getByText("Session Signals").parentElement!;
+  const cell = within(block).getByText(label).parentElement;
+  return cell?.querySelector("div:last-child")?.textContent ?? "";
 }
 
 describe("S02 worksheet", () => {
@@ -120,7 +130,7 @@ describe("S02 worksheet", () => {
     renderWorksheet(Array.from({ length: 15 }, (_, index) => `예시 ${index + 1}`), {}, { cdQuestScores: Array.from({ length: 15 }, () => 2), cdQuestTotal: 30 });
     // Both counters read 15 / 15: every pattern looked at, and every one scored.
     expect(screen.getAllByText(`15 / ${COGNITIVE_DISTORTIONS.length}`)).toHaveLength(2);
-    expect(screen.getByText("30")).toBeInTheDocument();
+    expect(signalValue("총점")).toBe("30");
   });
 
   it("follows the scoring pointer rather than the example pointer once scoring is the active step", () => {
@@ -135,22 +145,19 @@ describe("S02 worksheet", () => {
   // 매트릭스에 의해서" (985) -- and the participant read her own score off it,
   // answering "2점인 것 같아요" as often as she gave the two halves.
 
-  it("puts the grid on screen while the scoring runs, and not before", () => {
-    renderWorksheet(["예시 하나"]);
-    expect(screen.queryByTestId("s02-cdquest-grid")).toBeNull();
-    cleanup();
-
-    // From the step that explains it onward.
-    renderWorksheet(["예시 하나"], { activeCanonicalFieldKey: "cdQuestScalePresented" });
+  it("is on screen from the start, as it is on the participant's own form", () => {
+    // CD Quest Client version 1 is one sheet: the matrix ("1 2 3 / 2 3 4 /
+    // 3 4 5") and the fifteen "enter a personal example of..." fields sit on it
+    // together, so the worksheet shows both the whole time too.
+    renderWorksheet([]);
     expect(screen.getByTestId("s02-cdquest-grid")).toBeInTheDocument();
     cleanup();
 
-    renderWorksheet(["예시 하나"], { activeCanonicalFieldKey: "cdQuestItemScore" });
+    renderWorksheet(["예시 하나"], { activeCanonicalFieldKey: "distortionTurnAnswer" });
     expect(screen.getByTestId("s02-cdquest-grid")).toBeInTheDocument();
-  });
+    cleanup();
 
-  it("stays on screen once there are scores to read it against", () => {
-    renderWorksheet(["예시 하나"], {}, { cdQuestScores: [2] });
+    renderWorksheet(["예시 하나"], { activeCanonicalFieldKey: "cdQuestItemScore" }, { cdQuestScores: [2] });
     expect(screen.getByTestId("s02-cdquest-grid")).toBeInTheDocument();
   });
 
@@ -179,9 +186,53 @@ describe("S02 worksheet", () => {
     expect(screen.getByTestId("s02-distortion-row-4")).toHaveAttribute("aria-current", "step");
   });
 
+  // The guide reads the score out of what the participant SAYS. A misread one is
+  // a measured value that would otherwise stay wrong for the rest of the study,
+  // and the example cell beside it has always been editable.
+  it("lets the participant correct a score, writing the two halves with it", () => {
+    const onEdit = vi.fn();
+    render(
+      <LocaleProvider>
+        <S02Worksheet
+          view={viewWith({ distortionExamples: ["예시 하나"], cdQuestScores: [2], cdQuestFrequency: [2], cdQuestIntensity: [1] })}
+          activeCanonicalFieldKey="cdQuestItemScore"
+          onConfirm={() => {}}
+          onEdit={onEdit}
+          busy={false}
+          locale="ko-KR"
+        />
+      </LocaleProvider>,
+    );
+    fireEvent.click(screen.getByTestId("s02-distortion-score-1"));
+    const picker = screen.getByTestId("s02-score-picker-1");
+    fireEvent.click(within(within(picker).getByRole("group", { name: "얼마나 자주" })).getByRole("button", { name: "6~7일" }));
+    fireEvent.click(within(within(picker).getByRole("group", { name: "얼마나 강하게" })).getByRole("button", { name: "꽤" }));
+    fireEvent.click(within(picker).getByRole("button", { name: "저장" }));
+
+    // Six-to-seven days at "quite" is a 4, and the halves are stored with it so
+    // the row never holds a score apart from what it was made of.
+    const written = Object.fromEntries(onEdit.mock.calls.map(([key, value]) => [key, value]));
+    expect(written.cdQuestScores).toEqual([cdQuestScore(3, 2)]);
+    expect(written.cdQuestFrequency).toEqual([3]);
+    expect(written.cdQuestIntensity).toEqual([2]);
+  });
+
+  it("offers no score picker where the participant may not edit", () => {
+    renderWorksheet(["예시 하나"], { readOnly: true, allowEdit: false }, { cdQuestScores: [2] });
+    expect((screen.getByTestId("s02-distortion-score-1") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("keeps the total in step with a corrected score", () => {
+    renderWorksheet(["하나", "둘"], {}, { cdQuestScores: [2, 3], cdQuestTotal: 99 });
+    // Summed from the rows on screen, not from the program's own figure, so a
+    // correction shows immediately.
+    expect(signalValue("총점")).toBe("5");
+  });
+
   it("counts the patterns looked at and the examples actually given", () => {
     renderWorksheet(["예시 하나", NO_EXAMPLE_MARKER, "예시 둘"]);
     expect(screen.getByText(`3 / ${COGNITIVE_DISTORTIONS.length}`)).toBeInTheDocument();
-    expect(screen.getByText("2")).toBeInTheDocument();
+    // Read from the signals block: the grid has single digits of its own.
+    expect(signalValue("내 예시")).toBe("2");
   });
 });

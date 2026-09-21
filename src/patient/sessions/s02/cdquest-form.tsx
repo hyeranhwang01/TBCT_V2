@@ -128,9 +128,9 @@ export function toCdQuestRounds(entries: HomeworkEntryRecord[]): CdQuestRound[] 
     .sort((left, right) => left.date.localeCompare(right.date));
 }
 
-const GRADES: CdQuestGrade[] = [0, 1, 2, 3];
+export const GRADES: CdQuestGrade[] = [0, 1, 2, 3];
 
-function GradeButtons({
+export function GradeButtons({
   legend,
   labels,
   value,

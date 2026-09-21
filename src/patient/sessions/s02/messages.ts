@@ -112,10 +112,17 @@ function composeScoreDistortion(fields: Record<string, unknown>, isKorean: boole
   // Points at the grid beside the conversation rather than reciting six bands
   // fifteen times over, which is how the recording ran it (985) and what the
   // participant answered from.
+  // The worked example comes once, on the first pattern, and not again.
   if (isKorean) {
-    return `${ordinal}번째, '${distortion.nameKo}'입니다. 옆의 점수판을 보시고, 지난 한 주 기준으로 몇 점쯤 될 것 같으세요? 점수로 말씀하셔도 되고, 며칠 정도였고 얼마나 믿었는지로 말씀하셔도 괜찮아요.`;
+    if (index === 0) {
+      return `이제 옆의 점수판을 보면서 하나씩 점수를 매겨 볼게요. 가로는 지난 한 주에 며칠이었는지, 세로는 그때 얼마나 믿었는지예요. 예를 들어 6~7일 있었는데 강도가 약간이면 만나는 칸이 3점이에요. 첫 번째, '${distortion.nameKo}'은 몇 점쯤 될 것 같으세요?`;
+    }
+    return `${ordinal}번째, '${distortion.nameKo}'입니다. 몇 점쯤 될 것 같으세요? 점수로 말씀하셔도 되고, 며칠 정도였고 얼마나 믿었는지로 말씀하셔도 괜찮아요.`;
   }
-  return `Pattern ${ordinal}, "${distortion.nameEn[0]}". Looking at the grid beside this, what would you make it for this past week? A score is fine, and so is telling me how often and how strongly.`;
+  if (index === 0) {
+    return `Let's score them one at a time against the grid beside this. Across is how many days it came up this past week, down is how strongly you believed it at the time. Six or seven days and only a little, for instance, meets at a 3. For the first one, "${distortion.nameEn[0]}", what would you make it?`;
+  }
+  return `Pattern ${ordinal}, "${distortion.nameEn[0]}". What would you make it? A score is fine, and so is telling me how often and how strongly.`;
 }
 
 /** The total, spoken not asked. s02/turn-rules.ts wrote cdQuestTotal when the

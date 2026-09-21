@@ -405,13 +405,24 @@ function escapeRegExp(text: string) {
  * iteration -- two prompts cannot alternate fifteen times inside one node. */
 function scoringIntent(fields: Record<string, unknown>, korean: boolean): S02TaskIntent {
   const scored = Array.isArray(fields.cdQuestScores) ? fields.cdQuestScores.length : 0;
+  // Walk them through the grid on the first pattern only. Repeating it fifteen
+  // times is what made the scoring read as a form being read out; skipping it
+  // entirely leaves the first one guessed at.
+  const first = scored === 0;
   const index = Math.min(scored, COGNITIVE_DISTORTIONS.length - 1);
   const distortion = COGNITIVE_DISTORTIONS[index];
   const name = korean ? distortion.nameKo : distortion.nameEn[0];
   return {
-    obtain: `For pattern ${index + 1} of 15, "${name}": what it scores. The grid is on their screen beside the conversation, so they can read the score off it themselves -- ask what they make it, and take either the score or the two halves it is made of.`,
+    obtain:
+      `For pattern ${index + 1} of 15, "${name}": what it scores. The grid is on their screen beside the conversation, so they can read the score off it themselves -- ask what they make it, and take either the score or the two halves it is made of.` +
+      (first
+        ? ` This is the first one, so show them how to read the grid once, with a worked example -- something like "six or seven days and only a little comes to a 3" -- before you ask.`
+        : ` They have scored one already, so ask straight out. Do not walk them through the grid again unless they ask.`),
     keep: [
       `Name this pattern, and only this pattern: ${name}.`,
+      first
+        ? "Read one cell out loud as an example so they can see how the two rows and columns meet, then ask. Once."
+        : "No worked example this time and no explanation of the grid -- it is on their screen and they have used it. If they ask how it works, explain it again as fully as they need.",
       // The recording's counselor put the form up and pointed at it -- "요
       // 매트릭스에 의해서" (985) -- and she answered "2점인 것 같아요" as often as
       // she gave the two halves. Reciting six bands every turn for fifteen

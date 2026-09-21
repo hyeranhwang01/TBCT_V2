@@ -187,6 +187,26 @@ describe("S02 task intents", () => {
     });
   });
 
+  describe("reading the grid", () => {
+    const id = "tbct-s02-n07-p01-score-distortion";
+
+    // Walking through the grid on all fifteen is what made the scoring read as a
+    // form being read out; skipping it entirely leaves the first one guessed at.
+    it("shows how to read it on the first pattern only", () => {
+      const firstTurn = intent(id, { cdQuestScores: [] })!;
+      expect(firstTurn.obtain).toMatch(/first one/i);
+      expect(firstTurn.keep.join(" ")).toMatch(/Read one cell out loud/i);
+
+      const later = intent(id, { cdQuestScores: [2, 3] })!;
+      expect(later.obtain).toMatch(/ask straight out/i);
+      expect(later.keep.join(" ")).toMatch(/No worked example/i);
+    });
+
+    it("still explains it again whenever they ask", () => {
+      expect(intent(id, { cdQuestScores: [2] })!.keep.join(" ")).toMatch(/If they ask how it works/i);
+    });
+  });
+
   describe("the total", () => {
     const id = S02_PROMPTS.find((item) => item.id.endsWith("-total"))!.id;
 

@@ -5,6 +5,7 @@ import { Button, textareaClass } from "@/shared/components/ui/primitives";
 import { ScoreChip, SessionSignals } from "@/patient/components/worksheet-renderers/shared";
 import { COGNITIVE_DISTORTIONS } from "@/shared/protocol/cognitive-distortions";
 import { NO_EXAMPLE_MARKER, cdQuestScore, type CdQuestGrade } from "@/patient/sessions/s02/turn-rules";
+import { GradeButtons } from "@/patient/sessions/s02/cdquest-form";
 import type { WorksheetFieldView, WorksheetView } from "@/types/worksheet";
 
 // Session 2's worksheet: the Cognitive Distortions List (book appendix Table
@@ -39,9 +40,12 @@ const FREQUENCY_LABELS = ["—", "1–2일", "3–5일", "6–7일"] as const;
 const FREQUENCY_LABELS_EN = ["—", "1-2 days", "3-5 days", "6-7 days"] as const;
 const INTENSITY_LABELS = ["—", "약간", "꽤", "아주 강함"] as const;
 const INTENSITY_LABELS_EN = ["—", "a little", "quite", "very much"] as const;
-
-/** The steps that introduce the grid, so it is on screen while it is explained. */
-const CDQUEST_INTRO_FIELDS = new Set(["cdQuestScalePresented", "cdQuestScaleUnderstood"]);
+// Index-matched to the grade, so index 0 is the real answer "it did not come up"
+// rather than the "unknown" dash the summary labels above use.
+const FREQUENCY_LABELS_PICKER = ["없었음", "1~2일", "3~5일", "6~7일"] as const;
+const FREQUENCY_LABELS_PICKER_EN = ["Not at all", "1-2 days", "3-5 days", "6-7 days"] as const;
+const INTENSITY_LABELS_PICKER = ["없었음", "약간", "꽤", "아주 강하게"] as const;
+const INTENSITY_LABELS_PICKER_EN = ["Not at all", "A little", "Quite", "Very much"] as const;
 
 const FREQUENCY_COLUMNS = [
   { grade: 0 as CdQuestGrade, ko: "없었음", en: "Not at all" },
@@ -63,6 +67,13 @@ const INTENSITY_ROWS = [
  * answering "2점인 것 같아요" as often as she gave the two halves. Reading a
  * number off a visible table is a different, easier task than holding six bands
  * in your head while someone recites them.
+ *
+ * On screen from the start, not only once the scoring begins. This was gated at
+ * first, on the reasoning that the recording brings the grid out at 43:00 -- but
+ * the participant's own copy of the instrument (CD Quest Client version 1) is
+ * ONE sheet, carrying "1 2 3 / 2 3 4 / 3 4 5" beside the fifteen "enter a
+ * personal example of..." fields. The form shows both the whole time, so the
+ * worksheet does too.
  *
  * Cell values come from cdQuestScore, never from a literal table here, so the
  * grid a participant reads and the arithmetic the session records cannot drift
@@ -152,15 +163,38 @@ export function S02Worksheet({
   // the scratch name too.
   const active = activeCanonicalFieldKey === "distortionExamples" || activeCanonicalFieldKey === "distortionTurnAnswer";
   const scoringActive = activeCanonicalFieldKey === "cdQuestScores" || activeCanonicalFieldKey === "cdQuestItemScore";
-  // The grid comes out when it is about to be used, as it did in the recording
-  // at 43:00 -- not during the walkthrough, where it would be one more thing to
-  // read while trying to think of an example.
-  const gridVisible = scoringActive || scores.length > 0 || CDQUEST_INTRO_FIELDS.has(activeCanonicalFieldKey ?? "");
+
   // The pattern currently being asked about: the row after the last stored one.
   // During scoring the pointer follows the scores instead of the examples.
   const currentIndex = Math.min(scoringActive ? scores.length : rows.length, COGNITIVE_DISTORTIONS.length - 1);
   const editable = Boolean(field) && (!readOnly || Boolean(allowEdit));
   const filledCount = rows.filter((row) => isFilled(row)).length;
+
+  // A score the participant can correct, for the same reason the example cell is
+  // editable: the guide reads the score out of what they SAY, and a misread one
+  // is a measured value that would otherwise stay wrong. Writing the two halves
+  // and the score together keeps the row self-consistent -- the score is never
+  // stored apart from what it was made of.
+  const saveScore = (index: number, frequency: CdQuestGrade, intensity: CdQuestGrade) => {
+    const scoreField = view.fields.find((item) => item.binding.canonicalFieldKey === "cdQuestScores");
+    const frequencyField = view.fields.find((item) => item.binding.canonicalFieldKey === "cdQuestFrequency");
+    const intensityField = view.fields.find((item) => item.binding.canonicalFieldKey === "cdQuestIntensity");
+    if (!scoreField || !frequencyField || !intensityField) return;
+    const pad = <T,>(list: T[], fill: T) => {
+      const next = [...list];
+      while (next.length <= index) next.push(fill);
+      return next;
+    };
+    const nextScores = pad(scores, 0);
+    const nextFrequency = pad(frequencies, null);
+    const nextIntensity = pad(intensities, null);
+    nextScores[index] = cdQuestScore(frequency, intensity);
+    nextFrequency[index] = frequency;
+    nextIntensity[index] = intensity;
+    onEdit(frequencyField.definition.worksheetFieldKey, nextFrequency);
+    onEdit(intensityField.definition.worksheetFieldKey, nextIntensity);
+    onEdit(scoreField.definition.worksheetFieldKey, nextScores);
+  };
 
   const save = (index: number, text: string) => {
     if (!field) return;
@@ -177,10 +211,13 @@ export function S02Worksheet({
           { label: korean ? "살펴본 유형" : "Patterns looked at", value: `${rows.length} / ${COGNITIVE_DISTORTIONS.length}` },
           { label: korean ? "내 예시" : "My examples", value: String(filledCount) },
           { label: korean ? "채점한 유형" : "Patterns scored", value: `${scores.length} / ${COGNITIVE_DISTORTIONS.length}` },
-          { label: korean ? "총점" : "Total", value: totalField?.value?.displayValue ?? "—" },
+          // Summed from the rows rather than read from cdQuestTotal, so a score
+          // corrected here shows up immediately. The two agree unless a row was
+          // edited after the program worked the total out.
+          { label: korean ? "총점" : "Total", value: scores.length ? String(scores.reduce<number>((sum, score) => sum + (score ?? 0), 0)) : (totalField?.value?.displayValue ?? "—") },
         ]}
       />
-      {gridVisible && <CdQuestGrid korean={korean} />}
+      <CdQuestGrid korean={korean} />
       <div className={`rounded-panel border p-3 sm:p-4 transition ${active ? "ring-2 ring-clinical-blue border-clinical-blue" : "border-border bg-surface"}`}>
         <div className="mb-3 text-sm font-semibold text-text-primary">{korean ? "인지왜곡 목록과 내 예시" : "Cognitive distortions and my examples"}</div>
         <ol className="space-y-2" data-testid="s02-distortion-rows">
@@ -199,6 +236,7 @@ export function S02Worksheet({
               busy={busy}
               korean={korean}
               onSave={(text) => save(index, text)}
+              onScore={(frequency, intensity) => saveScore(index, frequency, intensity)}
             />
           ))}
         </ol>
@@ -220,6 +258,7 @@ function DistortionRow({
   busy,
   korean,
   onSave,
+  onScore,
 }: {
   index: number;
   name: string;
@@ -233,8 +272,12 @@ function DistortionRow({
   busy: boolean;
   korean: boolean;
   onSave: (text: string) => void;
+  onScore: (frequency: CdQuestGrade, intensity: CdQuestGrade) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [scoring, setScoring] = useState(false);
+  const [draftFrequency, setDraftFrequency] = useState<CdQuestGrade | null>(null);
+  const [draftIntensity, setDraftIntensity] = useState<CdQuestGrade | null>(null);
   const [draft, setDraft] = useState(isFilled(example) ? (example as string) : "");
   const filled = isFilled(example);
   const lookedAt = example !== undefined;
@@ -253,16 +296,69 @@ function DistortionRow({
           <div className="mt-0.5 text-xs text-text-secondary">{description}</div>
         </div>
         {typeof score === "number" && Number.isFinite(score) && (
-          <div className="flex shrink-0 flex-col items-end gap-0.5" data-testid={`s02-distortion-score-${index + 1}`}>
+          <button
+            type="button"
+            disabled={!editable || busy}
+            onClick={() => {
+              setDraftFrequency(frequency === null ? null : (frequency as CdQuestGrade));
+              setDraftIntensity(intensity === null ? null : (intensity as CdQuestGrade));
+              setScoring(true);
+            }}
+            aria-label={korean ? `${index + 1}번 유형 점수 고치기` : `Change the score for pattern ${index + 1}`}
+            className={`flex shrink-0 flex-col items-end gap-0.5 rounded-panel px-1 py-0.5 ${editable ? "hover:bg-surface-hover" : "cursor-default"}`}
+            data-testid={`s02-distortion-score-${index + 1}`}
+          >
             <ScoreChip score={score} />
             {(frequency !== null || intensity !== null) && (
-              <div className="text-[10px] text-text-muted">
+              <span className="text-[10px] text-text-muted">
                 {(korean ? FREQUENCY_LABELS : FREQUENCY_LABELS_EN)[frequency ?? 0]} · {(korean ? INTENSITY_LABELS : INTENSITY_LABELS_EN)[intensity ?? 0]}
-              </div>
+              </span>
             )}
-          </div>
+          </button>
         )}
       </div>
+
+      {scoring && (
+        <div className="mt-2 space-y-2 rounded-panel border border-border bg-surface-subtle p-2.5" data-testid={`s02-score-picker-${index + 1}`}>
+          <div className="flex flex-wrap gap-4">
+            <GradeButtons
+              legend={korean ? "얼마나 자주" : "How often"}
+              labels={korean ? [...FREQUENCY_LABELS_PICKER] : [...FREQUENCY_LABELS_PICKER_EN]}
+              value={draftFrequency}
+              onChange={setDraftFrequency}
+              disabled={busy}
+            />
+            <GradeButtons
+              legend={korean ? "얼마나 강하게" : "How strongly"}
+              labels={korean ? [...INTENSITY_LABELS_PICKER] : [...INTENSITY_LABELS_PICKER_EN]}
+              value={draftIntensity}
+              onChange={setDraftIntensity}
+              disabled={busy}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              disabled={busy || draftFrequency === null || draftIntensity === null}
+              onClick={() => {
+                if (draftFrequency === null || draftIntensity === null) return;
+                onScore(draftFrequency, draftIntensity);
+                setScoring(false);
+              }}
+            >
+              {korean ? "저장" : "Save"}
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => setScoring(false)}>
+              {korean ? "취소" : "Cancel"}
+            </Button>
+            {draftFrequency !== null && draftIntensity !== null && (
+              <span className="text-xs text-text-secondary">
+                {korean ? "점수" : "Score"} <ScoreChip score={cdQuestScore(draftFrequency, draftIntensity)} />
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="mt-1.5">
         <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-text-muted">{korean ? "내 예시" : "My example"}</div>
