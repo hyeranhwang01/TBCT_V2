@@ -40,6 +40,10 @@ const CONTENT_POOLS: Array<{ pattern: RegExp; replies: string[] }> = [
     "Six to seven days, very strongly.",
     "One or two days, and quite strongly.",
   ] },
+  // Keyed on distortionExamples, which is the walkthrough's output field again
+  // since the step went back on the shared collection path
+  // (note2026_09_21_s02_model_judges_the_answer).
+  //
   // S02's fifteen-pattern walkthrough takes TWO turns per pattern
   // (note2026_09_21_s02_walkthrough_discussion): an example, then a reply to what
   // the guide said about it. The pool alternates the two, so the synthetic
@@ -50,7 +54,7 @@ const CONTENT_POOLS: Array<{ pattern: RegExp; replies: string[] }> = [
   // open while the participant ADDS something, so long synthetic answers would
   // spend the full three-turn discussion on all fifteen patterns, which no real
   // session does.
-  { pattern: /distortionTurnAnswer/i, replies: [
+  { pattern: /distortionExamples/i, replies: [
     "I decided one slip meant the whole thing was ruined.",
     "Yes, that was it.",
     "I was sure the presentation would go badly and I would never recover.",

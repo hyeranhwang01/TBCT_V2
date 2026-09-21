@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createCanonicalTestRuntimeSession, getRuntimeSession } from "@/shared/api/runtime-session-api";
 import { startRuntimeSession, submitPatientInput } from "@/shared/api/runtime-execution-api";
 import { getLocalDb } from "@/shared/data/db/tbct-local-db";
@@ -7,7 +7,35 @@ import { isSafetyCriticalPrompt } from "@/shared/dialogue-agent/dialogue-agent-o
 import { COGNITIVE_DISTORTIONS } from "@/shared/protocol/cognitive-distortions";
 import { NO_EXAMPLE_MARKER, normalizeExampleForWorksheet, s02PromptSlug } from "@/patient/sessions/s02/turn-rules";
 import { getWorksheetView } from "@/shared/worksheet/worksheet-projection";
+import { resetAssessmentModelForTests, setAssessmentModelForTests } from "@/shared/assessment/assessment-providers";
+import type { AssessmentModel, AssessmentProviderHealth, AssessmentProviderMetadata, AssessmentRequest, AssessmentResult } from "@/shared/assessment/assessment-contract";
 import type { PatientInput } from "@/types/runtime-session";
+
+/** The semantic gate, made scriptable: each test says what the "model" decided
+ * about the next answer and then drives one real turn through it. */
+function assessment(overrides: Partial<AssessmentResult>): AssessmentResult {
+  return {
+    inputValid: true,
+    relevance: "relevant",
+    intent: "answer",
+    extractedFields: {},
+    completionStatus: "complete",
+    safetyLevel: "none",
+    safetySignals: [],
+    recommendedTransition: null,
+    internalSummary: null,
+    ...overrides,
+  };
+}
+
+class ScriptedAssessmentModel implements AssessmentModel {
+  public next: AssessmentResult = assessment({ turnAction: "accept_answer" });
+  async assessInput(_request: AssessmentRequest): Promise<AssessmentResult> {
+    return this.next;
+  }
+  async healthCheck(): Promise<AssessmentProviderHealth> { return { ok: true, provider: "deterministic" }; }
+  getProviderMetadata(): AssessmentProviderMetadata { return { provider: "deterministic", privacyBoundary: "none" }; }
+}
 
 type RuntimeSessionView = NonNullable<Awaited<ReturnType<typeof getRuntimeSession>>>;
 
@@ -236,21 +264,47 @@ describe("S02 redesign: real second session replay", () => {
     expect(assistantTexts(view).at(-1) ?? "").toContain(COGNITIVE_DISTORTIONS[1].nameKo);
   }, 60_000);
 
-  // "I don't see why this is a distortion" is not an example: nothing is stored
-  // and the same pattern is asked about again, where the step's guidance tells
-  // Claude to ask what feels off rather than explain it. No flag is set for
-  // this -- a turn the engine does not accept never commits its fields.
-  it("stores nothing and stays on the same pattern when the participant does not see why it is a distortion", async () => {
-    const session = await startSession();
-    await driveUntil(session.id, "review-distortion");
-    await submitPatientInput(session.id, { kind: "text", value: "이게 왜 왜곡인지 잘 모르겠어요" });
+  // Whether an answer IS an example is the model's call, on the shared
+  // collection path (runtime-context.ts's turnAction dispatch). It used to be a
+  // keyword list here, which filed "네 있었어요" as somebody's example for a
+  // pattern while the guide was asking them what the example actually was.
+  // Driven with a scripted assessment so the contract is pinned rather than
+  // whatever the offline heuristic happens to make of a sentence.
+  describe("when the model says the answer is not an example yet", () => {
+    const model = new ScriptedAssessmentModel();
+    beforeEach(() => setAssessmentModelForTests(model));
+    afterEach(() => resetAssessmentModelForTests());
 
-    const view = await currentView(session.id);
-    expect(storedRows(view)).toHaveLength(0);
-    expect(currentSlug(view)).toBe("review-distortion");
-    // Still the first pattern, not advanced past it.
-    expect(assistantTexts(view).at(-1) ?? "").not.toContain(COGNITIVE_DISTORTIONS[1].nameKo);
-  }, 60_000);
+    it("stores nothing, stays on the same pattern, and does not start the discussion", async () => {
+      const session = await startSession();
+      model.next = assessment({ turnAction: "accept_answer" });
+      await driveUntil(session.id, "review-distortion");
+
+      model.next = assessment({ turnAction: "clarification_request" });
+      await submitPatientInput(session.id, { kind: "text", value: "네 있었어요" });
+
+      const view = await currentView(session.id);
+      expect(storedRows(view)).toHaveLength(0);
+      expect(view.session.runtimeContext.fields.s02PatternPhase).not.toBe("discuss");
+      // Still the first pattern -- the guide asks it again, for the detail.
+      expect(assistantTexts(view).at(-1) ?? "").not.toContain(COGNITIVE_DISTORTIONS[1].nameKo);
+    }, 90_000);
+
+    it("files it and moves to the discussion once the model accepts it", async () => {
+      const session = await startSession();
+      model.next = assessment({ turnAction: "accept_answer" });
+      await driveUntil(session.id, "review-distortion");
+
+      model.next = assessment({ turnAction: "clarification_request" });
+      await submitPatientInput(session.id, { kind: "text", value: "네 있었어요" });
+      model.next = assessment({ turnAction: "accept_answer" });
+      await submitPatientInput(session.id, { kind: "text", value: "시험 점수가 안 떨어졌는데 그냥 운이 좋았던 거야" });
+
+      const view = await currentView(session.id);
+      expect(storedRows(view)).toEqual(["시험 점수가 안 떨어졌는데 그냥 운이 좋았던 거야"]);
+      expect(view.session.runtimeContext.fields.s02PatternPhase).toBe("discuss");
+    }, 90_000);
+  });
 
   it("hears a no to today's order, and pauses the session on a second no", async () => {
     const session = await startSession();

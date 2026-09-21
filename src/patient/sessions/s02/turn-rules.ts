@@ -93,15 +93,6 @@ export function hasNoExampleForPattern(text: string) {
   return NO_EXAMPLE_EXACT.has(value) || NO_EXAMPLE_CONTAINS.some((phrase) => value.includes(phrase));
 }
 
-// 06:30: "그런데 이게 왜 왜곡인지 느껴지세요?" -- the counselor asks when the
-// participant does not yet see it. Only an explicit why/understanding signal
-// counts, so "생각 안 나요" stays a no-example answer.
-const UNCLEAR_CONTAINS = ["왜 왜곡", "왜곡인지 모르", "왜곡인지 잘 모르", "이해가 안", "이해가 잘 안", "무슨 말인지", "무슨 뜻", "이게 왜", "왜 그런", "why is that", "why is this", "don't understand", "do not understand", "what do you mean"];
-function looksLikeDistortionUnclear(text: string) {
-  const value = normalize(text);
-  return UNCLEAR_CONTAINS.some((phrase) => value.includes(phrase));
-}
-
 function stringList(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
@@ -403,81 +394,90 @@ export async function applyS02TurnRules(input: S02TurnRulesInput): Promise<S02Tu
   }
 
   if (slug === "review-distortion") {
-    // Two turns per pattern, as the recording ran it (note2026_09_21_s02
-    // _walkthrough_discussion): "ask" puts the pattern and collects their
-    // example, "discuss" talks about what they said. Only the second advances
-    // the pointer, so the discussion is a turn of its own.
+    // What this step decides, and what it does NOT.
     //
-    // distortionExamples is reliable here because it is not this prompt's
-    // output field any more -- the shared extraction never touches it.
-    const rows = stringList(extracted.fields.distortionExamples);
+    // Whether an answer is an example at all is the model's call, made on the
+    // shared collection path before this runs: runtime-context.ts asks for a
+    // turnAction and, on accept_answer, appends the participant's own words to
+    // distortionExamples; on clarification_request or unresolved it stores
+    // nothing and leaves the field missing, so the step asks again and the guide
+    // asks for the detail. A keyword list here used to make that call instead,
+    // and filed "네 있었어요" as somebody's example for a pattern while the guide
+    // was asking them what the example actually was.
+    //
+    // What is left here is the STEP: which pattern the loop is on, whether this
+    // turn asks or talks about the answer, and when the walkthrough is done.
+    //
+    // s02RowCount is how many rows the walkthrough has settled. It cannot be
+    // read off the list, because by the time this runs the collection path has
+    // already appended to it -- there is no "before" left to compare against.
+    const settledCount = typeof extracted.fields.s02RowCount === "number" ? extracted.fields.s02RowCount : 0;
+    const rows = stringList(fields.distortionExamples);
     const discussing = extracted.fields.s02PatternPhase === "discuss";
+    const acceptedByModel = !extracted.missingFields.includes("distortionExamples");
 
     if (discussing) {
-      // Whatever they say back -- agreement, a correction, a different example
-      // -- is a whole answer here. Accepting unconditionally is what lets a bare
-      // "네" count, which it must: the discussion turn asks them to look at their
-      // own example, not to produce a new one.
-      accept(text);
+      // This answer belongs to the conversation about the example, not to the
+      // list, so anything the collection path appended is dropped and the turn
+      // is accepted -- otherwise the loop would sit here asking again.
+      const kept = rows.slice(0, settledCount);
+      accept(kept);
+      delete fields.distortionExamplesNoMore;
 
-      // A replacement example offered in this turn belongs to the SAME pattern:
-      // the counselor did exactly this at line 325 of the transcript ("그것보다는
-      // ... 좋은 예예요, 그 예를 좀 써봅시다"). The row is rewritten, never moved.
-      if (rows.length && !hasNoExampleForPattern(text) && offersReplacementExample(text)) {
-        const replaced = [...rows];
+      // A better example of their own, offered a turn late, replaces the row it
+      // belongs to. The pattern never changes -- only which of their examples
+      // fills it.
+      if (kept.length && !hasNoExampleForPattern(text) && offersReplacementExample(text)) {
+        const replaced = [...kept];
         replaced[replaced.length - 1] = normalizeExampleForWorksheet(text);
         fields.distortionExamples = replaced;
         log("a better-fitting example for the same pattern replaced the row", { index: replaced.length });
       }
 
-      // How long the discussion runs is decided here rather than by the guide,
-      // because step order belongs to the program in this codebase. The rule
-      // follows the recording: at 578-596 the counselor kept going while the
-      // participant kept giving content ("많지는 않은 것 같습니다", "말투가
-      // 친절하지 않았을 것 같습니다") and stopped when she simply agreed. So the
-      // discussion ends on an acknowledgement, and otherwise follows them -- to
-      // a hard ceiling, so no single pattern can hold the session open.
       const spent = (typeof extracted.fields.s02PatternDiscussTurns === "number" ? extracted.fields.s02PatternDiscussTurns : 0) + 1;
       const settled = isAcknowledgementOnly(text) || looksLikeDisagreement(text) || !addsSomethingNew(text);
-      const keepTalking = spent < MAX_DISCUSS_TURNS && !settled;
-      if (keepTalking) {
+      if (spent < MAX_DISCUSS_TURNS && !settled) {
         fields.s02PatternDiscussTurns = spent;
         log("the participant is still giving content; staying on this pattern", { discussTurns: spent });
       } else {
         fields.s02PatternPhase = "ask";
         fields.s02PatternDiscussTurns = 0;
-        log("pattern discussed; moving to the next one", { reviewed: rows.length, discussTurns: spent });
+        log("pattern discussed; moving to the next one", { reviewed: kept.length, discussTurns: spent });
       }
-    } else if (hasNoExampleForPattern(text)) {
-      // "없어요" is a real answer. The row stays empty and there is nothing to
-      // discuss, so this pattern takes one turn rather than two.
-      const next = [...rows, NO_EXAMPLE_MARKER];
-      accept(text);
-      fields.distortionExamples = next;
+    } else if (hasNoExampleForPattern(text) || extracted.fields.distortionExamplesNoMore === true) {
+      // "없어요" is about the STEP -- this pattern has no example, go to the next
+      // -- rather than about the content, so it stays a decision here. The
+      // collection path may have read it as a stop or as an item; either way the
+      // row is the empty marker and there is nothing to discuss.
+      const next = [...rows.slice(0, settledCount), NO_EXAMPLE_MARKER];
+      accept(next);
+      delete fields.distortionExamplesNoMore;
+      fields.s02RowCount = next.length;
       fields.s02PatternPhase = "ask";
       fields.s02PatternDiscussTurns = 0;
       log("no example for this pattern; empty row recorded", { distortionExamples: next });
-    } else if (looksLikeDistortionUnclear(text) || isAcknowledgementOnly(text)) {
-      // Not an example: either they do not see why this one is a distortion yet,
-      // or they only acknowledged the explanation. Either way the field stays
-      // missing, so the engine asks about this same pattern again -- where the
-      // step's guidance tells Claude to ask what feels off. No flag is set: a
-      // turn the engine does not accept never commits its fields.
-      if (targetField && !missingFields.includes(targetField)) missingFields.push(targetField);
-      log("not an example for this pattern; asking again", { reviewed: rows.length });
-    } else {
-      const next = [...rows, normalizeExampleForWorksheet(text)];
-      accept(text);
-      fields.distortionExamples = next;
+    } else if (acceptedByModel && rows.length > settledCount) {
+      // Taken as an example. The collection path stored their wording verbatim;
+      // the worksheet cell wants the thought rather than the sentence about it.
+      const cleaned = rows.slice(0, settledCount + 1);
+      cleaned[cleaned.length - 1] = normalizeExampleForWorksheet(cleaned[cleaned.length - 1]);
+      fields.distortionExamples = cleaned;
+      fields.s02RowCount = cleaned.length;
       fields.s02PatternPhase = "discuss";
       fields.s02PatternDiscussTurns = 0;
-      log("example recorded; next turn discusses it", { distortionExamples: next });
+      log("example recorded; next turn discusses it", { distortionExamples: cleaned });
+    } else {
+      // Not taken as an example -- a meta remark, or too little to file. Nothing
+      // is stored and the field stays missing, so the step asks about this same
+      // pattern again and the guide asks for what is missing. No flag is set: a
+      // turn the engine does not accept never commits its fields.
+      fields.distortionExamples = rows.slice(0, settledCount);
+      if (targetField && !missingFields.includes(targetField)) missingFields.push(targetField);
+      log("not taken as an example; asking about this pattern again", { reviewed: settledCount });
     }
 
-    // Not complete until the fifteenth pattern has also been discussed --
-    // otherwise the loop would exit before its own last discussion turn.
-    const stored = stringList(fields.distortionExamples);
-    const done = stored.length >= COGNITIVE_DISTORTIONS.length && fields.s02PatternPhase !== "discuss";
+    const settledRows = stringList(fields.distortionExamples);
+    const done = settledRows.length >= COGNITIVE_DISTORTIONS.length && fields.s02PatternPhase !== "discuss";
     fields.allDistortionsReviewed = done;
     if (done) log("every pattern has a row and has been talked about", { allDistortionsReviewed: true });
   }

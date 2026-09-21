@@ -258,12 +258,17 @@ export const spec: SessionSpec = {
           slug: "review-distortion",
           type: "question",
           source: [145, 155],
-          // A scratch scalar, not the accumulated list: a field named in
-          // outputFields is overwritten with the raw answer text by the shared
-          // extraction, and the two-turn rhythm needs the list and the pointer
-          // to be owned by s02/turn-rules.ts alone (same reason as
-          // cdQuestItemScore in the scoring loop).
-          outputFields: ["distortionTurnAnswer"],
+          // The list itself, with validation.kind "array" -- which is what puts
+          // this step on the shared collection path
+          // (runtime-input-assessment.ts's S02_COLLECTION_FIELDS,
+          // runtime-context.ts's turnAction dispatch). That path asks the model
+          // whether the answer IS an example before storing anything, which is
+          // the judgement this step needs and the one a keyword list in
+          // s02/turn-rules.ts got wrong: "네 있었어요" was filed as the
+          // participant's example while the guide was, correctly, asking them
+          // what the example actually was.
+          outputFields: ["distortionExamples"],
+          validation: { kind: "array" },
           // Patient-facing text is composed per type in s02/messages.ts
           // (currentDistortionName / currentDistortionIndex). This text is the
           // last-resort fallback only, which is why it names no type.
