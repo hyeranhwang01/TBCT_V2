@@ -54,6 +54,21 @@ const metadata: SessionSourceMetadata = {
   safetyRange: [411, 429],
 };
 
+// Attached to the safety-pause node ONLY, and deliberately not to the session's
+// content nodes (note2026_09_21_s02_safety_ids_disabled_claude).
+//
+// A PromptItem inherits its node's safetyRuleIds (source-fidelity-catalog.ts:235),
+// and isSafetyCriticalPrompt treats ANY prompt carrying one as a turn Claude must
+// never see -- in either direction, so that crisis wording stays deterministic.
+// Putting this on every node therefore switched the dialogue agent off for the
+// whole of S02: 24 of 24 prompts were excluded and every turn shipped its
+// approved text, which is why the session read as a questionnaire. S01 carries
+// none of these (0 of 75 excluded) and S03 carries two, on its safety steps.
+//
+// Nothing is lost by removing them: TBCT-S02-CRISIS-PAUSE matches no row in
+// safetyRules, so it contributed no safety behaviour. The crisis path is the
+// `crisisSignal` safety edges below, which are evaluated independently of this
+// field, plus the global safety rules that apply to every node regardless.
 const CRISIS = ["TBCT-S02-CRISIS-PAUSE"];
 
 export const spec: SessionSpec = {
@@ -66,7 +81,6 @@ export const spec: SessionSpec = {
       type: "session_start",
       source: [250, 261],
       requiredFields: ["sessionOpeningAcknowledged"],
-      safetyRuleIds: CRISIS,
       // 00:00-01:00 of the recording: a greeting, then the ground the last
       // session covered, then straight into the homework. No question here --
       // the homework review is the program's next node.
@@ -93,7 +107,6 @@ export const spec: SessionSpec = {
       type: "question",
       source: [255, 261],
       requiredFields: ["homeworkReport"],
-      safetyRuleIds: CRISIS,
       // 01:00-02:30. The participant reported the difficulty herself ("I
       // couldn't tell which of the fifteen categories an example belonged
       // to"), and the counselor normalized it rather than treating it as a
@@ -129,7 +142,6 @@ export const spec: SessionSpec = {
       type: "orientation",
       source: [250, 261],
       requiredFields: ["sessionAgendaAgreed"],
-      safetyRuleIds: CRISIS,
       // 02:30-03:10. The counselor takes the difficulty the participant just
       // reported and turns it into today's plan, then asks whether that is
       // all right -- "괜찮으세요? 이렇게 진행하시는 거?". A no is heard, not
@@ -181,7 +193,6 @@ export const spec: SessionSpec = {
       type: "orientation",
       source: [145, 155],
       requiredFields: ["distortionConceptAcknowledged"],
-      safetyRuleIds: CRISIS,
       restrictions: [sourceText([145, 155])],
       // 03:10-05:00. Three things, none of which asks a question: what a
       // cognitive distortion is, the research behind looking at them, and
@@ -223,7 +234,6 @@ export const spec: SessionSpec = {
       type: "question",
       source: [145, 155],
       requiredFields: ["distortionExamples"],
-      safetyRuleIds: CRISIS,
       restrictions: [sourceText([145, 155])],
       participantRationale:
         "Seeing each pattern next to an example from your own week is what makes it recognizable later, when the thought is actually happening.",
@@ -281,7 +291,6 @@ export const spec: SessionSpec = {
       type: "orientation",
       source: [145, 155],
       requiredFields: ["cdQuestScaleUnderstood"],
-      safetyRuleIds: CRISIS,
       // 43:00-44:00. Frequency and intensity, each in three bands, read off a
       // grid. The numbers themselves are pinned by mustMention in
       // s02/task-intents.ts -- the wording is Claude's, the bands are not.
@@ -313,7 +322,6 @@ export const spec: SessionSpec = {
       type: "assessment",
       source: [145, 155],
       requiredFields: ["cdQuestScores"],
-      safetyRuleIds: CRISIS,
       // 44:00-49:00. The recording asked frequency, waited, then asked
       // intensity -- two turns per pattern. A repeat_until loop runs ONE prompt
       // per iteration, so two prompts cannot alternate fifteen times inside one
@@ -351,7 +359,6 @@ export const spec: SessionSpec = {
       type: "assessment",
       source: [145, 155],
       requiredFields: ["cdQuestReflection"],
-      safetyRuleIds: CRISIS,
       // 49:00-51:00. The total is spoken, not asked -- s02/turn-rules.ts wrote
       // it when the fifteenth score landed. "There is no cut-off" is the
       // counselor's own framing at 49:20 and is pinned by mustMention.
@@ -394,7 +401,6 @@ export const spec: SessionSpec = {
       type: "question",
       source: [145, 155],
       requiredFields: ["cdQuestPriorityTypes"],
-      safetyRuleIds: CRISIS,
       // 51:40. The participant names which patterns to adjust -- emotional
       // reasoning, overgeneralizing, what-if. The guide never picks for them.
       objective:
@@ -417,7 +423,6 @@ export const spec: SessionSpec = {
       type: "session_complete",
       source: [388, 429],
       requiredFields: ["homeworkCommitment"],
-      safetyRuleIds: CRISIS,
       terminal: true,
       // The recording's order, which differs from S01's: the recap comes
       // BEFORE the homework here (52:50-53:30), where in the first session it

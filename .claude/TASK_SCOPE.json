@@ -1,4 +1,16 @@
 {
+  "note2026_09_21_s02_safety_ids_disabled_claude": {
+    "task": "S02 read as a questionnaire with no interaction at all. Cause: Claude was never consulted for ANY S02 turn.",
+    "finding": "isSafetyCriticalPrompt returns true for a prompt carrying any safetyRuleIds, and such turns bypass the dialogue agent in both directions so crisis wording stays deterministic. A PromptItem inherits its node's ids (source-fidelity-catalog.ts:235). Stage 1 put safetyRuleIds: CRISIS on every S02 node, so 24 of 24 prompts were excluded and every turn shipped its approved text. Measured: S01 0/75 excluded, S03 2/42, S02 24/24.",
+    "whyItWasInvisible": "resolveDialogueAgentMessage returns excludedBySafety with usedFallback FALSE by design -- an always-deterministic safety turn is not a degraded turn. So audit:sessions kept reporting S02 8/8 with 0 fallbacks while the whole session was canned. Do not read 'fallbackCount 0' as evidence that Claude ran.",
+    "provenNotTheCause": "The model, the route and the gates are all healthy. A direct POST to the production /api/dialogue-agent with the participant's real sentence returned an interactive turn (provider anthropic, claude-sonnet-5, 4.1s). Running that exact output through taskIntentGaps and validateDialogueDecision with the real S02 discuss contract gave gaps [] and accepted true.",
+    "fix": "safetyRuleIds removed from the ten content nodes, kept on the safety-pause node and its prompt -- the same shape as S03/S08. S02 is now 1/24 excluded (pause-and-escalate).",
+    "nothingLost": "TBCT-S02-CRISIS-PAUSE matches no row in safetyRules, so it carried no safety behaviour. Verified by test that a risk disclosure mid-walkthrough still ends the session: it is caught by the session-level override (deliverSafetyOverrideTurn -> turnOutcome safety_override, status escalated), which never consulted safetyRuleIds. The node-level crisisSignal edges are a separate, untouched mechanism.",
+    "regressionTests": "s02/spec.test.ts now pins that the ONLY safety-critical S02 prompt is pause-and-escalate, that the steps the session is made of are not excluded, and that a risk disclosure still stops the session without being stored as an example.",
+    "stillUnverified": "That the deployed session now reads as a conversation. The audit runs with AI_PROVIDER=mock and the local runner has no key, so both still show deterministic text. Only a live session on the deployment shows the change.",
+    "allowedPaths": [".claude/TASK_SCOPE.json", "src/patient/sessions/s02/**"],
+    "verification": "npx tsc --noEmit 0 errors; npx vitest run 88 of 90 files, 991 of 999 tests (the 8 are the untracked pre-redesign files); npm run audit:sessions 8/8, 0 fallbacks, S02 51 turns; npm run lint 0 errors."
+  },
   "note2026_09_21_s02_walkthrough_discussion": {
     "task": "The fifteen-pattern walkthrough collected an example per pattern and moved straight on. The real session spent two thirds of its time TALKING about those examples. Each pattern now takes two turns: ask, then discuss what they said.",
     "userDecision": "Asked for what the recording's counselor actually does -- pointing at part of the participant's own sentence and saying that part is this pattern, and suggesting a better-fitting example of their own. Explicitly did not want the wording forced by code.",

@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createCanonicalTestRuntimeSession, getRuntimeSession } from "@/shared/api/runtime-session-api";
 import { startRuntimeSession, submitPatientInput } from "@/shared/api/runtime-execution-api";
 import { getLocalDb } from "@/shared/data/db/tbct-local-db";
+import { CANONICAL_PROMPT_ITEMS } from "@/shared/protocol/source-fidelity-catalog";
+import { isSafetyCriticalPrompt } from "@/shared/dialogue-agent/dialogue-agent-orchestrator";
 import { COGNITIVE_DISTORTIONS } from "@/shared/protocol/cognitive-distortions";
 import { NO_EXAMPLE_MARKER, s02PromptSlug } from "@/patient/sessions/s02/turn-rules";
 import { getWorksheetView } from "@/shared/worksheet/worksheet-projection";
@@ -590,6 +592,46 @@ describe("S02 redesign: real second session replay", () => {
     expect(field?.binding.participantOwned).toBe(true);
     expect(field?.binding.assistantMustNotSupply).toBe(true);
   }, 60_000);
+});
+
+// The defect this guards against produced no error anywhere and a green audit:
+// a PromptItem inherits its node's safetyRuleIds, isSafetyCriticalPrompt treats
+// any prompt carrying one as a turn Claude must never see, and the resulting
+// deterministic turns are deliberately NOT counted as fallbacks. S02 had them on
+// every node, so all 24 prompts were excluded and the whole session ran on its
+// approved text -- which is what "it reads like a questionnaire" turned out to
+// be (note2026_09_21_s02_safety_ids_disabled_claude).
+describe("S02 and the dialogue agent", () => {
+  const S02_PROMPTS = CANONICAL_PROMPT_ITEMS.filter((item) => item.sessionId === "tbct-s02");
+
+  it("keeps Claude out of the crisis instruction and nowhere else", () => {
+    const excluded = S02_PROMPTS.filter((item) => isSafetyCriticalPrompt(item)).map((item) => item.id);
+    expect(excluded).toEqual(["tbct-s02-n11-p01-pause-and-escalate"]);
+  });
+
+  it("lets Claude phrase the steps the session is actually made of", () => {
+    for (const slug of ["review-distortion", "score-distortion", "homework-update", "total", "what-to-adjust", "session-recap"]) {
+      const prompt = S02_PROMPTS.find((item) => item.id.endsWith(`-${slug}`));
+      expect(prompt, slug).toBeTruthy();
+      expect(isSafetyCriticalPrompt(prompt!), slug).toBe(false);
+    }
+  });
+
+  // Removing the ids has to leave the crisis path exactly as it was. It does,
+  // because that path never went through them: a risk disclosure is caught
+  // before the step's own handling and overrides the turn at session level
+  // (deliverSafetyOverrideTurn), which is why it fires mid-walkthrough here.
+  it("still stops the session on a risk disclosure, mid-walkthrough", async () => {
+    const session = await startSession();
+    await driveUntil(session.id, "review-distortion");
+    const result = await submitPatientInput(session.id, { kind: "text", value: "사실 요즘 죽고 싶다는 생각이 들어요" });
+
+    expect(result.turnOutcome).toBe("safety_override");
+    const view = await currentView(session.id);
+    expect(view.session.status).toBe("escalated");
+    // The walkthrough did not quietly take the disclosure as an example.
+    expect(storedRows(view)).toHaveLength(0);
+  }, 90_000);
 });
 
 describe("S02 registry order", () => {
