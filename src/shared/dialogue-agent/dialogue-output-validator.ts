@@ -20,6 +20,7 @@ export type DialogueGuardMode = "off" | "log" | "enforce";
 
 export const DIALOGUE_GUARDS = {
   unresolved_template_variable: "enforce",
+  structured_output_leak: "enforce",
   empty_message: "enforce",
   message_too_long: "enforce",
   locale_mismatch: "enforce",
@@ -43,6 +44,15 @@ export type DialogueValidationResult =
   // said, and the task waits (note2026_09_15_olivia_persona).
   | { accepted: true; finalText?: string; summaryCheck?: { summaryText: string; correction?: FieldCorrection }; exploration?: boolean; guardLogs: string[] }
   | { accepted: false; reason: string; guardLogs: string[] };
+
+// 2026-09-21, live S02: a turn reached the participant ending
+// "...어떻게 느껴지세요?</patientFacingMessage>\n<parameter name=\"keepCurrentNode\">true".
+// The model had written the rest of its structured call inside the first field,
+// and nothing between there and the screen looked at the text. Enforced rather
+// than logged: this is never a sentence a person should read, and the approved
+// text is always a better turn than a broken one.
+const STRUCTURED_OUTPUT_LEAK_PATTERN =
+  /<\/?(?:patientFacingMessage|parameter|invoke|function_calls|antml:[a-z_]+)\b|<parameter\s+name=|\b(?:keepCurrentNode|participantResponseState|conversationMove|responseType)\s*[">:]/i;
 
 const DIAGNOSIS_PATTERN = /\b(?:you have|this (?:is|sounds like|indicates)) (?:a |an )?(?:diagnos|disorder|clinical depression|generalized anxiety disorder|bipolar|PTSD|OCD)\b/i;
 const TREATMENT_ADVICE_PATTERN = /\b(?:you should (?:take|try)|i recommend (?:medication|therapy|seeing a)|consider (?:medication|antidepressants))\b/i;
@@ -78,6 +88,7 @@ export function validateDialogueDecision(decision: DialogueDecision, contract: D
   const text = decision.patientFacingMessage;
   const lastAssistantTurn = [...contract.recentContext].reverse().find((message) => message.role === "assistant");
   const rejection = guard("unresolved_template_variable", hasUnresolvedTemplateVariable(text))
+    ?? guard("structured_output_leak", STRUCTURED_OUTPUT_LEAK_PATTERN.test(text))
     ?? guard("empty_message", !text.trim())
     ?? guard("message_too_long", text.length > 700)
     // A Korean session must never ship an English reply, or the reverse.

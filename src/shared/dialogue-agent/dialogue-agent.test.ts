@@ -56,6 +56,45 @@ describe("case 1: participant asks what the current question means", () => {
   });
 });
 
+// 2026-09-21, live S02: a turn reached the participant ending
+// "...어떻게 느껴지세요?</patientFacingMessage>\n<parameter name="keepCurrentNode">true".
+// The model had written the rest of its structured call inside the first field
+// and nothing between there and the screen looked at the text.
+describe("structured output that leaked into the patient's message", () => {
+  const LEAKED = [
+    '이 부분 어떻게 느껴지세요?</patientFacingMessage>\n<parameter name="keepCurrentNode">true',
+    "What comes to mind?</patientFacingMessage>",
+    '<parameter name="responseType">reflect_and_ask',
+    "좋아요. <invoke name=\"submit_dialogue_decision\">",
+  ];
+
+  it("is rejected rather than shown", () => {
+    for (const text of LEAKED) {
+      const contract = baseContract();
+      const decision: DialogueDecision = { ...fakeDialogueDecision(contract), patientFacingMessage: text };
+      const result = validateDialogueDecision(decision, contract);
+      expect(result.accepted, text).toBe(false);
+      if (!result.accepted) expect(result.reason).toBe("structured_output_leak");
+    }
+  });
+
+  it("does not fire on ordinary wording", () => {
+    for (const text of [
+      "그 순간에 어떤 생각이 스쳐 지나갔나요?",
+      "What went through your mind? Take your time.",
+      "'나는 실패자야' 같은 생각이 드셨던 건가요?",
+    ]) {
+      const contract = baseContract();
+      const decision: DialogueDecision = { ...fakeDialogueDecision(contract), patientFacingMessage: text };
+      expect(validateDialogueDecision(decision, contract).accepted, text).toBe(true);
+    }
+  });
+
+  it("is enforced, not logged -- a broken sentence is never better than the approved one", () => {
+    expect(DIALOGUE_GUARDS.structured_output_leak).toBe("enforce");
+  });
+});
+
 describe("case 2: participant says a required visual/list is missing", () => {
   it("classifies as missing_visual and requests restoring the worksheet", () => {
     const contract = baseContract({ targetField: "cognitiveDistortion", lastParticipantMessage: "I don't see the list of distortions anymore." });

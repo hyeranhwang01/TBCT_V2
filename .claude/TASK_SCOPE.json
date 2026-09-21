@@ -1,4 +1,19 @@
 {
+  "note2026_09_21_structured_output_leak": {
+    "task": "A turn reached the participant ending '...어떻게 느껴지세요?</patientFacingMessage>\\n<parameter name=\"keepCurrentNode\">true'. The model wrote the rest of its structured call inside the first field and nothing between there and the screen looked at the text.",
+    "sharedFileJustification": "dialogue-output-validator.ts is the only place the patient-facing text is inspected before it ships, and the defect is session-agnostic -- any of the eight can produce it. It cannot be caught session-locally. One guard added (structured_output_leak, enforce) and one pattern; no existing guard changed.",
+    "whyEnforceNotLog": "The other content guards are log-mode because their matches are judgement calls. This one is not: a patient must never read markup, and the approved text is always a better turn than a broken one. Enforcing also means one rewrite is tried first.",
+    "tests": "dialogue-agent.test.ts: four leaked shapes rejected with reason structured_output_leak, three ordinary sentences (including one with quoted speech) unaffected, and the guard mode pinned.",
+    "notDiagnosed": "Why the model produced it. The Anthropic path uses a proper tool_use block and guards stop_reason=max_tokens, so the malformed output came back inside the tool input itself. Worth watching in the turn records if it recurs.",
+    "allowedPaths": [".claude/TASK_SCOPE.json", "src/shared/dialogue-agent/dialogue-output-validator.ts", "src/shared/dialogue-agent/dialogue-agent.test.ts", "src/patient/sessions/s02/**"]
+  },
+  "note2026_09_21_worksheet_text_fused_forms": {
+    "task": "The cell still held '...좋았던거라고 생각했음' after the first cleanup pass.",
+    "cause": "That pass only removed a DETACHED quote ('...싫어할꺼야 라고 생각했습니다') and deliberately left the fused form alone, because cutting at the particle leaves '...좋았던거'. Leaving it alone was safe but did not do the job.",
+    "fix": "Three shapes now, each leaving grammatical Korean: a detached quote loses the frame; '거/것 + 라고 + report verb' unwinds to '거야'; '-다고 + report verb' unwinds to '-다'; and a nominalised report ('...어떡하지 하는 생각이 들어요') loses the tail. Anything else still falls through to the sentence-end check and is left as written.",
+    "honestCaveat": "The 거야 branch adds a syllable the participant did not type. It is the plain form their own quotative was quoting, not new content, and it is the only way to leave that shape grammatical -- but it is an addition, not purely a removal.",
+    "allowedPaths": [".claude/TASK_SCOPE.json", "src/patient/sessions/s02/**"]
+  },
   "note2026_09_21_s02_one_step_per_message": {
     "task": "Two defects visible in the first live S02 run, once the dialogue agent was actually reached.",
     "duplication": "The rationale node said the same thing twice in a row: the research message ended with what the pattern list gets used for later, and the next message repeated it. Cause: the contract's therapeuticObjective is the NODE's objective (dialogue-contract-compiler.ts:441) and every prompt in the node receives it, so an objective that reads 'say three things' invites each turn to say all three. Five S02 nodes carry more than one prompt and all had the same exposure. Fixed with a session rule (each message covers only its own step) plus a keep line on research-evidence.",

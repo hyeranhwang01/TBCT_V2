@@ -27,17 +27,25 @@ describe("the worksheet cell text", () => {
     ]) expect(normalizeExampleForWorksheet(text), text).toBe(text);
   });
 
-  // The conservative half of the rule, and the reason it is safe to ship: in
-  // "…무너질 거라고 생각했어요" the particle is fused into the clause, so cutting
-  // there would leave "…무너질 거". Left exactly as written instead.
-  it("does not cut a frame that is fused into the sentence", () => {
-    for (const text of [
-      "계획에 실패하면 모든 게 무너질 거라고 생각했어요",
-      "토플 점수가 안 떨어진 건 그냥 운이 좋았던 거라고 생각했어요",
-      "교수님이 싫어하면 어떡하지 하는 생각이 들어요",
-      "그냥 운이 좋았다고 느꼈어요",
-      "실수하면 내가 부족해서 그렇다고 스스로를 탓해요",
-    ]) expect(normalizeExampleForWorksheet(text), text).toBe(text);
+  // Korean attaches the quotative particle to the clause as often as it detaches
+  // it, and a plain cut at the particle leaves a fragment: "...무너질 거라고
+  // 생각했어요" would become "...무너질 거", which the first build of this shipped.
+  // These unwind to the plain form the sentence was quoting instead.
+  it("unwinds a frame that is fused into the sentence rather than cutting it", () => {
+    // Reported from a live session.
+    expect(normalizeExampleForWorksheet("시험점수가 떨어지진않았지만 그건 운이 좋았던거라고 생각했음"))
+      .toBe("시험점수가 떨어지진않았지만 그건 운이 좋았던거야");
+    expect(normalizeExampleForWorksheet("계획에 실패하면 모든 게 무너질 거라고 생각했어요"))
+      .toBe("계획에 실패하면 모든 게 무너질 거야");
+    expect(normalizeExampleForWorksheet("그냥 운이 좋았다고 느꼈어요")).toBe("그냥 운이 좋았다");
+    expect(normalizeExampleForWorksheet("교수님이 싫어하면 어떡하지 하는 생각이 들어요"))
+      .toBe("교수님이 싫어하면 어떡하지");
+  });
+
+  it("leaves a sentence alone when the report verb is not what ends it", () => {
+    // "그렇다고" here is not a frame around the thought -- the sentence continues.
+    const text = "실수하면 내가 부족해서 그렇다고 스스로를 탓해요";
+    expect(normalizeExampleForWorksheet(text)).toBe(text);
   });
 
   it("drops the filler people start with, and nothing after it", () => {

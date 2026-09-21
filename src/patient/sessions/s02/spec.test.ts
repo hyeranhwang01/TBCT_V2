@@ -5,7 +5,7 @@ import { getLocalDb } from "@/shared/data/db/tbct-local-db";
 import { CANONICAL_PROMPT_ITEMS } from "@/shared/protocol/source-fidelity-catalog";
 import { isSafetyCriticalPrompt } from "@/shared/dialogue-agent/dialogue-agent-orchestrator";
 import { COGNITIVE_DISTORTIONS } from "@/shared/protocol/cognitive-distortions";
-import { NO_EXAMPLE_MARKER, s02PromptSlug } from "@/patient/sessions/s02/turn-rules";
+import { NO_EXAMPLE_MARKER, normalizeExampleForWorksheet, s02PromptSlug } from "@/patient/sessions/s02/turn-rules";
 import { getWorksheetView } from "@/shared/worksheet/worksheet-projection";
 import type { PatientInput } from "@/types/runtime-session";
 
@@ -310,7 +310,7 @@ describe("S02 redesign: real second session replay", () => {
 
     const view = await currentView(session.id);
     // The example is already stored, and the pointer has NOT moved on.
-    expect(storedRows(view)).toEqual([OWN_EXAMPLES[0]]);
+    expect(storedRows(view)).toEqual([normalizeExampleForWorksheet(OWN_EXAMPLES[0])]);
     expect(view.session.runtimeContext.fields.s02PatternPhase).toBe("discuss");
     expect(currentSlug(view)).toBe("review-distortion");
     // Still the first pattern: the second one has not been introduced.
@@ -403,7 +403,7 @@ describe("S02 redesign: real second session replay", () => {
     expect(view.session.runtimeContext.fields.s02PatternPhase).toBe("ask");
     // The example they gave is kept; disagreeing with a reading is not
     // withdrawing the example.
-    expect(storedRows(view)).toEqual([OWN_EXAMPLES[0]]);
+    expect(storedRows(view)).toEqual([normalizeExampleForWorksheet(OWN_EXAMPLES[0])]);
     expect(assistantTexts(view).at(-1) ?? "").toContain(COGNITIVE_DISTORTIONS[1].nameKo);
   }, 90_000);
 

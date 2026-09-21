@@ -259,17 +259,27 @@ export function offersReplacementExample(text: string): boolean {
  * alone, and a result that comes out empty or suspiciously short falls back to
  * the original, so a miss is never worse than today's behaviour.
  */
-const REPORTING_FRAME =
-  /\s*(?:[,·]\s*)?(?:라|다|이라|하)?고\s*(?:생각|느꼈|느껴|봤|여겼|믿었|받아들였)\S*$|\s*(?:라고|하고)?\s*(?:생각|느낌)(?:이|을)?\s*(?:들었|했|해요|들어요)\S*$/;
+// A reporting frame in three shapes, because Korean attaches the quotative
+// particle to the clause as often as it detaches it. Each branch has to leave
+// grammatical Korean behind; the first build cut at the particle regardless and
+// turned "...무너질 거라고 생각했어요" into "...무너질 거".
+const REPORT_VERB = "(?:생각|느꼈|느껴|느낀|봤|여겼|믿었|받아들였|탓했)";
+// "...싫어할꺼야 라고 생각했습니다" -- the thought is already a finished
+// sentence, so the frame simply comes off.
+const DETACHED_QUOTE = new RegExp(`\\s*(?:[,·]\\s*)?(?:라|이라)고\\s*${REPORT_VERB}\\S*$`);
+// "...좋았던 거라고 생각했음" -- the particle is fused to the bound noun 거/것,
+// which is left dangling by a plain cut. Unwinds to the plain form it quotes.
+const FUSED_BOUND_NOUN = new RegExp(`(거|것)\\s*(?:라|이라)고\\s*${REPORT_VERB}\\S*$`);
+// "...운이 좋았다고 느꼈어요" -- -다고 unwinds to -다, a complete sentence.
+const FUSED_DECLARATIVE = new RegExp(`다고\\s*${REPORT_VERB}\\S*$`);
+// "...어떡하지 하는 생각이 들어요".
+const NOMINALISED_REPORT = /\s*(?:라고|하고)?\s*하?는?\s*(?:생각|느낌)(?:이|을)?\s*(?:들었|들어|했|해)\S*$/;
 const TRAILING_HEDGE = /\s*(?:인\s*것\s*같아요|것\s*같아요|같았어요|같습니다)$/;
 const LEADING_FILLERS = [/^(?:음+|어+|그+)[,.\s]+/, /^(?:제가\s*생각한\s*(?:건|것은)|예를\s*들(?:면|어서))[,\s]+/];
 /**
- * The frame comes off only when what is left already ends like a finished
- * sentence. Korean fuses the quotative particle into the clause as often as it
- * detaches it: "…무너질 거라고 생각했어요" has no seam, and cutting at the
- * particle leaves "…무너질 거". Requiring a sentence-final ending means the
- * detached case ("…싫어할꺼야 라고 생각했습니다") is trimmed and the fused case
- * is left exactly as written -- a miss costs nothing, a bad cut would.
+ * Whether what is left reads as a finished sentence. The unwinding branches
+ * above produce one by construction; this catches the cases they do not cover,
+ * where leaving the text alone is the right answer.
  */
 const SENTENCE_END = /(?:야|어|아|요|다|까|네|지|죠|군|구나|잖아|[.!?'"”’])$/;
 const MIN_KEPT_LENGTH = 4;
@@ -278,11 +288,15 @@ export function normalizeExampleForWorksheet(raw: string): string {
   const original = raw.trim().replace(/\s+/g, " ");
   let value = original;
   for (const filler of LEADING_FILLERS) value = value.replace(filler, "").trim();
-  const trimmed = value
-    .replace(REPORTING_FRAME, "")
-    .replace(TRAILING_HEDGE, "")
-    .replace(/[\s,·]+$/, "")
-    .trim();
+
+  // Most specific first: the fused forms have to be unwound before the generic
+  // detached cut would reach them.
+  let trimmed = value;
+  if (FUSED_BOUND_NOUN.test(trimmed)) trimmed = trimmed.replace(FUSED_BOUND_NOUN, "$1야");
+  else if (FUSED_DECLARATIVE.test(trimmed)) trimmed = trimmed.replace(FUSED_DECLARATIVE, "다");
+  else trimmed = trimmed.replace(DETACHED_QUOTE, "").replace(NOMINALISED_REPORT, "");
+  trimmed = trimmed.replace(TRAILING_HEDGE, "").replace(/[\s,·]+$/, "").trim();
+
   if (trimmed.length >= MIN_KEPT_LENGTH && SENTENCE_END.test(trimmed)) return trimmed;
   return value.length >= MIN_KEPT_LENGTH ? value : original;
 }
