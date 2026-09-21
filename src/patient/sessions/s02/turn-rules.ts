@@ -241,6 +241,52 @@ export function offersReplacementExample(text: string): boolean {
   return REPLACEMENT_HINTS.some((hint) => value.includes(hint));
 }
 
+/**
+ * What goes in the worksheet cell, as opposed to what they said.
+ *
+ * "저 사람이 나한테 인사를 안했으니까, 나를 싫어할꺼야 라고 생각했습니다" is a
+ * sentence about a thought; the cell wants the thought. Only the reporting
+ * frame around it comes off -- no summarising, no rewording, nothing shortened.
+ * The row stays the participant's own words, which is what
+ * assistantMustNotSupply means for this field, and the chat message keeps the
+ * sentence exactly as they typed it.
+ *
+ * Deliberately deterministic. Handing this to the model would put it back
+ * inside a participant-owned field, and the ask was explicitly to clean rather
+ * than to summarise.
+ *
+ * Conservative by construction: anything it cannot confidently strip is left
+ * alone, and a result that comes out empty or suspiciously short falls back to
+ * the original, so a miss is never worse than today's behaviour.
+ */
+const REPORTING_FRAME =
+  /\s*(?:[,·]\s*)?(?:라|다|이라|하)?고\s*(?:생각|느꼈|느껴|봤|여겼|믿었|받아들였)\S*$|\s*(?:라고|하고)?\s*(?:생각|느낌)(?:이|을)?\s*(?:들었|했|해요|들어요)\S*$/;
+const TRAILING_HEDGE = /\s*(?:인\s*것\s*같아요|것\s*같아요|같았어요|같습니다)$/;
+const LEADING_FILLERS = [/^(?:음+|어+|그+)[,.\s]+/, /^(?:제가\s*생각한\s*(?:건|것은)|예를\s*들(?:면|어서))[,\s]+/];
+/**
+ * The frame comes off only when what is left already ends like a finished
+ * sentence. Korean fuses the quotative particle into the clause as often as it
+ * detaches it: "…무너질 거라고 생각했어요" has no seam, and cutting at the
+ * particle leaves "…무너질 거". Requiring a sentence-final ending means the
+ * detached case ("…싫어할꺼야 라고 생각했습니다") is trimmed and the fused case
+ * is left exactly as written -- a miss costs nothing, a bad cut would.
+ */
+const SENTENCE_END = /(?:야|어|아|요|다|까|네|지|죠|군|구나|잖아|[.!?'"”’])$/;
+const MIN_KEPT_LENGTH = 4;
+
+export function normalizeExampleForWorksheet(raw: string): string {
+  const original = raw.trim().replace(/\s+/g, " ");
+  let value = original;
+  for (const filler of LEADING_FILLERS) value = value.replace(filler, "").trim();
+  const trimmed = value
+    .replace(REPORTING_FRAME, "")
+    .replace(TRAILING_HEDGE, "")
+    .replace(/[\s,·]+$/, "")
+    .trim();
+  if (trimmed.length >= MIN_KEPT_LENGTH && SENTENCE_END.test(trimmed)) return trimmed;
+  return value.length >= MIN_KEPT_LENGTH ? value : original;
+}
+
 /** The empty row: a pattern the participant had no example for. Stored rather
  * than skipped so the pointer stays aligned with the registry and the worksheet
  * shows the pattern as looked at. */
@@ -365,7 +411,7 @@ export async function applyS02TurnRules(input: S02TurnRulesInput): Promise<S02Tu
       // ... 좋은 예예요, 그 예를 좀 써봅시다"). The row is rewritten, never moved.
       if (rows.length && !hasNoExampleForPattern(text) && offersReplacementExample(text)) {
         const replaced = [...rows];
-        replaced[replaced.length - 1] = text.trim();
+        replaced[replaced.length - 1] = normalizeExampleForWorksheet(text);
         fields.distortionExamples = replaced;
         log("a better-fitting example for the same pattern replaced the row", { index: replaced.length });
       }
@@ -406,7 +452,7 @@ export async function applyS02TurnRules(input: S02TurnRulesInput): Promise<S02Tu
       if (targetField && !missingFields.includes(targetField)) missingFields.push(targetField);
       log("not an example for this pattern; asking again", { reviewed: rows.length });
     } else {
-      const next = [...rows, text.trim()];
+      const next = [...rows, normalizeExampleForWorksheet(text)];
       accept(text);
       fields.distortionExamples = next;
       fields.s02PatternPhase = "discuss";

@@ -423,6 +423,21 @@ describe("S02 redesign: real second session replay", () => {
     expect(assistantTexts(view).at(-1) ?? "").not.toContain(COGNITIVE_DISTORTIONS[1].nameKo);
   }, 90_000);
 
+  // Reported from a live session: the cell held the whole sentence, reporting
+  // frame and all. The cell takes the thought; the chat keeps what they typed.
+  it("files the thought in the worksheet cell and keeps their sentence in the chat", async () => {
+    const session = await startSession();
+    await driveUntil(session.id, "review-distortion");
+    const said = "저 사람이 나한테 인사를 안했으니까, 나를 싫어할꺼야 라고 생각했습니다";
+    await submitPatientInput(session.id, { kind: "text", value: said });
+
+    const view = await currentView(session.id);
+    expect(storedRows(view)).toEqual(["저 사람이 나한테 인사를 안했으니까, 나를 싫어할꺼야"]);
+    // Their own message is untouched -- the cleanup is for the cell only.
+    const theirs = view.messages.filter((message) => message.role === "patient").map((message) => message.content);
+    expect(theirs).toContain(said);
+  }, 90_000);
+
   it("skips the discussion when there was no example to talk about", async () => {
     const session = await startSession();
     await driveUntil(session.id, "review-distortion");

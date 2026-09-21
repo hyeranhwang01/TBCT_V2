@@ -120,6 +120,7 @@ const INTENTS: Record<string, S02TaskIntent> = {
       "Ask nothing.",
       "State it as things going together, never as one causing the other: the study found these scores rose together. Do NOT say that lowering the distortions lowers depression or anxiety -- that is not what this study shows.",
       "Name the university and the number of students so they can tell where it comes from. No statistics beyond that.",
+      "Stop there. What this list of patterns gets used for later is the next message's job, not this one's.",
     ],
     mustMention: [
       { describe: "where the study comes from -- the Federal University of Bahia in Brazil", ko: "바이아", en: "Bahia" },

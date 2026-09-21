@@ -23,6 +23,18 @@ const SESSION_RULES = [
   // participant's behalf, or re-filing an example under a different pattern.
   "Never rank the fifteen patterns, never choose among them on the participant's behalf, and never move an example to a different pattern than the one they put it against. Within the pattern the program is currently on you may say where it shows up in their own words, and you may say that other patterns show through as well.",
   "One question at a time. Never interpret or judge what the participant shares, and never diagnose.",
+  // 2026-09-21, first live S02 run (note2026_09_21_s02_one_step_per_message):
+  // the contract's therapeuticObjective is the NODE's objective
+  // (dialogue-contract-compiler.ts:441), and every prompt in that node receives
+  // it. In the rationale node it reads "say three things", so the research turn
+  // said the third thing too and the next message repeated it word for word.
+  // Five S02 nodes carry more than one prompt and all had the same exposure.
+  "Each message covers only its own step. The other parts of this step arrive as their own messages, so never say what a later message will say, even when the step's objective lists it.",
+  // Same run: a message the program does not wait on opened with "네, 좋아요",
+  // agreeing with something the participant had said two messages earlier.
+  // lastParticipantMessage stays set across consecutive program messages, so
+  // this is keyed on whether the turn waits for an answer instead.
+  "When the program is not waiting for an answer to this message, do not open by agreeing with or reacting to the participant -- they have not spoken since your last message.",
   // Same shape as S01's rule after its 2026-09-21 closing recap: the summary
   // ban is narrowed to the one step that looks back, the feedback ban is absolute.
   "Never ask the participant for feedback about the session or about you. Only the closing recap step looks back over the session; no other step summarizes it.",
