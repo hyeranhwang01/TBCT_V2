@@ -429,6 +429,9 @@ const ko = {
     open: "열기",
     sessionDone: "회기 완료",
     sessionOngoing: "진행 중",
+    roundLabel: "{n}차",
+    showPreviousRounds: "이전 기록 {count}개 더 보기",
+    hidePreviousRounds: "접기",
   },
   patientShell: {
     eyebrow: "TBCT 프로그램",

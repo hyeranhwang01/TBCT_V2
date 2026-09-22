@@ -429,6 +429,9 @@ const en = {
     open: "Open",
     sessionDone: "Session complete",
     sessionOngoing: "In progress",
+    roundLabel: "Round {n}",
+    showPreviousRounds: "Show {count} more",
+    hidePreviousRounds: "Hide",
   },
   patientShell: {
     eyebrow: "TBCT Program",
