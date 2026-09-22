@@ -13,6 +13,7 @@ import { propagateLocaleToOpenSessions } from "@/patient/lib/api/patient-locale-
 import { useT } from "@/shared/i18n/context";
 import { mapToUiLocale } from "@/shared/i18n/locales";
 import { useAuth } from "@/shared/auth/auth-context";
+import { isPatientMockModeEnabled } from "@/shared/mocks/patient-dev-mock";
 
 export function PatientProfilePage() {
   // Aliased: this page already has its own local `locale`/`setLocale` state
@@ -139,7 +140,10 @@ export function PatientProfilePage() {
           </div>
         </Card>
         <div className="grid gap-4 sm:grid-cols-2">
-        <MfaSettings />
+        {/* Mock mode never touches Supabase (see patient-dev-mock.ts), and
+           MFA is a Supabase Auth feature, so it's hidden rather than shown
+           broken while NEXT_PUBLIC_TBCT_PATIENT_MOCK=1 is set. */}
+        {!isPatientMockModeEnabled() && <MfaSettings />}
         <DataPrivacySection participantId={participant.id} />
         </div>
       </div>
