@@ -150,6 +150,12 @@ describe("authorship: a memory is never a quotable participant statement", () =>
   });
 });
 
+// The Claude request sends the system prompt as blocks (a cached per-session
+// block, then the per-turn block); read them back as one text, in order.
+function systemText(body: Record<string, unknown>) {
+  return (body.system as Array<{ text: string }>).map((block) => block.text).join("\n");
+}
+
 describe("providers: memory reaches Claude's system prompt, never the Groq fallback", () => {
   const originalFetch = globalThis.fetch;
   const env = { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY, GROQ_API_KEY: process.env.GROQ_API_KEY, AI_PROVIDER: process.env.AI_PROVIDER };
@@ -189,7 +195,7 @@ describe("providers: memory reaches Claude's system prompt, never the Groq fallb
     expect(result.failed).toBe(false);
     const call = captured.find((item) => item.url.includes("api.anthropic.com"));
     expect(call).toBeDefined();
-    const system = String(call!.body.system);
+    const system = systemText(call!.body);
     expect(system).toContain("EARLIER sessions");
     expect(system).toContain("[treatment_goal] 아침에 10분 산책하기");
     expect(system).toContain("Do not quote it");
@@ -204,7 +210,7 @@ describe("providers: memory reaches Claude's system prompt, never the Groq fallb
     delete process.env.GROQ_API_KEY;
     await generateDialogueDecision({ ...baseContract, participantMemory: undefined }, { sessionId: "tbct-s01", turnId: "turn-2" });
     const call = captured.find((item) => item.url.includes("api.anthropic.com"));
-    expect(String(call!.body.system)).not.toContain("EARLIER sessions");
+    expect(systemText(call!.body)).not.toContain("EARLIER sessions");
   });
 
   it("never sends the memory to the Groq continuity fallback", async () => {

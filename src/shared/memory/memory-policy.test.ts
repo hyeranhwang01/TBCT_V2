@@ -119,11 +119,13 @@ function compile(promptIdFragment: string, sessionDefinitionId: string) {
 describe("the contract follows the decided scope", () => {
   // S01 n10 preview: administrative turn, no protected field in the node.
   // S01 candidate-one-emotion: participant-owned turn in a protected node.
-  // S02 problem-framing (problems): participant-owned, node not protected.
+  // S02 review-distortion (the fifteen-distortion walkthrough): participant-
+  // owned, node not protected. (Was problem-framing until S02 dropped
+  // CCPH/CCGH for the cognitive-distortions session.)
   const cases: Array<[string, string, string, boolean]> = [
     ["administrative_only", "-preview", "tbct-s01", true],
-    ["administrative_only", "problem-framing", "tbct-s02", false],
-    ["unprotected_nodes", "problem-framing", "tbct-s02", true],
+    ["administrative_only", "review-distortion", "tbct-s02", false],
+    ["unprotected_nodes", "review-distortion", "tbct-s02", true],
     ["unprotected_nodes", "candidate-one-emotion", "tbct-s01", false],
     ["all_turns", "candidate-one-emotion", "tbct-s01", true],
   ];
@@ -145,7 +147,7 @@ describe("the contract follows the decided scope", () => {
     // even at all_turns, where every turn carries memory.
     for (const scope of MEMORY_INJECTION_SCOPES) {
       setPolicy({ injectionScope: scope });
-      for (const [prompt, sessionId] of [["-preview", "tbct-s01"], ["automatic-thought", "tbct-s03"], ["problem-framing", "tbct-s02"]] as const) {
+      for (const [prompt, sessionId] of [["-preview", "tbct-s01"], ["automatic-thought", "tbct-s03"], ["review-distortion", "tbct-s02"]] as const) {
         expect(JSON.stringify(compile(prompt, sessionId).confirmedState)).not.toContain("산책");
       }
     }
