@@ -17,10 +17,17 @@ import { getPatientRuntimeSession, getRuntimeSession } from "@/shared/api/runtim
 import { saveRemoteSessionAuditSnapshot } from "@/patient/lib/audit/remote-session-audit";
 import { computeSessionProgressPercent } from "@/shared/runtime/session-progress-estimate";
 import { describePatientInputForDisplay } from "@/shared/runtime/patient-input-display";
+import { normalizeSpeechText } from "@/patient/lib/speech/normalize-speech-text";
+import { readBrowserStorageItem, writeBrowserStorageItem } from "@/shared/browser-storage";
 import { resumeRuntimeSession, retryStalledRuntimeNode, startRuntimeSession, submitPatientInput, terminateRuntimeSession } from "@/shared/api/runtime-execution-api";
 import type { PatientInput, PatientRuntimeSessionView } from "@/types/runtime-session";
 import { useBrowserTts } from "@/patient/lib/speech/use-browser-tts";
 import { useT } from "@/shared/i18n/context";
+
+// Per-device, not per-participant: muting is a comfort setting for wherever the
+// patient happens to be sitting (a shared room, a quiet ward), not a property
+// of their record.
+const TTS_MUTED_STORAGE_KEY = "tbct.patient.tts.muted";
 
 function makeClientTurnId() {
   if (typeof globalThis.crypto?.randomUUID === "function") return `TURN-${globalThis.crypto.randomUUID()}`;
@@ -53,7 +60,11 @@ export function PatientSessionPage() {
     const timer = window.setTimeout(() => setIsLongWait(true), 2200);
     return () => window.clearTimeout(timer);
   }, [isSubmittingTurn]);
-  const lastAutoReadMessageIdRef = useRef<string | null>(null);
+  // Every Program message handed to the speech queue, not only the newest one:
+  // a turn can release several at once and all of them have to be read.
+  // "Queued" rather than "Read" because an id lands here when it enters the
+  // queue, which is well before it is actually spoken.
+  const autoQueuedMessageIdsRef = useRef<Set<string>>(new Set());
   // Messages already present the first time the session loads are shown in full;
   // only messages that arrive afterwards stream in, so history never replays.
   const historicalMessageIdsRef = useRef<Set<string> | null>(null);
@@ -201,7 +212,7 @@ export function PatientSessionPage() {
     return undefined;
   }, [inSafetyHold, previousHold]);
 
-  const messages = sessionData?.messages ?? [];
+  const messages = useMemo(() => sessionData?.messages ?? [], [sessionData]);
   const activeSession = sessionData?.session;
   const isKoreanSession = uiLocale === "ko";
   // A freshly-created session sits in "created" status until something
@@ -235,9 +246,29 @@ export function PatientSessionPage() {
   // to the UI-locale-derived value only until the session record itself
   // has loaded.
   const displayLocale = activeSession?.locale ?? (uiLocale === "ko" ? "ko-KR" : "en-US");
+  const sessionIsOver = activeSession?.status === "completed" || activeSession?.status === "terminated";
   const tts = useBrowserTts(displayLocale);
-  const { supported: ttsSupported, speak, stop } = tts;
-  const patientVisibleMessages = messages.filter((message) => message.role === "patient" || message.role === "assistant" || message.role === "system");
+  const { supported: ttsSupported, speakingMessageId, speak, stop } = tts;
+  // Safe to read storage in the initializer: this page is loaded with
+  // ssr:false (studio-app.tsx), so there is no server render to mismatch.
+  const [ttsMuted, setTtsMuted] = useState(() => readBrowserStorageItem(TTS_MUTED_STORAGE_KEY) === "true");
+  const toggleTtsMuted = () => {
+    const next = !ttsMuted;
+    setTtsMuted(next);
+    writeBrowserStorageItem(TTS_MUTED_STORAGE_KEY, String(next));
+    if (next) stop();
+  };
+  // An explicit tap means "say this one, now". Queueing it behind whatever is
+  // mid-sentence would make the button feel broken, so it interrupts -- and
+  // anything dropped from the queue is still on screen with its own button.
+  const replayMessage = (messageId: string, content: string) => {
+    stop();
+    speak(messageId, normalizeSpeechText(content, displayLocale));
+  };
+  // Memoised so displayMessages below keeps a stable identity between
+  // renders -- the auto-speak effect keys on it, and a fresh array every
+  // render would re-run it continuously.
+  const patientVisibleMessages = useMemo(() => messages.filter((message) => message.role === "patient" || message.role === "assistant" || message.role === "system"), [messages]);
   const latestAssistantMessage = [...patientVisibleMessages].reverse().find((message) => message.role === "assistant");
 
   // Walks patientVisibleMessages in order, including every historical
@@ -269,12 +300,53 @@ export function PatientSessionPage() {
     }
   }, [messages]);
 
-  // Every new approved Program message is read aloud automatically.
+  // Every new approved Program message is read aloud automatically. Driven by
+  // displayMessages, not by the newest message alone: displayMessages is
+  // already the serialized reveal queue (it stops after the first new
+  // assistant message that hasn't finished revealing), so walking it hands the
+  // speech queue exactly the messages the patient can see, in the order they
+  // appear. Keying on the newest message instead meant a turn that released
+  // three Program messages jumped straight to the third and the first two were
+  // never spoken at all.
   useEffect(() => {
-    if (!ttsSupported || !latestAssistantMessage || lastAutoReadMessageIdRef.current === latestAssistantMessage.id) return;
-    lastAutoReadMessageIdRef.current = latestAssistantMessage.id;
-    speak(latestAssistantMessage.id, latestAssistantMessage.content);
-  }, [latestAssistantMessage, speak, ttsSupported]);
+    if (!ttsSupported) return;
+    for (const message of displayMessages) {
+      if (message.role !== "assistant") continue;
+      if (autoQueuedMessageIdsRef.current.has(message.id)) continue;
+      autoQueuedMessageIdsRef.current.add(message.id);
+      // Muting is not a pause. A message that arrives while muted is still
+      // recorded as handled, so unmuting later starts from the next message
+      // instead of suddenly playing back everything that was missed.
+      if (ttsMuted) continue;
+      // Reopening a session renders its whole transcript at once. Replaying all
+      // of it aloud would be absurd, so of the messages that were already there
+      // on load only the most recent one -- the question still waiting on an
+      // answer -- is spoken. Everything arriving afterwards is new and spoken.
+      // A finished session has no such pending question, so it opens silently.
+      const wasAlreadyOnScreenAtLoad = historicalMessageIdsRef.current?.has(message.id) ?? true;
+      if (wasAlreadyOnScreenAtLoad && (sessionIsOver || message.id !== latestAssistantMessage?.id)) continue;
+      speak(message.id, normalizeSpeechText(message.content, displayLocale));
+    }
+  }, [displayMessages, displayLocale, latestAssistantMessage, sessionIsOver, speak, ttsMuted, ttsSupported]);
+
+  // Moving between two sessions does NOT remount this page: studio-app.tsx
+  // renders <Page /> with no key, so React keeps the same instance alive and
+  // every ref survives the navigation. Each of these is scoped to one session
+  // and has to be dropped on the way out, or session B inherits session A's:
+  // stale historical ids make B's existing transcript look brand new, so it
+  // streams in again and gets read aloud, and a stale autoStartedRef leaves a
+  // freshly created B sitting there never auto-starting.
+  //
+  // Cleared on the way out rather than on the way in because the auto-speak
+  // effect above runs first on a cached load -- resetting on entry would wipe
+  // the ids it had just recorded and every message would be spoken twice.
+  useEffect(() => () => {
+    autoQueuedMessageIdsRef.current = new Set();
+    historicalMessageIdsRef.current = null;
+    autoStartedRef.current = false;
+    setRevealedNewMessageIds(new Set());
+    stop();
+  }, [sessionId, stop]);
 
   if (sessionQuery.isLoading) return <PatientShell title={uiLocale === "ko" ? "세션" : "Session"}><PageSkeleton /></PatientShell>;
   if (!sessionQuery.data || !activeSession) {
@@ -328,6 +400,11 @@ export function PatientSessionPage() {
                     flight still avoids a confusing "nothing happened" click. */}
                 {activeSession.status === "created" && <Button disabled={startMutation.isPending} onClick={() => startMutation.mutate()}>{isKoreanSession ? "시작" : "Start"}</Button>}
                 {activeSession.status === "paused" && <Button disabled={resumeMutation.isPending} onClick={() => resumeMutation.mutate()}>{isKoreanSession ? "재개" : "Resume"}</Button>}
+                {ttsSupported && (
+                  <Button variant="secondary" onClick={toggleTtsMuted} aria-pressed={ttsMuted}>
+                    {ttsMuted ? (isKoreanSession ? "소리 켜기" : "Unmute") : (isKoreanSession ? "소리 끄기" : "Mute")}
+                  </Button>
+                )}
                 <Button variant="danger" onClick={() => setEndConfirmOpen(true)}>{isKoreanSession ? "종료" : "End"}</Button>
               </div>
             </div>
@@ -341,6 +418,7 @@ export function PatientSessionPage() {
             <AnimatePresence initial={false}>
               {displayMessages.map((message) => {
                 const isNewAssistantTurn = message.role === "assistant" && historicalMessageIdsRef.current !== null && !historicalMessageIdsRef.current.has(message.id);
+                const isSpeaking = message.role === "assistant" && speakingMessageId === message.id;
                 return (
                   <motion.div
                     key={message.id}
@@ -349,9 +427,26 @@ export function PatientSessionPage() {
                     animate={reducedMotion ? undefined : "animate"}
                     exit={reducedMotion ? undefined : "exit"}
                     layout={reducedMotion ? undefined : true}
-                    className={`max-w-[85%] rounded-panel border px-4 py-3 text-sm ${message.role === "patient" ? "ml-auto border-clinical-blue-light bg-clinical-blue-light/60" : message.role === "system" ? "border-warning-light bg-warning-light/60" : "border-border bg-surface-subtle"}`}
+                    className={`max-w-[85%] rounded-panel border px-4 py-3 text-sm ${message.role === "patient" ? "ml-auto border-clinical-blue-light bg-clinical-blue-light/60" : message.role === "system" ? "border-warning-light bg-warning-light/60" : "border-border bg-surface-subtle"}${isSpeaking ? " ring-2 ring-clinical-blue" : ""}`}
                   >
-                    <div className="mb-1 text-[11px] font-semibold text-text-muted">{message.role === "assistant" ? (isKoreanSession ? "프로그램" : "Program") : message.role === "patient" ? (isKoreanSession ? "나" : "You") : message.role}</div>
+                    <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold text-text-muted">
+                      <span>{message.role === "assistant" ? (isKoreanSession ? "프로그램" : "Program") : message.role === "patient" ? (isKoreanSession ? "나" : "You") : message.role}</span>
+                      {isSpeaking && (
+                        <span className="flex items-center gap-1 text-clinical-blue" aria-live="polite">
+                          <span className={reducedMotion ? undefined : "animate-pulse"} aria-hidden="true">●</span>
+                          {isKoreanSession ? "읽는 중" : "Speaking"}
+                        </span>
+                      )}
+                      {message.role === "assistant" && ttsSupported && !ttsMuted && (
+                        <button
+                          type="button"
+                          onClick={() => replayMessage(message.id, message.content)}
+                          className="ml-auto rounded px-1.5 py-0.5 font-semibold text-text-secondary underline-offset-2 hover:text-text-primary hover:underline"
+                        >
+                          {isKoreanSession ? "다시 듣기" : "Replay"}
+                        </button>
+                      )}
+                    </div>
                     <StreamingText
                       streamKey={message.id}
                       text={message.content}
