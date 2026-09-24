@@ -1,3 +1,4 @@
+import { memoryAllowedOnTurn, resolveLongitudinalMemoryPolicy } from "@/shared/memory/memory-policy";
 import type { ClinicalStageNode, PromptItem } from "@/shared/protocol/source-fidelity-types";
 import type { RuntimePromptItem } from "@/types/protocol-runtime";
 import type { RuntimeMessage, RuntimeSession } from "@/types/runtime-session";
@@ -149,6 +150,28 @@ function confirmedStateFor(session: RuntimeSession, node: ClinicalStageNode, tar
     if (fields[key] !== undefined && fields[key] !== "") state[key] = fields[key];
   }
   return state;
+}
+
+/** Longitudinal memory for THIS turn (.claude/TASK_SCOPE.json
+ * note2026_09_13_ari_memory_pipeline_plumbing). The session object arrives
+ * with the node's retrieved, clinician-approved memories already on
+ * runtimeContext.longitudinalMemory (runtime-execution-api.ts
+ * executeCurrentNode -> memory-context-injector.ts); this is the only place
+ * that reads them into the contract. WHICH turns may carry it is the PI's
+ * decision, not this file's: memory-policy.ts's injectionScope decides,
+ * given this turn's ownership facts. The default scope withholds memory
+ * entirely -- not trimmed -- whenever the turn asks for participant-owned
+ * content or the node is responsible for a protected field (S02/S03
+ * identifiers): the Patient Authorship Invariant (note2026_09_05) forbids
+ * the assistant from supplying, suggesting or completing such content, and
+ * a prior-session memory is exactly the kind of material it could be
+ * smoothed from. Whatever the scope, memory never enters confirmedState. */
+function participantMemoryFor(session: RuntimeSession, participantOwned: boolean, nodeRequiresProtectedField: boolean) {
+  const policy = resolveLongitudinalMemoryPolicy();
+  if (!memoryAllowedOnTurn(policy.injectionScope, { participantOwned, nodeRequiresProtectedField })) return undefined;
+  const items = session.runtimeContext.longitudinalMemory?.items ?? [];
+  const usable = items.filter((item) => item.id && item.content.trim());
+  return usable.length ? usable.map((item) => ({ id: item.id, type: item.type, content: item.content })) : undefined;
 }
 
 function choiceOptionsFor(promptItem: PromptItem) {
@@ -469,6 +492,7 @@ export function compileDialogueContract(input: {
     nodeRequiresProtectedField,
     worksheetEditAvailable: hasWorksheetBindings(session.sessionDefinitionId),
     confirmedState: confirmedStateFor(session, node, targetField),
+    participantMemory: participantMemoryFor(session, ownership.participantOwned, nodeRequiresProtectedField),
     // Named to exactly match dialogueResponseTypeSchema's responseType enum
     // (dialogue-agent-contract.ts), not a separate vocabulary -- these used
     // to be free-standing action names ("ask_current_task",

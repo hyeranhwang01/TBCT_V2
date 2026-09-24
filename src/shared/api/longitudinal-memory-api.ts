@@ -1,11 +1,12 @@
-import { getLocalDb } from "@/shared/data/db/tbct-local-db";
 import { makeId } from "@/shared/id";
-import { createMemoryAuditEntry, defaultPolicyIdForType } from "@/shared/memory/memory-helpers";
+import { defaultPolicyIdForType, recordMemoryAudit } from "@/shared/memory/memory-helpers";
 import { retrieveSelectiveMemory } from "@/shared/memory/memory-retrieval-engine";
 import {
+  deleteMemoryCandidate,
   getLongitudinalMemory,
   getMemoryCandidate,
   listAllMemoryUsageLogs,
+  listExpiredApprovedMemories,
   listGoalTrackingRecords,
   listHomeworkTrackingRecords,
   listLongitudinalMemories,
@@ -14,9 +15,14 @@ import {
   listMemoryUsageLogs,
   saveLongitudinalMemory,
   updateLongitudinalMemory,
+  updateMemoryCandidate,
 } from "@/shared/data/repositories/longitudinal-memory-repository";
 import { getParticipant } from "@/shared/data/repositories/participant-repository";
 import type { LongitudinalMemory, MemoryRetrievalRequest } from "@/types/longitudinal-memory";
+
+// No browser IndexedDB access here any more: every record this file touches lives in Neon
+// (see longitudinal-memory-repository.ts), and the audit entries go through
+// recordMemoryAudit, which never throws. Function names/signatures unchanged.
 
 export async function getParticipantMemories(participantId: string) {
   return listLongitudinalMemories(participantId);
@@ -38,34 +44,30 @@ export async function approveMemoryCandidate(candidateId: string, approvedBy = "
     updatedAt: new Date().toISOString(),
   };
   await saveLongitudinalMemory(approved);
-  await getLocalDb().memoryCandidates.delete(candidateId);
-  await getLocalDb().auditEntries.put(
-    createMemoryAuditEntry({
-      action: "Memory approved",
-      resource: `Memory ${candidateId}`,
-      version: "stage3",
-      previousValue: JSON.stringify(candidate),
-      newValue: JSON.stringify(approved),
-      reason: "Approved for longitudinal use",
-    }),
-  );
+  await deleteMemoryCandidate(candidateId);
+  await recordMemoryAudit({
+    action: "Memory approved",
+    resource: `Memory ${candidateId}`,
+    version: "stage3",
+    previousValue: JSON.stringify(candidate),
+    newValue: JSON.stringify(approved),
+    reason: "Approved for longitudinal use",
+  });
   return approved;
 }
 
 export async function rejectMemoryCandidate(candidateId: string, reason: string) {
   const candidate = await getMemoryCandidate(candidateId);
   if (!candidate) throw new Error("Memory candidate not found");
-  await getLocalDb().memoryCandidates.put({ ...candidate, status: "rejected", rejectionReason: reason, updatedAt: new Date().toISOString() });
-  await getLocalDb().auditEntries.put(
-    createMemoryAuditEntry({
-      action: "Memory rejected",
-      resource: `Memory ${candidateId}`,
-      version: "stage3",
-      previousValue: JSON.stringify(candidate),
-      newValue: JSON.stringify({ status: "rejected", reason }),
-      reason,
-    }),
-  );
+  await updateMemoryCandidate(candidateId, { status: "rejected", rejectionReason: reason });
+  await recordMemoryAudit({
+    action: "Memory rejected",
+    resource: `Memory ${candidateId}`,
+    version: "stage3",
+    previousValue: JSON.stringify(candidate),
+    newValue: JSON.stringify({ status: "rejected", reason }),
+    reason,
+  });
 }
 
 export async function supersedeMemory(memoryId: string, replacementMemoryId: string, reason: string) {
@@ -73,22 +75,18 @@ export async function supersedeMemory(memoryId: string, replacementMemoryId: str
   if (!current || !replacement) throw new Error("Memory not found");
   await updateLongitudinalMemory(memoryId, { status: "superseded", supersededByMemoryId: replacementMemoryId });
   await updateLongitudinalMemory(replacementMemoryId, { supersedesMemoryId: memoryId });
-  await getLocalDb().auditEntries.put(
-    createMemoryAuditEntry({
-      action: "Memory superseded",
-      resource: `Memory ${memoryId}`,
-      version: "stage3",
-      previousValue: JSON.stringify(current),
-      newValue: JSON.stringify(replacement),
-      reason,
-    }),
-  );
+  await recordMemoryAudit({
+    action: "Memory superseded",
+    resource: `Memory ${memoryId}`,
+    version: "stage3",
+    previousValue: JSON.stringify(current),
+    newValue: JSON.stringify(replacement),
+    reason,
+  });
 }
 
 export async function expireEligibleMemories() {
-  const all = await getLocalDb().longitudinalMemories.toArray();
-  const now = Date.now();
-  const expired = all.filter((memory) => memory.validUntil && new Date(memory.validUntil).getTime() < now && memory.status === "approved");
+  const expired = await listExpiredApprovedMemories();
   for (const memory of expired) {
     await updateLongitudinalMemory(memory.id, { status: "expired" });
   }
@@ -135,16 +133,14 @@ export async function deleteClinicianNote(memoryId: string, deletedBy = "Clinici
   const existing = await getLongitudinalMemory(memoryId);
   if (!existing) throw new Error("Clinical note not found");
   const deleted = await updateLongitudinalMemory(memoryId, { status: "deleted" });
-  await getLocalDb().auditEntries.put(
-    createMemoryAuditEntry({
-      action: "Clinical note deleted",
-      resource: `Participant ${existing.participantId}`,
-      version: "stage3",
-      previousValue: JSON.stringify(existing),
-      newValue: JSON.stringify({ status: "deleted" }),
-      reason: `Deleted by ${deletedBy} from Patient Monitoring`,
-    }),
-  );
+  await recordMemoryAudit({
+    action: "Clinical note deleted",
+    resource: `Participant ${existing.participantId}`,
+    version: "stage3",
+    previousValue: JSON.stringify(existing),
+    newValue: JSON.stringify({ status: "deleted" }),
+    reason: `Deleted by ${deletedBy} from Patient Monitoring`,
+  });
   return deleted;
 }
 
@@ -179,16 +175,14 @@ export async function addClinicianNote(input: {
     createdBy: input.createdBy ?? "Clinician",
   };
   await saveLongitudinalMemory(note);
-  await getLocalDb().auditEntries.put(
-    createMemoryAuditEntry({
-      action: "Clinical note added",
-      resource: `Participant ${input.participantId}`,
-      version: "stage3",
-      previousValue: "",
-      newValue: JSON.stringify(note),
-      reason: "Clinician-entered note from Patient Monitoring",
-    }),
-  );
+  await recordMemoryAudit({
+    action: "Clinical note added",
+    resource: `Participant ${input.participantId}`,
+    version: "stage3",
+    previousValue: "",
+    newValue: JSON.stringify(note),
+    reason: "Clinician-entered note from Patient Monitoring",
+  });
   return note;
 }
 

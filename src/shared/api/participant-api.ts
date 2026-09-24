@@ -1,3 +1,4 @@
+import { resolveLongitudinalMemoryPolicy } from "@/shared/memory/memory-policy";
 import { appendParticipantSession, getLongitudinalRecord, getParticipant, getParticipantByAuthUserId, listParticipantConsentEvents, listParticipants, saveLongitudinalRecord, saveParticipant, saveParticipantConsentEvent, updateParticipant } from "@/shared/data/repositories/participant-repository";
 import { createMemoryAuditEntry } from "@/shared/memory/memory-helpers";
 import { getLocalDb } from "@/shared/data/db/tbct-local-db";
@@ -36,7 +37,7 @@ export async function getOrCreateDemoParticipant() {
     longitudinalRecordId: "LREC-DEMO-BR-001",
     consent: {
       memoryStorageAllowed: true,
-      crossSessionUseAllowed: true,
+      crossSessionUseAllowed: resolveLongitudinalMemoryPolicy().crossSessionConsentDefault,
       sensitiveMemoryAllowed: false,
       updatedAt: now,
     },
@@ -77,7 +78,7 @@ export async function getOrCreateParticipantForUser(authUserId: string, defaults
     authUserId,
     consent: {
       memoryStorageAllowed: true,
-      crossSessionUseAllowed: true,
+      crossSessionUseAllowed: resolveLongitudinalMemoryPolicy().crossSessionConsentDefault,
       sensitiveMemoryAllowed: false,
       updatedAt: now,
     },

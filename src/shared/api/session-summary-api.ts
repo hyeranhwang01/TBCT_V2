@@ -1,11 +1,14 @@
-import { getLocalDb } from "@/shared/data/db/tbct-local-db";
 import { makeId } from "@/shared/id";
-import { createMemoryAuditEntry } from "@/shared/memory/memory-helpers";
+import { recordMemoryAudit } from "@/shared/memory/memory-helpers";
 import { extractMemoryCandidatesFromSummary } from "@/shared/memory/memory-candidate-extractor";
 import { generateDeterministicSessionSummary } from "@/shared/memory/session-summary-generator";
 import { saveMemoryCandidate, saveGoalTrackingRecord, saveHomeworkTrackingRecord, updateMemoryCandidate } from "@/shared/data/repositories/longitudinal-memory-repository";
 import { getSessionSummary, getSessionSummaryBySession, saveSessionSummary, updateSessionSummary } from "@/shared/data/repositories/session-summary-repository";
 import { getRuntimeSession } from "@/shared/api/runtime-session-api";
+
+// Runs on the server at session completion (runtime-execution-api.ts
+// completeRuntimeSession) as well as from the clinician's browser -- every
+// store it touches is Neon-backed and the audit entry never throws.
 
 export async function generateSessionSummary(sessionId: string) {
   const view = await getRuntimeSession(sessionId);
@@ -14,15 +17,13 @@ export async function generateSessionSummary(sessionId: string) {
   if (existing) return existing;
   const summary = generateDeterministicSessionSummary(view);
   await saveSessionSummary(summary);
-  await getLocalDb().auditEntries.put(
-    createMemoryAuditEntry({
-      action: "Session summary generated",
-      resource: `Runtime Session ${sessionId}`,
-      version: view.session.protocolVersion,
-      newValue: JSON.stringify(summary),
-      reason: "Stage 3 session completion summary",
-    }),
-  );
+  await recordMemoryAudit({
+    action: "Session summary generated",
+    resource: `Runtime Session ${sessionId}`,
+    version: view.session.protocolVersion,
+    newValue: JSON.stringify(summary),
+    reason: "Stage 3 session completion summary",
+  });
   return summary;
 }
 
@@ -83,15 +84,13 @@ export async function extractMemoryCandidates(summaryId: string) {
       }),
     ),
   );
-  await getLocalDb().auditEntries.put(
-    createMemoryAuditEntry({
-      action: "Memory candidates extracted",
-      resource: `Session Summary ${summaryId}`,
-      version: summary.protocolVersion,
-      newValue: JSON.stringify(existingCandidates.map((candidate) => candidate.id)),
-      reason: "Deterministic memory extraction",
-    }),
-  );
+  await recordMemoryAudit({
+    action: "Memory candidates extracted",
+    resource: `Session Summary ${summaryId}`,
+    version: summary.protocolVersion,
+    newValue: JSON.stringify(existingCandidates.map((candidate) => candidate.id)),
+    reason: "Deterministic memory extraction",
+  });
   return existingCandidates;
 }
 

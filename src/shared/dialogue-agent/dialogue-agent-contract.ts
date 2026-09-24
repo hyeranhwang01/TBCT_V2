@@ -165,6 +165,19 @@ export const dialogueContractSchema = z.object({
   }).optional(),
   // Set on a rewrite after the turn left out must-include content.
   intentFeedback: z.string().optional(),
+  // Longitudinal memory (.claude/TASK_SCOPE.json
+  // note2026_09_13_ari_memory_pipeline_plumbing): clinician-APPROVED
+  // memories from the participant's earlier sessions (goals, homework,
+  // barriers, coping strategies), selected per node by
+  // memory-retrieval-engine.ts and carried on
+  // session.runtimeContext.longitudinalMemory. Reference context only --
+  // these are system summaries, never the participant's words in THIS
+  // conversation, so they are deliberately NOT part of confirmedState
+  // (message-composition.ts's quote sources) and the compiler leaves this
+  // empty on every turn that asks for participant-owned content or
+  // belongs to a node with a protected field. `id` is what the turn log
+  // records (injectedMemoryIds) for reproducibility.
+  participantMemory: z.array(z.object({ id: z.string(), type: z.string(), content: z.string() })).optional(),
 });
 export type DialogueContract = z.infer<typeof dialogueContractSchema>;
 

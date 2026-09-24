@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { dispatchParticipantStoreOp, getMemory, getParticipant, getParticipantByAuthUserId } from "@/shared/data/server/participant-store";
+import { getRuntimeSessionRecord } from "@/shared/data/server/runtime-session-store";
 import type { ParticipantStoreOp } from "@/shared/runtime/participant-store-ops";
 import { getAuthenticatedCaller } from "@/shared/supabase/server";
 
@@ -61,5 +62,44 @@ async function isDeniedForPatient(op: ParticipantStoreOp, callerUserId: string):
     const [memory, own] = await Promise.all([getMemory(memoryId), getParticipantByAuthUserId(callerUserId)]);
     return !memory || !own || memory.participantId !== own.id;
   }
+  // Longitudinal-memory pipeline ops (sql/023). From the browser a patient
+  // only ever READS their own records (profile dashboard, session-complete
+  // summary, the session view's retrieval/usage lists) and writes the
+  // retrieval/usage logs of their own session start; candidates, review
+  // decisions, summaries and tracking writes are clinician-only here.
+  // Server-turn writes never reach this check (in-process dispatch, see
+  // runtime-request-context.ts).
+  if (op.op === "listAllMemoryUsageLogs" || op.op === "listGoalTrackingRecords" || op.op === "listHomeworkTrackingRecords") {
+    const own = await getParticipantByAuthUserId(callerUserId);
+    return !own || op.participantId !== own.id;
+  }
+  if (op.op === "getSessionSummaryBySession" || op.op === "listMemoryRetrievalRuns" || op.op === "listMemoryUsageLogs") {
+    const [session, own] = await Promise.all([getRuntimeSessionRecord(op.runtimeSessionId), getParticipantByAuthUserId(callerUserId)]);
+    return !session || !own || session.participantId !== own.id;
+  }
+  if (op.op === "saveMemoryRetrievalRun" || op.op === "saveMemoryUsageLog") {
+    const participantId = op.op === "saveMemoryRetrievalRun" ? op.run.participantId : op.log.participantId;
+    const own = await getParticipantByAuthUserId(callerUserId);
+    return !own || participantId !== own.id;
+  }
+  if (PATIENT_DENIED_MEMORY_PIPELINE_OPS.has(op.op)) return true;
   return false;
 }
+
+const PATIENT_DENIED_MEMORY_PIPELINE_OPS = new Set<ParticipantStoreOp["op"]>([
+  "listExpiredApprovedMemories",
+  "getSessionSummary",
+  "saveSessionSummary",
+  "updateSessionSummary",
+  "listMemoryCandidates",
+  "getMemoryCandidate",
+  "saveMemoryCandidate",
+  "updateMemoryCandidate",
+  "deleteMemoryCandidate",
+  "saveMemoryReviewDecision",
+  "listMemoryReviewDecisions",
+  "saveGoalTrackingRecord",
+  "updateGoalTrackingRecord",
+  "saveHomeworkTrackingRecord",
+  "updateHomeworkTrackingRecord",
+]);
