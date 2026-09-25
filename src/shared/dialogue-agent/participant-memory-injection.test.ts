@@ -90,16 +90,17 @@ function compileFor(promptIdFragment: string, sessionDefinitionId: string, withM
 
 describe("contract compiler: participantMemory", () => {
   it("carries the session's memories (with ids) on an administrative turn that asks for no participant content", () => {
-    // S01 n10 "preview" (three-person model) writes threePersonPreviewComplete -- a delivery flag, not participant content, in a node with no protected field.
-    const contract = compileFor("preview", "tbct-s01");
+    // S03 "ccd-connection" explains how the Intra-TR builds on the diagram -- no participant content, in a node with no protected field.
+    // (It was S01's three-person preview until S01 became prompt-driven, note2026_09_25_prompt_driven_s01_s02.)
+    const contract = compileFor("ccd-connection", "tbct-s03");
     expect(contract.participantOwned).toBe(false);
     expect(contract.participantMemory).toEqual(MEMORY_ITEMS);
     // Never mixed into confirmedState (the quote-source pool).
     expect(JSON.stringify(contract.confirmedState)).not.toContain("산책");
   });
 
-  it("is absent on a participant-owned turn (S01 candidate-one-emotion)", () => {
-    const contract = compileFor("candidate-one-emotion", "tbct-s01");
+  it("is absent on a participant-owned turn (S03 primary emotion)", () => {
+    const contract = compileFor("primary-emotion", "tbct-s03");
     expect(contract.participantOwned).toBe(true);
     expect(contract.participantMemory).toBeUndefined();
   });
@@ -111,7 +112,7 @@ describe("contract compiler: participantMemory", () => {
   });
 
   it("is absent when the session carries no memory", () => {
-    expect(compileFor("intro-distortions", "tbct-s01", false).participantMemory).toBeUndefined();
+    expect(compileFor("ccd-connection", "tbct-s03", false).participantMemory).toBeUndefined();
   });
 });
 
@@ -229,10 +230,10 @@ describe("providers: memory reaches Claude's system prompt, never the Groq fallb
 
 describe("turn record: injected memory ids", () => {
   it("reports the ids of the memories that were on the contract", async () => {
-    const sourcePromptItem = CANONICAL_PROMPT_ITEMS.find((item) => item.id.startsWith("tbct-s01") && item.id.includes("-preview"))!;
+    const sourcePromptItem = CANONICAL_PROMPT_ITEMS.find((item) => item.id.startsWith("tbct-s03") && item.id.includes("-ccd-connection"))!;
     const node = CANONICAL_STAGE_NODES.find((item) => item.id === sourcePromptItem.nodeId)!;
     const result = await resolveDialogueAgentMessage({
-      session: session("tbct-s01"),
+      session: session("tbct-s03"),
       node,
       sourcePromptItem,
       runtimePromptItem: runtimePromptItem({ id: sourcePromptItem.id, nodeId: node.id }),

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Button, textareaClass } from "@/shared/components/ui/primitives";
 import { ScoreChip } from "@/patient/components/worksheet-renderers/shared";
 import { COGNITIVE_DISTORTIONS, DISTORTION_IDS } from "@/shared/protocol/cognitive-distortions";
-import { cdQuestScore, type CdQuestGrade } from "@/patient/sessions/s02/turn-rules";
+import { cdQuestScore, type CdQuestGrade } from "@/patient/sessions/s02/cdquest-score";
 import { useT } from "@/shared/i18n/context";
 import type { HomeworkEntryRecord } from "@/types/homework";
 
@@ -14,7 +14,7 @@ import type { HomeworkEntryRecord } from "@/types/homework";
 // it was believed (.claude/TASK_SCOPE.json
 // note2026_09_21_s02_cognitive_distortions, stage 3).
 //
-// The grid is the same one the session uses (s02/turn-rules.ts), so a score here
+// The grid is the same one the session uses (s02/cdquest-score.ts), so a score here
 // and a score in the session mean the same thing and can be compared. Rows come
 // from the shared registry, in the same order as the session worksheet.
 //

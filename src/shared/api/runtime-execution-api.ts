@@ -6,8 +6,10 @@ import { runMemoryRetrieval } from "@/shared/api/longitudinal-memory-api";
 import { extractMemoryCandidates, generateSessionSummary } from "@/shared/api/session-summary-api";
 import { createSafetyEvent, findOpenSafetyEventByTriggerKey, patchSafetyEvent, placeSessionOnSafetyHold } from "@/shared/api/safety-operations-api";
 import { getRuntimeParticipant } from "@/shared/api/participant-api";
-import { mergeExtractedRuntimeContext, extractRuntimeState, refreshListRatingPointers, removeRatingForRemovedListItem, isExplicitPatientRefusal, violatesThirdPersonRequirement, normalizeText, looksLikeMetaQuestionAboutTheProcess, looksLikeMeaningClarificationRequest, looksLikeS02ExplanationRequest } from "@/shared/runtime/runtime-context";
+import { mergeExtractedRuntimeContext, extractRuntimeState, refreshListRatingPointers, removeRatingForRemovedListItem, isExplicitPatientRefusal, violatesThirdPersonRequirement, normalizeText, looksLikeMetaQuestionAboutTheProcess, looksLikeMeaningClarificationRequest } from "@/shared/runtime/runtime-context";
 import { detectLanguageSwitchRequest } from "@/shared/runtime/language-switch-detector";
+import { safetyClarificationText } from "@/shared/runtime/safety-clarification";
+import { isPromptDrivenSession } from "@/shared/runtime/prompt-driven-sessions";
 import { describePatientInputForDisplay } from "@/shared/runtime/patient-input-display";
 import { executeRuntimeNodeMessage } from "@/shared/runtime/runtime-node-executor";
 import { runSafetyOrchestrator } from "@/shared/runtime/runtime-safety-orchestrator";
@@ -23,8 +25,6 @@ import { REFLECTION_ASK_AGAIN, REFLECTION_MOVE_ON, classifyReflectionCheckReply,
 import { applyConfirmedSummaryToFields, confirmedSummaryKey, confirmedSummaryRecord, resolveLongAnswerSummaryTarget } from "@/shared/runtime/long-answer";
 import { applyFieldCorrection, confirmedSummariesAfterCorrection } from "@/shared/runtime/field-correction";
 import { findPendingExploration, type PendingExploration } from "@/shared/runtime/conversation-steering";
-import { applyS01TurnRules } from "@/patient/sessions/s01/turn-rules";
-import { applyS02TurnRules } from "@/patient/sessions/s02/turn-rules";
 import { composeCrpPlanSummary } from "@/patient/sessions/s07/messages";
 import { composeTrialClosingSummary } from "@/patient/sessions/s08/messages";
 import type { ClinicalStageNode, PromptItem } from "@/shared/protocol/source-fidelity-types";
@@ -47,6 +47,27 @@ async function submitPatientInputOnServer(sessionId: string, patientInput: Patie
   return payload.result;
 }
 import type { SafetyTriggerSuppression } from "@/types/safety-operations";
+
+// Prompt-driven sessions (.claude/TASK_SCOPE.json
+// note2026_09_25_prompt_driven_s01_s02) are run by prompt-session-api.ts, on
+// the server: the model call needs ANTHROPIC_API_KEY. From the browser the
+// request goes through /api/runtime/prompt-session, the same way patient turns
+// go through /api/runtime/turn. Imported lazily -- prompt-session-api.ts
+// imports this module back.
+async function continuePromptSessionAnywhere(sessionId: string): Promise<RuntimeCycleResult> {
+  if (typeof window !== "undefined" && process.env.NODE_ENV !== "test") {
+    const response = await fetch("/api/runtime/prompt-session", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId }),
+    });
+    const payload = await response.json().catch(() => null) as { ok?: boolean; result?: RuntimeCycleResult; error?: string } | null;
+    if (!response.ok || !payload?.ok || !payload.result) throw new Error(payload?.error ?? `Session step failed (${response.status})`);
+    return payload.result;
+  }
+  const { continuePromptSession } = await import("@/shared/api/prompt-session-api");
+  return continuePromptSession(sessionId);
+}
 
 function makeId(prefix: string) {
   const webCrypto = typeof globalThis !== "undefined" ? globalThis.crypto : undefined;
@@ -204,20 +225,7 @@ async function deliverClarificationTurn(input: {
         `방금 "저"라고 말씀하셨어요 -- 지금은 ${roleName.ko}(으)로서 피고인에 대해 이야기하시는 중이에요. 3인칭으로 다시 말씀해 주시겠어요?`,
       )
     : undefined;
-  // "잘 모르겠는데 설명해주세요" / "무슨질문이요?" during S02's fifteen-pattern
-  // walkthrough must explain what is actually being asked -- not the generic
-  // "give a short concrete example" fallback (adaptiveClarification below),
-  // which says nothing about the patterns at all. Retargeted from the CCPH/CCGH
-  // rating-card and problem/goal steps when S02 was redesigned
-  // (.claude/TASK_SCOPE.json note2026_09_21_s02_cognitive_distortions).
-  const isS02Walkthrough = input.promptItem.id === "tbct-s02-n05-p01-review-distortion" || missing.has("distortionExamples");
-  const s02ExplanationClarification = isS02Walkthrough && looksLikeS02ExplanationRequest(input.patientMessage.content)
-    ? tr(
-        "We're going through fifteen common thinking patterns one at a time. For the one we're on, I'm asking you to tell me about a moment from your week when a thought like that came up -- and if nothing comes to mind for this one, saying so is a complete answer.",
-        "생각이 왜곡될 수 있는 열다섯 가지 패턴을 하나씩 살펴보고 있어요. 지금 보고 있는 패턴에 대해, 최근에 그런 생각이 들었던 순간이 어떤 상황이었는지 여쭤보는 거예요. 떠오르지 않으면 그렇게 말씀하시는 것도 온전한 답이에요.",
-      )
-    : undefined;
-  const sourceSpecificClarification = thirdPersonCorrection ?? s02ExplanationClarification ?? (input.promptItem.id === "tbct-s08-n01-p04-distressing-situation"
+  const sourceSpecificClarification = thirdPersonCorrection ?? (input.promptItem.id === "tbct-s08-n01-p04-distressing-situation"
     ? missing.has("distressingSituation") && !missing.has("automaticThought")
       ? tr("Please describe a specific distressing situation and the important facts of what actually happened.", "\uad6c\uccb4\uc801\uc73c\ub85c \ud798\ub4e4\uc5c8\ub358 \uc0c1\ud669\uacfc \uc2e4\uc81c\ub85c \uc788\uc5c8\ub358 \uc911\uc694\ud55c \uc0ac\uc2e4\uc744 \ub9d0\uc500\ud574 \uc8fc\uc2dc\uaca0\uc5b4\uc694?")
       : missing.has("automaticThought") && !missing.has("distressingSituation")
@@ -230,10 +238,7 @@ async function deliverClarificationTurn(input: {
         "\uc54c\uaca0\uc2b5\ub2c8\ub2e4. \uc5ec\uae30\uc11c \uba48\ucd94\uc154\ub3c4 \uad1c\ucc2e\uc544\uc694. \uacc4\uc18d\ud558\uc9c0 \uc54a\uc73c\uc154\ub3c4 \ub429\ub2c8\ub2e4. \uc6d0\ud558\uc2dc\uba74 \uc5ec\uae30\uc11c \uc138\uc158\uc744 \ub9c8\uce58\uac70\ub098 \ub098\uc911\uc5d0 \ub2e4\uc2dc \uc774\uc5b4\uac00\uc2e4 \uc218 \uc788\uc5b4\uc694. \uad1c\ucc2e\uc73c\uc2dc\uba74 \uc9c0\uae08\uae4c\uc9c0 \uc774\uc57c\uae30\ud55c \ub0b4\uc6a9\uc744 \uc81c\uac00 \uc694\uc57d\ud574 \ub4dc\ub9b4\uae4c\uc694?",
       )
     : input.reason === "safety_clarification"
-      ? tr(
-          "I want to make sure I understand you correctly. Are you saying that you may be thinking about dying or harming yourself, or do you mean that things feel overwhelming right now?",
-          "\uc81c\uac00 \uc815\ud655\ud788 \uc774\ud574\ud588\ub294\uc9c0 \ud655\uc778\ud558\uace0 \uc2f6\uc5b4\uc694. \uc8fd\uace0 \uc2f6\uac70\ub098 \uc2a4\uc2a4\ub85c\ub97c \ud574\uce58\uace0 \uc2f6\ub2e4\ub294 \uc0dd\uac01\uc774 \ub4e0\ub2e4\ub294 \ub73b\uc778\uac00\uc694, \uc544\ub2c8\uba74 \uc9c0\uae08 \uc0c1\ud669\uc774 \uac10\ub2f9\ud558\uae30 \ud798\ub4e4\uac8c \ub290\uaef4\uc9c4\ub2e4\ub294 \ub73b\uc778\uac00\uc694?",
-        )
+      ? safetyClarificationText(input.session.locale)
     : sourceSpecificClarification ?? resolveBracketPlaceholders(resolvePromptLocaleText(input.runtimePromptItem.id, input.runtimePromptItem.clarificationPatientText ?? input.runtimePromptItem.fallbackPatientText, input.session.locale), input.session.runtimeContext);
   const normalizeMessage = (value: string) => value.toLowerCase().replace(/[^a-z0-9\uac00-\ud7a3]+/g, " ").trim();
   const duplicatesRecentQuestion = (input.recentAssistantMessages ?? []).slice(-3).some((message) => normalizeMessage(message) === normalizeMessage(proposedContent));
@@ -557,7 +562,7 @@ async function deliverLanguageSwitchTurn(input: {
 // deliverProcessClarificationTurn. Scoped to S01-S03 (this task's stated
 // scope); every other session keeps its exact prior behavior (such a message
 // falls through to the normal extraction/clarification pipeline unchanged).
-const PROCESS_CLARIFICATION_SESSIONS = new Set(["tbct-s01", "tbct-s02", "tbct-s03"]);
+const PROCESS_CLARIFICATION_SESSIONS = new Set(["tbct-s03"]);
 
 // Per-session deterministic turn rules, run once per patient turn right after
 // extractRuntimeState (see the call in submitPatientInput). Was a hard
@@ -577,10 +582,9 @@ type SessionTurnRulesInput = {
   clarificationAttemptCount?: number;
 };
 type SessionTurnRulesOutput = { extracted: StateExtractionResult; logs: Array<{ summary: string; output: Record<string, unknown> }> };
-const TURN_RULES_BY_SESSION: Partial<Record<string, (input: SessionTurnRulesInput) => Promise<SessionTurnRulesOutput>>> = {
-  "tbct-s01": applyS01TurnRules,
-  "tbct-s02": applyS02TurnRules,
-};
+// S01 and S02 were the only entries; both are prompt-driven now
+// (note2026_09_25_prompt_driven_s01_s02) and never reach this pipeline.
+const TURN_RULES_BY_SESSION: Partial<Record<string, (input: SessionTurnRulesInput) => Promise<SessionTurnRulesOutput>>> = {};
 
 // Deliberately narrow, like detectLanguageSwitchRequest above: only fires
 // when the entire message is essentially just the clarification request, so
@@ -1548,6 +1552,7 @@ export async function executeCurrentNode(sessionId: string, prefetchedView?: Run
   const view = prefetchedView ?? await getRuntimeSessionForTurn(sessionId);
   if (!view) throw new Error("Runtime session not found");
   const session = view.session;
+  if (isPromptDrivenSession(session.sessionDefinitionId)) return continuePromptSessionAnywhere(sessionId);
   const runtimeRelease = loadRuntimeRelease(view.release);
   const runtimeState = normalizeRuntimeSessionState(session, runtimeRelease);
   const activeStep = resolveActiveRuntimeStep(runtimeRelease, runtimeState);
@@ -1761,6 +1766,173 @@ export async function executeCurrentNode(sessionId: string, prefetchedView?: Run
   throw new Error("Runtime session resolved no active source PromptItem.");
 }
 
+/**
+ * A turn on which the safety orchestrator triggered: the fixed approved
+ * response replaces the assistant's message, a safety event is recorded (or an
+ * open one reused under an active suppression), and the session is escalated
+ * to a clinician or put on safety hold. Lifted out of submitPatientInput
+ * unchanged (.claude/TASK_SCOPE.json note2026_09_25_prompt_driven_s01_s02) so
+ * the prompt-driven sessions go through exactly the same path.
+ */
+export async function handleTriggeredSafetyTurn(input: {
+  sessionId: string;
+  session: RuntimeSession;
+  currentNode: ClinicalStageNode;
+  currentPromptItem: PromptItem;
+  runtimePromptItem: import("@/types/protocol-runtime").RuntimePromptItem;
+  release: ProtocolReleaseVersion;
+  runtimeState: NonNullable<RuntimeSession["runtimeState"]>;
+  patientMessage: RuntimeMessage;
+  patientInput: PatientInput;
+  safetyContext: RuntimeSession["runtimeContext"];
+  safetyResult: Awaited<ReturnType<typeof runSafetyOrchestrator>>;
+  executionSequence: number;
+  extracted: StateExtractionResult;
+}): Promise<RuntimeCycleResult> {
+  const { sessionId, session, currentNode, currentPromptItem, runtimePromptItem, release, runtimeState, patientMessage, patientInput, safetyContext, safetyResult, executionSequence, extracted } = input;
+  const inputFingerprint = createSafetyInputFingerprint({
+    runtimeSessionId: sessionId,
+    sourceNodeId: currentNode.id,
+    safetyRuleId: safetyResult.ruleIds[0],
+    patientInput,
+  });
+  const riskSignalSignature = createRiskSignalSignature(safetyResult.ruleIds);
+  const [activeSuppression] = await getActiveSafetyTriggerSuppressions({
+    runtimeSessionId: sessionId,
+    sourceNodeId: currentNode.id,
+    safetyRuleId: safetyResult.ruleIds[0],
+    inputFingerprint,
+  });
+  const suppressionDecision = evaluateSafetyTriggerSuppression({
+    suppression: activeSuppression,
+    executionSequence,
+    safetyResult,
+    riskSignalSignature,
+    inputFingerprint,
+  });
+  const safetyMessage = await deliverSafetyOverrideTurn({
+    session,
+    node: currentNode,
+    promptItem: currentPromptItem,
+    runtimePromptItem: runtimePromptItem,
+    release: release,
+    runtimeState,
+    patientMessage,
+    safetyContext,
+    safetyResult,
+  });
+  const safetyEvent = suppressionDecision.suppressed && activeSuppression
+    ? await findOpenSafetyEventByTriggerKey({
+      runtimeSessionId: sessionId,
+      sourceNodeId: currentNode.id,
+      safetyRuleId: safetyResult.ruleIds[0],
+      executionSequence: activeSuppression.executionSequence ?? executionSequence,
+    })
+    : await ensureSafetyOperationsRecord({
+      sessionId,
+      session,
+      currentNodeId: currentNode.id,
+      executionSequence,
+      safetyResult,
+      patientMessageId: patientMessage.id,
+      fixedResponseMessageId: safetyMessage.id,
+    });
+  if (suppressionDecision.suppressed && activeSuppression) {
+    await consumeOrRecordSuppressionUse(activeSuppression);
+    void saveRuntimeLog(makeLog(sessionId, "safety_check", "completed", "Safety trigger suppression reused existing event", {
+      nodeId: currentNode.id,
+      output: {
+        suppressionId: activeSuppression.id,
+        reason: suppressionDecision.reason,
+        reusedSafetyEventId: safetyEvent?.id,
+      },
+    })).catch(() => {});
+  }
+  if (!safetyEvent) {
+    throw new Error("Suppressed safety trigger could not resolve an existing safety event");
+  }
+  if (safetyResult.escalationRequired) {
+    const escalation = await saveRuntimeEscalation({
+      id: makeId("ESC"),
+      runtimeSessionId: sessionId,
+      protocolId: session.protocolId,
+      protocolVersion: session.protocolVersion,
+      sessionDefinitionId: session.sessionDefinitionId,
+      nodeId: currentNode.id,
+      safetyRuleId: safetyResult.ruleIds[0],
+      linkedSafetyEventId: safetyEvent.id,
+      executionSequence,
+      severity: safetyResult.severity === "high" ? "high" : "medium",
+      triggerSummary: safetyResult.reason ?? "Safety escalation triggered",
+      status: "created",
+      createdAt: new Date().toISOString(),
+    });
+    await updateRuntimeSessionRecord(sessionId, { status: "escalated", escalationIds: [...session.escalationIds, escalation.id] });
+    await patchSafetyEvent(safetyEvent.id, { linkedEscalationId: escalation.id }, "Linked escalation to safety event");
+    void saveRuntimeLog(makeLog(sessionId, "escalation", "completed", "Clinician escalation created", { nodeId: currentNode.id })).catch(() => {});
+    if (escalation.severity === "high") {
+      // Fire-and-forget, and deliberately routed through a real server
+      // route (not a direct sendSafetyAlertEmail import): this module runs
+      // entirely in the browser (imported only by "use client" pages), so
+      // RESEND_API_KEY/SUPABASE_SERVICE_ROLE_KEY would never be available
+      // here -- see src/app/api/notifications/safety-alert/route.ts's own
+      // doc comment. Never awaited; a slow/failed dispatch must never
+      // delay or fail the patient's turn.
+      void getRuntimeParticipant(session.participantId)
+        .then((participant) =>
+          fetch("/api/notifications/safety-alert", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              participantId: session.participantId,
+              participantAlias: participant?.alias ?? session.participantId,
+              severity: "high",
+              triggerSummary: escalation.triggerSummary,
+              assignedClinicianUserId: participant?.assignedClinician,
+              locale: session.locale,
+            }),
+          }),
+        )
+        .catch((error) => console.error("[runtime-execution-api] failed to dispatch safety alert email", error));
+    }
+    await createRuntimeCheckpoint(sessionId);
+    return {
+      sessionId,
+      previousNodeId: session.previousNodeId,
+      currentNodeId: currentNode.id,
+      stateExtraction: extracted,
+      safetyResult,
+      safetyTriggerSuppressed: suppressionDecision.suppressed,
+      suppressionId: suppressionDecision.suppressionId,
+      suppressionReason: suppressionDecision.reason,
+      reusedSafetyEventId: suppressionDecision.suppressed ? safetyEvent.id : undefined,
+      generatedMessage: safetyMessage,
+      turnOutcome: "safety_override",
+      fallbackUsed: false,
+      sessionStatus: "escalated",
+      logIds: [],
+    };
+  }
+  await placeSessionOnSafetyHold(sessionId, safetyEvent.id, "Runtime safety trigger requested hold");
+  await createRuntimeCheckpoint(sessionId);
+  return {
+    sessionId,
+    previousNodeId: session.previousNodeId,
+    currentNodeId: currentNode.id,
+    stateExtraction: extracted,
+    safetyResult,
+    safetyTriggerSuppressed: suppressionDecision.suppressed,
+    suppressionId: suppressionDecision.suppressionId,
+    suppressionReason: suppressionDecision.reason,
+    reusedSafetyEventId: suppressionDecision.suppressed ? safetyEvent.id : undefined,
+    generatedMessage: safetyMessage,
+    turnOutcome: "safety_override",
+    fallbackUsed: false,
+    sessionStatus: "safety_paused",
+    logIds: [],
+  };
+}
+
 export async function submitPatientInput(sessionId: string, patientInput: PatientInput, options: { clientTurnId?: string; expectedSessionVersion?: number; locale?: string } = {}): Promise<RuntimeCycleResult> {
   // Collapse the browser's many sequential store/model round trips into one
   // authenticated server turn. The server invocation continues below.
@@ -1776,6 +1948,10 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
   void cleanupExpiredTriggerSuppressions().catch(() => {});
   const initialView = await getRuntimeSessionForTurn(sessionId);
   if (!initialView) throw new Error("Runtime session not found");
+  if (isPromptDrivenSession(initialView.session.sessionDefinitionId)) {
+    const { submitPromptSessionInput } = await import("@/shared/api/prompt-session-api");
+    return submitPromptSessionInput(sessionId, patientInput, options, initialView);
+  }
   const initialSession = initialView.session;
   const turnLocale = options.locale ?? initialSession.locale;
   if (initialSession.status === "completed") throw new Error("Completed session does not accept input");
@@ -2109,147 +2285,7 @@ export async function submitPatientInput(sessionId: string, patientInput: Patien
     };
   }
   if (safetyResult.triggered) {
-    const inputFingerprint = createSafetyInputFingerprint({
-      runtimeSessionId: sessionId,
-      sourceNodeId: currentNode.id,
-      safetyRuleId: safetyResult.ruleIds[0],
-      patientInput,
-    });
-    const riskSignalSignature = createRiskSignalSignature(safetyResult.ruleIds);
-    const [activeSuppression] = await getActiveSafetyTriggerSuppressions({
-      runtimeSessionId: sessionId,
-      sourceNodeId: currentNode.id,
-      safetyRuleId: safetyResult.ruleIds[0],
-      inputFingerprint,
-    });
-    const suppressionDecision = evaluateSafetyTriggerSuppression({
-      suppression: activeSuppression,
-      executionSequence,
-      safetyResult,
-      riskSignalSignature,
-      inputFingerprint,
-    });
-    const safetyMessage = await deliverSafetyOverrideTurn({
-      session,
-      node: currentNode,
-      promptItem: currentPromptItem,
-      runtimePromptItem: activeStep.promptItem,
-      release: view.release,
-      runtimeState,
-      patientMessage,
-      safetyContext,
-      safetyResult,
-    });
-    const safetyEvent = suppressionDecision.suppressed && activeSuppression
-      ? await findOpenSafetyEventByTriggerKey({
-        runtimeSessionId: sessionId,
-        sourceNodeId: currentNode.id,
-        safetyRuleId: safetyResult.ruleIds[0],
-        executionSequence: activeSuppression.executionSequence ?? executionSequence,
-      })
-      : await ensureSafetyOperationsRecord({
-        sessionId,
-        session,
-        currentNodeId: currentNode.id,
-        executionSequence,
-        safetyResult,
-        patientMessageId: patientMessage.id,
-        fixedResponseMessageId: safetyMessage.id,
-      });
-    if (suppressionDecision.suppressed && activeSuppression) {
-      await consumeOrRecordSuppressionUse(activeSuppression);
-      void saveRuntimeLog(makeLog(sessionId, "safety_check", "completed", "Safety trigger suppression reused existing event", {
-        nodeId: currentNode.id,
-        output: {
-          suppressionId: activeSuppression.id,
-          reason: suppressionDecision.reason,
-          reusedSafetyEventId: safetyEvent?.id,
-        },
-      })).catch(() => {});
-    }
-    if (!safetyEvent) {
-      throw new Error("Suppressed safety trigger could not resolve an existing safety event");
-    }
-    if (safetyResult.escalationRequired) {
-      const escalation = await saveRuntimeEscalation({
-        id: makeId("ESC"),
-        runtimeSessionId: sessionId,
-        protocolId: session.protocolId,
-        protocolVersion: session.protocolVersion,
-        sessionDefinitionId: session.sessionDefinitionId,
-        nodeId: currentNode.id,
-        safetyRuleId: safetyResult.ruleIds[0],
-        linkedSafetyEventId: safetyEvent.id,
-        executionSequence,
-        severity: safetyResult.severity === "high" ? "high" : "medium",
-        triggerSummary: safetyResult.reason ?? "Safety escalation triggered",
-        status: "created",
-        createdAt: new Date().toISOString(),
-      });
-      await updateRuntimeSessionRecord(sessionId, { status: "escalated", escalationIds: [...session.escalationIds, escalation.id] });
-      await patchSafetyEvent(safetyEvent.id, { linkedEscalationId: escalation.id }, "Linked escalation to safety event");
-      void saveRuntimeLog(makeLog(sessionId, "escalation", "completed", "Clinician escalation created", { nodeId: currentNode.id })).catch(() => {});
-      if (escalation.severity === "high") {
-        // Fire-and-forget, and deliberately routed through a real server
-        // route (not a direct sendSafetyAlertEmail import): this module runs
-        // entirely in the browser (imported only by "use client" pages), so
-        // RESEND_API_KEY/SUPABASE_SERVICE_ROLE_KEY would never be available
-        // here -- see src/app/api/notifications/safety-alert/route.ts's own
-        // doc comment. Never awaited; a slow/failed dispatch must never
-        // delay or fail the patient's turn.
-        void getRuntimeParticipant(session.participantId)
-          .then((participant) =>
-            fetch("/api/notifications/safety-alert", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({
-                participantId: session.participantId,
-                participantAlias: participant?.alias ?? session.participantId,
-                severity: "high",
-                triggerSummary: escalation.triggerSummary,
-                assignedClinicianUserId: participant?.assignedClinician,
-                locale: session.locale,
-              }),
-            }),
-          )
-          .catch((error) => console.error("[runtime-execution-api] failed to dispatch safety alert email", error));
-      }
-      await createRuntimeCheckpoint(sessionId);
-      return {
-        sessionId,
-        previousNodeId: session.previousNodeId,
-        currentNodeId: currentNode.id,
-        stateExtraction: extracted,
-        safetyResult,
-        safetyTriggerSuppressed: suppressionDecision.suppressed,
-        suppressionId: suppressionDecision.suppressionId,
-        suppressionReason: suppressionDecision.reason,
-        reusedSafetyEventId: suppressionDecision.suppressed ? safetyEvent.id : undefined,
-        generatedMessage: safetyMessage,
-        turnOutcome: "safety_override",
-        fallbackUsed: false,
-        sessionStatus: "escalated",
-        logIds: [],
-      };
-    }
-    await placeSessionOnSafetyHold(sessionId, safetyEvent.id, "Runtime safety trigger requested hold");
-    await createRuntimeCheckpoint(sessionId);
-    return {
-      sessionId,
-      previousNodeId: session.previousNodeId,
-      currentNodeId: currentNode.id,
-      stateExtraction: extracted,
-      safetyResult,
-      safetyTriggerSuppressed: suppressionDecision.suppressed,
-      suppressionId: suppressionDecision.suppressionId,
-      suppressionReason: suppressionDecision.reason,
-      reusedSafetyEventId: suppressionDecision.suppressed ? safetyEvent.id : undefined,
-      generatedMessage: safetyMessage,
-      turnOutcome: "safety_override",
-      fallbackUsed: false,
-      sessionStatus: "safety_paused",
-      logIds: [],
-    };
+    return handleTriggeredSafetyTurn({ sessionId, session, currentNode, currentPromptItem, runtimePromptItem: activeStep.promptItem, release: view.release, runtimeState, patientMessage, patientInput, safetyContext, safetyResult, executionSequence, extracted });
   }
   const nextContext = { ...mergeExtractedRuntimeContext(session.runtimeContext, extracted), lastPatientMessage: patientMessage.content, clarificationAttemptCount: 0, lastClarificationReason: undefined };
   const reduction = reduceRuntimeState({

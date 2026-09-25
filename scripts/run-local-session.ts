@@ -51,7 +51,8 @@ import { dispatchFakeProtocolStudioStoreOp } from "../src/test/fakes/protocol-st
 import { dispatchFakeWorksheetStoreOp } from "../src/test/fakes/worksheet-store.fake";
 import { dispatchFakeHomeworkStoreOp } from "../src/test/fakes/homework-store.fake";
 import { createCanonicalTestRuntimeSession, getRuntimeSession } from "../src/shared/api/runtime-session-api";
-import { startRuntimeSession, submitPatientInput } from "../src/shared/api/runtime-execution-api";
+import { retryStalledRuntimeNode, startRuntimeSession, submitPatientInput } from "../src/shared/api/runtime-execution-api";
+import { isPromptDrivenSession } from "../src/shared/runtime/prompt-driven-sessions";
 import { syntheticPatientInput } from "../src/shared/runtime/testing/session-fidelity-fixtures";
 import type { PatientInput } from "@/types/runtime-session";
 
@@ -86,7 +87,10 @@ const interactive = args.includes("--interactive");
 const locale = args.includes("--en") ? "en-US" : "ko-KR";
 
 if (!process.env.ANTHROPIC_API_KEY) {
-  console.log("[info] ANTHROPIC_API_KEY is not set -- every turn will use the approved deterministic fallback text instead of live Claude phrasing.\n");
+  console.log(isPromptDrivenSession(sessionDefinitionId)
+    // S01/S02 are prompt-driven (.claude/TASK_SCOPE.json note2026_09_25_prompt_driven_s01_s02): every message is the model's.
+    ? "[info] ANTHROPIC_API_KEY is not set -- S01/S02 are run entirely by the model, so each turn will only show the fixed 'something went wrong' line.\n"
+    : "[info] ANTHROPIC_API_KEY is not set -- every turn will use the approved deterministic fallback text instead of live Claude phrasing.\n");
 }
 
 // interactive 모드에서는 "환자" 발화를 다시 찍지 않는다 -- 참가자가 방금
@@ -153,6 +157,13 @@ async function main() {
     if (view.session.status === "paused" || view.session.status === "safety_paused" || view.session.status === "escalated") {
       console.log(`\n=== 세션이 ${view.session.status} 상태로 멈췄습니다 (재개하려면 별도 로직 필요) ===`);
       break;
+    }
+    // A prompt-driven session that ran out of its per-turn budget while
+    // sending messages that ask nothing is left "active"; the patient page
+    // retries it, and so does this script.
+    if (view.session.status === "active" && isPromptDrivenSession(sessionDefinitionId)) {
+      await retryStalledRuntimeNode(session.id);
+      continue;
     }
     if (view.session.status !== "waiting_for_input") {
       console.log(`\n=== 예상치 못한 상태: ${view.session.status} ===`);

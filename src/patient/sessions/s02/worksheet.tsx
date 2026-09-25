@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button, textareaClass } from "@/shared/components/ui/primitives";
 import { ScoreChip, SessionSignals } from "@/patient/components/worksheet-renderers/shared";
 import { COGNITIVE_DISTORTIONS } from "@/shared/protocol/cognitive-distortions";
-import { NO_EXAMPLE_MARKER, cdQuestScore, type CdQuestGrade } from "@/patient/sessions/s02/turn-rules";
+import { NO_EXAMPLE_MARKER, cdQuestScore, type CdQuestGrade } from "@/patient/sessions/s02/cdquest-score";
 import { GradeButtons } from "@/patient/sessions/s02/cdquest-form";
 import type { WorksheetFieldView, WorksheetView } from "@/types/worksheet";
 

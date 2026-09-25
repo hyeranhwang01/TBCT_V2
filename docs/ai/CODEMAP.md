@@ -48,6 +48,7 @@ src/
   - `src/shared/runtime/runtime-static-message.ts`
   - `src/shared/worksheet/composed-worksheet-registry.ts`
   - `src/shared/worksheet/worksheet-binding-registry.ts`
+  - `src/shared/runtime/prompt-driven-sessions.ts` (S01/S02 field lists, 2026-09-25)
 
 **Why no `clinician/sessions/`.** Clinician UI is session-agnostic; nothing session-specific exists on that side. Create it with the same rule if that changes.
 
@@ -97,7 +98,11 @@ Called from [src/patient/pages/patient-session-page.tsx:77](../../src/patient/pa
 - Catalog -> immutable **release** (what the runtime engine actually executes against, so live edits never change a session mid-flight): `runtime-release-compiler.ts` / `runtime-release-normalizer.ts` / `runtime-release-loader.ts` in [src/shared/runtime/](../../src/shared/runtime/).
 - `src/clinician/lib/protocol-drafts/session-03-real.ts` / `session-03-importer.ts` is a **separate, older ProtocolGraphNode/Edge-based draft** (pt-BR locale, protocol id `tbct-br-001`) stored in Dexie — distinct from the canonical `s03.ts` spec that the live runtime actually serves. Confirm which one is in scope before editing "Session 3" (see [TBCT_SESSIONS_1_3.md](TBCT_SESSIONS_1_3.md) §Session 3 for detail). UNVERIFIED whether this draft is reachable from any current UI path — grep `REAL_SESSION_03` call sites to confirm.
 
-## 4. Runtime execution engine (session-agnostic; drives all 8 sessions)
+## 3b. Prompt-driven sessions (S01, S02 — 2026-09-25)
+
+S01 and S02 do not use the node engine below. One system prompt per session (`src/shared/protocol/session-prompts.generated.ts`, built from `docs/prompts/*.md` by `npm run prompts:build`) runs the conversation through `src/shared/api/prompt-session-api.ts`; safety (`assessTurnRisk` → `handleTriggeredSafetyTurn` / fixed clarification), storage and arithmetic stay in code. Routed from `executeCurrentNode` / `submitPatientInput` by `isPromptDrivenSession`. Details: [TBCT_SESSIONS_1_3.md](TBCT_SESSIONS_1_3.md) §"Session 1 and Session 2".
+
+## 4. Runtime execution engine (session-agnostic; drives Sessions 3-8)
 
 All in [src/shared/runtime/](../../src/shared/runtime/) unless noted:
 

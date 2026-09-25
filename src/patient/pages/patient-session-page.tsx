@@ -103,6 +103,7 @@ export function PatientSessionPage() {
           completedPromptItemIds: auditView.session.completedPromptItemIds ?? [],
           skippedPromptItemIds: auditView.session.skippedPromptItemIds ?? [],
           sessionStatus: auditView.session.status,
+          fields: auditView.session.runtimeContext.fields,
         }),
       );
       try { await saveRemoteSessionAuditSnapshot(auditView); }

@@ -624,6 +624,44 @@ export function isNonCurrentRiskMention(text: string) {
   return RISK_NEGATION_PATTERNS.some((pattern) => pattern.test(trimmed)) || RISK_THIRD_PARTY_PATTERNS.some((pattern) => pattern.test(trimmed));
 }
 
+// The participant's answer to the fixed safety clarification question
+// ("are you saying you may be thinking about dying or harming yourself, or
+// that things feel overwhelming?"). Shared by extractRuntimeState and
+// assessTurnRisk so both read the answer the same way.
+const SAFETY_CLARIFICATION_CONFIRMS = /^(?:yes|yes,|i do|that is what i mean|\uB124|\uC608|\uADF8\uB7F0 \uB73B)/i;
+const SAFETY_CLARIFICATION_DENIES = /^(?:no|no,|not that|i mean|\uC544\uB2C8|\uC544\uB2C8\uC694)/i;
+
+export type TurnRiskAssessment = {
+  riskLevel: "low" | "medium" | "high";
+  riskSignals: string[];
+  /** Set only when this turn answers the safety clarification question. */
+  clarificationAnswer?: "confirmed" | "denied" | "unclear";
+};
+
+/**
+ * The risk half of extractRuntimeState, on its own, for the prompt-driven
+ * sessions (.claude/TASK_SCOPE.json note2026_09_25_prompt_driven_s01_s02),
+ * where the model -- not field extraction -- reads the answer. Same rules:
+ * an answer to the safety clarification confirms (high), denies (low) or stays
+ * unclear (ambiguous again); otherwise a current disclosure is high risk and a
+ * negated, past-only or third-party mention is ambiguous.
+ */
+export function assessTurnRisk(input: { text: string; currentContext: RuntimeContext }): TurnRiskAssessment {
+  const lowered = normalizeText(input.text);
+  if (input.currentContext.lastClarificationReason === "safety_clarification") {
+    if (SAFETY_CLARIFICATION_CONFIRMS.test(lowered)) return { riskLevel: "high", riskSignals: ["patient_confirmed_safety_concern"], clarificationAnswer: "confirmed" };
+    if (SAFETY_CLARIFICATION_DENIES.test(lowered)) return { riskLevel: "low", riskSignals: [], clarificationAnswer: "denied" };
+    // A reply that is itself a disclosure is read as one, not as "unclear".
+    const signals = detectRuntimeRiskSignals(lowered);
+    if (signals.length && !isNonCurrentRiskMention(input.text)) return { riskLevel: "high", riskSignals: signals, clarificationAnswer: "confirmed" };
+    return { riskLevel: "low", riskSignals: ["ambiguous_safety_language"], clarificationAnswer: "unclear" };
+  }
+  const riskSignals = detectRuntimeRiskSignals(lowered);
+  if (!riskSignals.length) return { riskLevel: "low", riskSignals: [] };
+  if (isNonCurrentRiskMention(input.text)) return { riskLevel: "low", riskSignals: ["ambiguous_safety_language", ...riskSignals] };
+  return { riskLevel: "high", riskSignals };
+}
+
 export function detectRuntimeRiskSignals(text: string) {
   return RISK_SIGNAL_PATTERNS
     .filter(({ pattern }) => pattern.test(text))
@@ -887,10 +925,10 @@ export async function extractRuntimeState(input: {
     : [String(payload.field ?? payload.responseField ?? input.currentNode.requiredFields[0] ?? input.currentNode.id)];
   const field = String(expectedFields[0] ?? "internalTurnEvidence");
   if (input.currentContext.lastClarificationReason === "safety_clarification") {
-    if (/^(?:yes|yes,|i do|that is what i mean|\uB124|\uC608|\uADF8\uB7F0 \uB73B)/i.test(lowered)) {
+    if (SAFETY_CLARIFICATION_CONFIRMS.test(lowered)) {
       return { fields: { ...nextFields, crisisSignal: true }, responseCategory: "affirmative", riskLevel: "high", riskSignals: ["patient_confirmed_safety_concern"], confidence: 1, missingFields: [] };
     }
-    if (/^(?:no|no,|not that|i mean|\uC544\uB2C8|\uC544\uB2C8\uC694)/i.test(lowered)) {
+    if (SAFETY_CLARIFICATION_DENIES.test(lowered)) {
       return { fields: nextFields, responseCategory: "negative", riskLevel: "low", riskSignals: [], confidence: 1, missingFields: expectedFields };
     }
     return { fields: nextFields, responseCategory: "text", riskLevel: "low", riskSignals: ["ambiguous_safety_language"], confidence: 0.4, missingFields: expectedFields };

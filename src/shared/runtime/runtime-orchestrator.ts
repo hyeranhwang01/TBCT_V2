@@ -11,10 +11,7 @@ import { recordModelUsage } from "@/shared/assessment/model-observability";
 import type { PatientRendererRequest } from "@/shared/patient-renderer/patient-renderer-contract";
 import { isDialogueAgentEnabled, resolveDialogueAgentMessage } from "@/shared/dialogue-agent/dialogue-agent-orchestrator";
 import { defaultFallbackPatientText, resolveModelGroundingText } from "@/shared/runtime/runtime-release-normalizer";
-import { resolveRepeatedFallbackText as resolveS01RepeatedFallbackText } from "@/patient/sessions/s01/messages";
-import { resolveRepeatedFallbackText as resolveS02RepeatedFallbackText } from "@/patient/sessions/s02/messages";
 import { resolveRepeatedFallbackText as resolveS03RepeatedFallbackText } from "@/patient/sessions/s03/messages";
-import { composeDistortionCandidateText, selectDistortionCandidatesDeterministically, type DistortionCandidate } from "@/patient/sessions/s01/distortion-candidates";
 import type { PendingReflectionCheck } from "@/shared/runtime/reflection-check";
 import type { PendingExploration } from "@/shared/runtime/conversation-steering";
 import { readLongAnswerSummaryTarget } from "@/shared/runtime/long-answer";
@@ -24,47 +21,6 @@ async function callPatientRenderer(request: PatientRendererRequest, context: { s
   const response = await runtimeFetch("/api/patient-reflection", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ request, context }) });
   const payload = await response.json().catch(() => null); if (!response.ok || !payload?.ok) return { reflection: "Thank you for sharing that.", provider: "none", failed: true };
   return payload.data as { reflection: string; patientMessage?: string; provider: string; failed: boolean; failureReason?: string };
-}
-
-// S01-only, cognitive-distortions candidate selection (task's registry
-// redesign brief; .claude/TASK_SCOPE.json's note2026_08_17d entry). Never
-// invoked for any other session. selectDistortionCandidatesDeterministically
-// is a pure, offline, registry-only function -- safe to import statically
-// and use directly as the browser-side/no-network fallback; the Anthropic-
-// backed path (which touches ANTHROPIC_API_KEY) stays server-only, mirroring
-// callPatientRenderer's dynamic-import/fetch split above.
-async function callDistortionClassifier(request: { locale: string; situation: string; automaticThought: string; emotion?: string }, context: { sessionId: string; turnId: string }): Promise<{ candidates: DistortionCandidate[] }> {
-  if (typeof window === "undefined") {
-    const { selectDistortionCandidates } = await import("@/patient/sessions/s01/distortion-candidates");
-    const result = await selectDistortionCandidates(request, context);
-    return { candidates: result.candidates };
-  }
-  try {
-    const response = await runtimeFetch("/api/distortion-candidates", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ request, context }) });
-    const payload = await response.json().catch(() => null);
-    if (!response.ok || !payload?.ok) throw new Error("distortion candidate request failed");
-    return { candidates: (payload.data.candidates as DistortionCandidate[]) ?? [] };
-  } catch {
-    return { candidates: selectDistortionCandidatesDeterministically(request) };
-  }
-}
-
-// S01 redesign (note2026_09_12_s01_redesign): candidates are offered only
-// when the participant explicitly asked for suggestions -- the
-// suggested-candidates prompt, activated by s01/turn-rules.ts. The
-// identify-distortion prompt itself shows only its static question.
-function isS01SuggestedCandidatesPrompt(promptItemId: string) {
-  return /^tbct-s01-n\d+-p\d+-suggested-candidates$/.test(promptItemId);
-}
-
-async function resolveS01DistortionCandidateText(input: { sessionId: string; turnId: string; locale: string; fields: Record<string, unknown> }): Promise<string | undefined> {
-  const situation = input.fields.situationThoughtDistinction;
-  const automaticThought = input.fields.openingInitialThought;
-  if (typeof situation !== "string" || !situation.trim() || typeof automaticThought !== "string" || !automaticThought.trim()) return undefined;
-  const emotion = typeof input.fields.personalEmotion === "string" ? input.fields.personalEmotion : undefined;
-  const { candidates } = await callDistortionClassifier({ locale: input.locale, situation, automaticThought, emotion }, { sessionId: input.sessionId, turnId: input.turnId });
-  if (!candidates.length) return undefined;
-  return composeDistortionCandidateText(candidates, input.locale);
 }
 
 function activeActionType(activeStep: RuntimeActiveStep) {
@@ -114,16 +70,10 @@ export function resolveRepeatedFallbackOverride(input: {
     .some((content) => content.replace(/\s+/g, " ").trim() === normalizedApproved);
   if (!repeatedFallback || !input.lastPatientMessage?.trim()) return undefined;
 
-  if (input.sessionDefinitionId === "tbct-s01") {
-    return resolveS01RepeatedFallbackText({ promptItemId: input.activePromptItemId, approvedPatientText: input.approvedPatientText, locale: input.locale });
-  }
-  // P1-3: same phase-preserving exception as S01 above, for S02 (problem/goal/
-  // rating) and S03 (situation/thought/emotion/body) -- see resolveRepeatedFallbackText
-  // in each session's static-messages/s0N.ts for the full rationale. S04-S08
-  // are untouched: this branch only intercepts tbct-s02/tbct-s03.
-  if (input.sessionDefinitionId === "tbct-s02") {
-    return resolveS02RepeatedFallbackText({ promptItemId: input.activePromptItemId, approvedPatientText: input.approvedPatientText, locale: input.locale });
-  }
+  // P1-3: a phase-preserving rephrase for S03 (situation/thought/emotion/body)
+  // -- see resolveRepeatedFallbackText in s03/messages.ts. S01 and S02 had the
+  // same exception until they became prompt-driven
+  // (note2026_09_25_prompt_driven_s01_s02). S04-S08 are untouched.
   if (input.sessionDefinitionId === "tbct-s03") {
     return resolveS03RepeatedFallbackText({ promptItemId: input.activePromptItemId, approvedPatientText: input.approvedPatientText, locale: input.locale });
   }
@@ -192,16 +142,7 @@ export async function orchestrateRuntimeAssistantTurn(input: RuntimeOrchestrator
   // Every other session keeps the exact prior behavior (approved static
   // text first, then personalized reflection / deterministic fallback)
   // unchanged.
-  let approvedPatientText = staticMessage?.patientMessage ?? contract.fallbackPatientText;
-  // S01-only: identify-distortion's grounding text is the dynamically
-  // composed, registry-validated candidate list (never Claude-invented
-  // distortion names) rather than the generic static fallback above -- see
-  // resolveS01DistortionCandidateText and .claude/TASK_SCOPE.json's
-  // note2026_08_17d entry. No other session's prompt ids ever match this.
-  if (input.session.sessionDefinitionId === "tbct-s01" && isS01SuggestedCandidatesPrompt(input.sourcePromptItem.id)) {
-    const candidateText = await resolveS01DistortionCandidateText({ sessionId: input.session.id, turnId: makeId("DISTORTION"), locale: input.session.locale, fields: input.session.runtimeContext.fields });
-    if (candidateText) approvedPatientText = candidateText;
-  }
+  const approvedPatientText = staticMessage?.patientMessage ?? contract.fallbackPatientText;
   if (isDialogueAgentEnabled(input.session.sessionDefinitionId)) {
     const dynamicRequestId = makeId("REFLECT");
     // promptIndex === 0 means this is the first prompt the participant will

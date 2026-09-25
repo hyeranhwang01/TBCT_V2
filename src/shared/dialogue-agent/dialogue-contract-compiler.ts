@@ -8,10 +8,6 @@ import { resolveBracketPlaceholders } from "@/shared/runtime/runtime-static-mess
 import type { DialogueContract, ExpectedInputType } from "@/shared/dialogue-agent/dialogue-agent-contract";
 import { dialogueContractSchema } from "@/shared/dialogue-agent/dialogue-agent-contract";
 import type { WorksheetBinding, WorksheetValueType } from "@/types/worksheet";
-import { isS01SummaryCheckForbidden, s01DialogueGuidance } from "@/patient/sessions/s01/dialogue-guidance";
-import { resolveS01TaskIntent, s01TaskIntentsEnabled } from "@/patient/sessions/s01/task-intents";
-import { isS02SummaryCheckForbidden, s02DialogueGuidance } from "@/patient/sessions/s02/dialogue-guidance";
-import { resolveS02TaskIntent, s02TaskIntentsEnabled } from "@/patient/sessions/s02/task-intents";
 
 // Pattern-based, session-agnostic construct terminology. Keyed by field-NAME
 // shape rather than an exact per-session map, because the same construct
@@ -334,12 +330,7 @@ const SUMMARY_CHECK_FORBIDDEN_VALIDATION_KINDS: ReadonlySet<string> = new Set(["
 export function summaryCheckForbiddenFor(sourcePromptItem: PromptItem): boolean {
   const kind = (sourcePromptItem.validation as { kind?: unknown } | null)?.kind;
   return SUMMARY_CHECK_FORBIDDEN_PROMPT_IDS.has(sourcePromptItem.id)
-    || (typeof kind === "string" && SUMMARY_CHECK_FORBIDDEN_VALIDATION_KINDS.has(kind))
-    // S01/S02 ids are positional and get renumbered by their redesigns
-    // (note2026_09_12_s01_redesign, note2026_09_21_s02_cognitive_distortions),
-    // so their forbidden steps are matched by slug.
-    || (sourcePromptItem.sessionId === "tbct-s01" && isS01SummaryCheckForbidden(sourcePromptItem.id))
-    || (sourcePromptItem.sessionId === "tbct-s02" && isS02SummaryCheckForbidden(sourcePromptItem.id));
+    || (typeof kind === "string" && SUMMARY_CHECK_FORBIDDEN_VALIDATION_KINDS.has(kind));
 }
 
 /** Exported for the catalog-integrity test only (every id must exist). */
@@ -358,24 +349,18 @@ export function stepSpecificGuidanceFor(sourcePromptItem: PromptItem): string[] 
   return all.length ? all : undefined;
 }
 
-// Per-session step guidance and task intents. Both were a hard
-// `=== "tbct-s01"` until S02 got the same treatment
-// (.claude/TASK_SCOPE.json note2026_09_21_s02_cognitive_distortions). A session
-// with no entry is unchanged: no guidance appended, and no task intent, so its
-// turns stay grounded on the approved sentence exactly as before.
-const DIALOGUE_GUIDANCE_BY_SESSION: Partial<Record<string, (promptItemId: string) => string[]>> = {
-  "tbct-s01": s01DialogueGuidance,
-  "tbct-s02": s02DialogueGuidance,
-};
+// Per-session step guidance and task intents. S01 and S02 were the only
+// entries; both are prompt-driven now (.claude/TASK_SCOPE.json
+// note2026_09_25_prompt_driven_s01_s02) and never compile a dialogue
+// contract. A session with no entry gets no guidance appended and no task
+// intent, so its turns stay grounded on the approved sentence.
+const DIALOGUE_GUIDANCE_BY_SESSION: Partial<Record<string, (promptItemId: string) => string[]>> = {};
 type ResolvedTaskIntent = Omit<NonNullable<DialogueContract["taskIntent"]>, "asksParticipant">;
 type SessionTaskIntentResolver = {
   enabled: () => boolean;
   resolve: (promptItemId: string, locale: string, context: { fields?: Record<string, unknown> }) => ResolvedTaskIntent | undefined;
 };
-const TASK_INTENTS_BY_SESSION: Partial<Record<string, SessionTaskIntentResolver>> = {
-  "tbct-s01": { enabled: s01TaskIntentsEnabled, resolve: resolveS01TaskIntent },
-  "tbct-s02": { enabled: s02TaskIntentsEnabled, resolve: resolveS02TaskIntent },
-};
+const TASK_INTENTS_BY_SESSION: Partial<Record<string, SessionTaskIntentResolver>> = {};
 
 function taskIntentFor(sourcePromptItem: PromptItem, session: RuntimeSession, asksParticipant: boolean): DialogueContract["taskIntent"] {
   const resolver = TASK_INTENTS_BY_SESSION[sourcePromptItem.sessionId];

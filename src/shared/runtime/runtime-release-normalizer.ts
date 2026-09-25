@@ -1,5 +1,3 @@
-import * as s01 from "@/patient/sessions/s01/messages";
-import * as s02 from "@/patient/sessions/s02/messages";
 import * as s03 from "@/patient/sessions/s03/messages";
 import * as s04 from "@/patient/sessions/s04/messages";
 import * as s05 from "@/patient/sessions/s05/messages";
@@ -150,8 +148,6 @@ function isLocaleConsistentFallbackText(value: string, locale: string) {
 // parallel Korean source corpus or per-prompt hand translation, a separate,
 // larger effort from this pass.
 const REVIEWED_KOREAN_PROMPT_TEXT: Record<string, string> = {
-  ...s01.koreanText,
-  ...s02.koreanText,
   ...s03.koreanText,
   ...s04.koreanText,
   ...s05.koreanText,

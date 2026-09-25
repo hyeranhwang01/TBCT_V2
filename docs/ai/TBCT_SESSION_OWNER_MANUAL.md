@@ -200,6 +200,8 @@ Shared files should not be edited by default. Demonstrate the need, explain cros
 
 7. Session-specific reference
 
+> **2026-09-25 — S01과 S02는 이제 프롬프트 주도 방식입니다.** 아래 S01·S02 항목(spec.ts / messages.ts로 대화와 문구를 고친다, S02 보호 필드 problems 등)은 더 이상 맞지 않습니다. 현재 기준은 `.claude/rules/tbct-session-manual.md` 1b절입니다: 문구와 흐름은 `docs/prompts/TBCT_AI_Prompt_S01.md`·`_S02.md`에서 고치고 `npm run prompts:build`로 반영합니다. 보호 필드는 S01 `s01Problems`·`s01RepresentativeProblem`·`s01Goal`, S02 `distortionExamples`·`cdQuestScores`·`cdQuestFrequency`·`cdQuestIntensity`·`cdQuestTotal`입니다. S03~S08 항목은 그대로 유효합니다.
+
 S01 — TBCT model introduction
 
 Content / flow: src/patient/sessions/s01/spec.ts

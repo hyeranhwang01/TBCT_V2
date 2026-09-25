@@ -117,17 +117,17 @@ function compile(promptIdFragment: string, sessionDefinitionId: string) {
 }
 
 describe("the contract follows the decided scope", () => {
-  // S01 n10 preview: administrative turn, no protected field in the node.
-  // S01 candidate-one-emotion: participant-owned turn in a protected node.
-  // S02 review-distortion (the fifteen-distortion walkthrough): participant-
-  // owned, node not protected. (Was problem-framing until S02 dropped
-  // CCPH/CCGH for the cognitive-distortions session.)
+  // S03 ccd-connection: administrative turn, no protected field in the node.
+  // S03 automatic-thought: participant-owned, node not protected.
+  // S03 primary-emotion: participant-owned turn in a protected node.
+  // (These were S01/S02 prompts until both became prompt-driven,
+  // note2026_09_25_prompt_driven_s01_s02 -- they compile no contract now.)
   const cases: Array<[string, string, string, boolean]> = [
-    ["administrative_only", "-preview", "tbct-s01", true],
-    ["administrative_only", "review-distortion", "tbct-s02", false],
-    ["unprotected_nodes", "review-distortion", "tbct-s02", true],
-    ["unprotected_nodes", "candidate-one-emotion", "tbct-s01", false],
-    ["all_turns", "candidate-one-emotion", "tbct-s01", true],
+    ["administrative_only", "-ccd-connection", "tbct-s03", true],
+    ["administrative_only", "-automatic-thought", "tbct-s03", false],
+    ["unprotected_nodes", "-automatic-thought", "tbct-s03", true],
+    ["unprotected_nodes", "-primary-emotion", "tbct-s03", false],
+    ["all_turns", "-primary-emotion", "tbct-s03", true],
   ];
   it.each(cases)("scope %s: %s (%s) carries memory = %s", (scope, prompt, sessionId, expected) => {
     setPolicy({ injectionScope: scope as LongitudinalMemoryPolicy["injectionScope"] });
@@ -136,7 +136,7 @@ describe("the contract follows the decided scope", () => {
 
   it("carries memory on the shipped default config, with no setting at all", () => {
     setPolicy(undefined);
-    expect(compile("-preview", "tbct-s01").participantMemory).toEqual(ITEMS);
+    expect(compile("-ccd-connection", "tbct-s03").participantMemory).toEqual(ITEMS);
   });
 
   it("never mixes memory into confirmedState, in any scope", () => {
@@ -147,7 +147,7 @@ describe("the contract follows the decided scope", () => {
     // even at all_turns, where every turn carries memory.
     for (const scope of MEMORY_INJECTION_SCOPES) {
       setPolicy({ injectionScope: scope });
-      for (const [prompt, sessionId] of [["-preview", "tbct-s01"], ["automatic-thought", "tbct-s03"], ["review-distortion", "tbct-s02"]] as const) {
+      for (const [prompt, sessionId] of [["-ccd-connection", "tbct-s03"], ["-automatic-thought", "tbct-s03"], ["-primary-emotion", "tbct-s03"]] as const) {
         expect(JSON.stringify(compile(prompt, sessionId).confirmedState)).not.toContain("산책");
       }
     }

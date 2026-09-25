@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { S01Worksheet } from "@/patient/sessions/s01/worksheet";
 import { TBCT_S01_BINDINGS } from "@/patient/sessions/s01/worksheet-binding";
 import { S01_COGNITIVE_DISTORTIONS } from "@/patient/sessions/s01/cognitive-distortions";
-import { CANONICAL_PROMPT_ITEMS } from "@/shared/protocol/source-fidelity-catalog";
+import { S01_PROMPT_FIELDS } from "@/patient/sessions/s01/prompt-fields";
 import { PATIENT_COMPOSED_WORKSHEET_SESSIONS } from "@/shared/worksheet/composed-worksheet-registry";
 import type { WorksheetBinding, WorksheetFieldView, WorksheetView } from "@/types/worksheet";
 
@@ -11,7 +11,7 @@ import type { WorksheetBinding, WorksheetFieldView, WorksheetView } from "@/type
 // note2026_09_12_s01_redesign): the participant's own cognitive model, the
 // three-person example, and the distortion list, filled from session fields.
 
-// Written by s01/turn-rules.ts, never by the participant.
+// Written by the program (s01/prompt-fields.ts derive), never by the participant or the model.
 const SYSTEM_FIELDS = ["threePersonScene", "candidateTwoEmotion", "candidateThreeEmotion"];
 
 function field(binding: WorksheetBinding, value: unknown): WorksheetFieldView {
@@ -69,9 +69,11 @@ const OWN_CASE = {
 const noop = () => undefined;
 
 describe("S01 worksheet bindings", () => {
-  const s01OutputFields = new Set(CANONICAL_PROMPT_ITEMS.filter((item) => item.id.startsWith("tbct-s01-")).flatMap((item) => item.outputFields));
+  // S01 is prompt-driven (note2026_09_25_prompt_driven_s01_s02): the fields
+  // the model may record are s01/prompt-fields.ts, not prompt output fields.
+  const s01OutputFields = new Set(S01_PROMPT_FIELDS.fields.map((spec) => spec.name));
 
-  it("binds only real S01 prompt output fields, plus the fields the session writes itself", () => {
+  it("binds only fields the S01 session prompt may record, plus the fields the program writes itself", () => {
     const unknown = TBCT_S01_BINDINGS.map((binding) => binding.canonicalFieldKey).filter((key) => !s01OutputFields.has(key) && !SYSTEM_FIELDS.includes(key));
     expect(unknown).toEqual([]);
   });

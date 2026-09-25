@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { COGNITIVE_DISTORTIONS } from "@/shared/protocol/cognitive-distortions";
-import { cdQuestScore } from "@/patient/sessions/s02/turn-rules";
+import { cdQuestScore } from "@/patient/sessions/s02/cdquest-score";
 import { vi } from "vitest";
 import { LocaleProvider } from "@/shared/i18n/context";
 import { S02Worksheet } from "@/patient/sessions/s02/worksheet";
-import { NO_EXAMPLE_MARKER } from "@/patient/sessions/s02/turn-rules";
+import { NO_EXAMPLE_MARKER } from "@/patient/sessions/s02/cdquest-score";
 import { TBCT_S02_BINDINGS } from "@/patient/sessions/s02/worksheet-binding";
 import type { WorksheetView } from "@/types/worksheet";
 

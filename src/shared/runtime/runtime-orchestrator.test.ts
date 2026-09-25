@@ -15,120 +15,6 @@ function threeRepeats(text: string) {
 
 const APPROVED = "This is the approved question text for the active prompt.";
 
-describe("resolveRepeatedFallbackOverride: S01-only phase-aware exception", () => {
-  it("RF-1: Neutral Example Emotion prompt gets a phase-preserving rephrase, never a personal-experience question", () => {
-    const result = resolveRepeatedFallbackOverride({
-      sessionDefinitionId: "tbct-s01",
-      usedFallback: true,
-      approvedPatientText: APPROVED,
-      recentAssistantMessages: threeRepeats(APPROVED),
-      lastPatientMessage: "I'm not sure.",
-      locale: "en-US",
-      activePromptItemId: "tbct-s01-n12-p01-candidate-two-thought",
-    });
-    expect(result).toBeDefined();
-    expect(result).not.toContain("specific moment");
-    expect(result).not.toMatch(/where were you|who was|recent experience/i);
-  });
-
-  it("RF-2: Neutral Example Behavior prompt stays on behavior, not emotion or situation", () => {
-    const result = resolveRepeatedFallbackOverride({
-      sessionDefinitionId: "tbct-s01",
-      usedFallback: true,
-      approvedPatientText: APPROVED,
-      recentAssistantMessages: threeRepeats(APPROVED),
-      lastPatientMessage: "hmm",
-      locale: "en-US",
-      activePromptItemId: "tbct-s01-n11-p03-candidate-one-behavior",
-    });
-    expect(result).toMatch(/behav/i);
-    expect(result).not.toContain("specific moment");
-  });
-
-  it("RF-3: Insight prompt re-explains the same concept, does not ask for a new personal example", () => {
-    const result = resolveRepeatedFallbackOverride({
-      sessionDefinitionId: "tbct-s01",
-      usedFallback: true,
-      approvedPatientText: APPROVED,
-      recentAssistantMessages: threeRepeats(APPROVED),
-      lastPatientMessage: "not sure",
-      locale: "en-US",
-      activePromptItemId: "tbct-s01-n14-p04-what-made-difference",
-    });
-    expect(result).toBeDefined();
-    expect(result).not.toContain("specific moment");
-    expect(result).not.toMatch(/where were you|who was/i);
-  });
-
-  it("RF-4: Initial Thought Probe fallback re-asks the thought, never a new situation", () => {
-    const result = resolveRepeatedFallbackOverride({
-      sessionDefinitionId: "tbct-s01",
-      usedFallback: true,
-      approvedPatientText: APPROVED,
-      recentAssistantMessages: threeRepeats(APPROVED),
-      lastPatientMessage: "I don't know",
-      locale: "en-US",
-      activePromptItemId: "tbct-s01-n06-p01-thought-behind-emotion",
-    });
-    expect(result).toMatch(/thought|mind/i);
-    expect(result).not.toMatch(/where were you|who was there|tell me (?:more )?about (?:a|the) (?:new |recent )?situation/i);
-  });
-
-  it("RF-5: Personal Re-application fallback (emotion/behavior/body) never re-asks the situation", () => {
-    const emotion = resolveRepeatedFallbackOverride({
-      sessionDefinitionId: "tbct-s01",
-      usedFallback: true,
-      approvedPatientText: APPROVED,
-      recentAssistantMessages: threeRepeats(APPROVED),
-      lastPatientMessage: "not sure",
-      locale: "en-US",
-      activePromptItemId: "tbct-s01-n05-p01-first-emotion",
-    });
-    const behavior = resolveRepeatedFallbackOverride({
-      sessionDefinitionId: "tbct-s01",
-      usedFallback: true,
-      approvedPatientText: APPROVED,
-      recentAssistantMessages: threeRepeats(APPROVED),
-      lastPatientMessage: "not sure",
-      locale: "en-US",
-      activePromptItemId: "tbct-s01-n07-p01-first-behavior",
-    });
-    for (const result of [emotion, behavior]) {
-      expect(result).toBeDefined();
-      expect(result).not.toMatch(/where were you|who was|new situation|recent moment/i);
-      expect(result).not.toContain("specific moment");
-    }
-  });
-
-  it("covers a prompt with no hand-tuned rephrase via the generic, still phase-neutral default", () => {
-    const result = resolveRepeatedFallbackOverride({
-      sessionDefinitionId: "tbct-s01",
-      usedFallback: true,
-      approvedPatientText: APPROVED,
-      recentAssistantMessages: threeRepeats(APPROVED),
-      lastPatientMessage: "not sure",
-      locale: "en-US",
-      activePromptItemId: "tbct-s01-n16-p01-participant-summary",
-    });
-    expect(result).toContain(APPROVED);
-    expect(result).not.toContain("specific moment");
-  });
-
-  it("Korean locale routes through the Korean rephrase, not the English one", () => {
-    const result = resolveRepeatedFallbackOverride({
-      sessionDefinitionId: "tbct-s01",
-      usedFallback: true,
-      approvedPatientText: APPROVED,
-      recentAssistantMessages: threeRepeats(APPROVED),
-      lastPatientMessage: "잘 모르겠어요",
-      locale: "ko-KR",
-      activePromptItemId: "tbct-s01-n11-p01-candidate-one-emotion",
-    });
-    expect(result).toMatch(/[가-힣]/);
-    expect(result).not.toContain("specific moment");
-  });
-});
-
 // P1-3 (TBCT S01-S03 fidelity pass): S02 and S03 gained the same
 // phase/construct-preserving exception S01 already had -- both now delegate
 // to their own static-messages/s0N.ts resolveRepeatedFallbackText instead of
@@ -139,35 +25,9 @@ describe("resolveRepeatedFallbackOverride: S01-only phase-aware exception", () =
 // question with an unrelated new-personal-situation prompt. S04-S08 are the
 // true regression group now: still byte-identical to the original generic
 // override.
-describe("resolveRepeatedFallbackOverride: S02/S03 construct-preserving exception", () => {
-  it("RF-6: S02's walkthrough prompt gets its hand-tuned, pattern-preserving rephrase", () => {
-    const result = resolveRepeatedFallbackOverride({
-      sessionDefinitionId: "tbct-s02",
-      usedFallback: true,
-      approvedPatientText: APPROVED,
-      recentAssistantMessages: threeRepeats(APPROVED),
-      lastPatientMessage: "I feel like nothing I do is good enough",
-      locale: "en-US",
-      activePromptItemId: "tbct-s02-n05-p01-review-distortion",
-    });
-    expect(result).not.toContain("specific moment");
-    expect(result).toMatch(/pattern/i);
-  });
-
-  it("RF-6: S02 falls back to the generic, still-construct-preserving default for a prompt with no hand-tuned rephrase", () => {
-    const result = resolveRepeatedFallbackOverride({
-      sessionDefinitionId: "tbct-s02",
-      usedFallback: true,
-      approvedPatientText: APPROVED,
-      recentAssistantMessages: threeRepeats(APPROVED),
-      lastPatientMessage: "힘들었어요",
-      locale: "en-US",
-      activePromptItemId: "tbct-s02-n10-p04-next-preview",
-    });
-    expect(result).toContain(APPROVED);
-    expect(result).not.toContain("specific moment");
-  });
-
+// S01 and S02 had the same exception until they became prompt-driven
+// (note2026_09_25_prompt_driven_s01_s02); their cases went with it.
+describe("resolveRepeatedFallbackOverride: S03 construct-preserving exception", () => {
   it("RF-7: S03's automatic-thought prompt gets its hand-tuned, thought-preserving rephrase", () => {
     const result = resolveRepeatedFallbackOverride({
       sessionDefinitionId: "tbct-s03",

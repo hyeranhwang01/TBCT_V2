@@ -1,3 +1,4 @@
+import { isPromptDrivenSession } from "@/shared/runtime/prompt-driven-sessions";
 import { createCanonicalTestRuntimeSession, getRuntimeSession } from "@/shared/api/runtime-session-api";
 import { startRuntimeSession, submitPatientInput } from "@/shared/api/runtime-execution-api";
 import { listRuntimeExecutionTraces } from "@/shared/data/repositories/runtime-session-repository";
@@ -150,8 +151,17 @@ export async function runSimulatedPatientSession(sessionDefinitionId: string, ma
   }
 }
 
+/** Every node-engine session, S03-S08. S01 and S02 are prompt-driven
+ * (.claude/TASK_SCOPE.json note2026_09_25_prompt_driven_s01_s02): a scripted
+ * patient against the node engine says nothing about them, so they are left
+ * out here and covered by src/shared/api/prompt-session-api.test.ts. The name
+ * is kept for the scripts that call it. */
 export async function runSessions01To08Audit() {
   const reports: SessionFidelityAudit[] = [];
-  for (let number = 1; number <= 8; number += 1) reports.push(await runSimulatedPatientSession(`tbct-s${String(number).padStart(2, "0")}`));
+  for (let number = 1; number <= 8; number += 1) {
+    const sessionDefinitionId = `tbct-s${String(number).padStart(2, "0")}`;
+    if (isPromptDrivenSession(sessionDefinitionId)) continue;
+    reports.push(await runSimulatedPatientSession(sessionDefinitionId));
+  }
   return reports;
 }

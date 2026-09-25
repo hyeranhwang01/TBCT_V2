@@ -1,4 +1,24 @@
 {
+  "note2026_09_25_prompt_driven_s01_s02": {
+    "task": "S01/S02 prompt-driven runtime (phase 2 of the session-prompt work). The S01/S02 node graphs, turn rules, task intents, dialogue guidance, static/Korean messages, S01 scene generation and S01 distortion candidates are retired; one system prompt (src/shared/protocol/session-prompts.generated.ts) runs each session and returns {reply, fieldUpdates, focusField, inputHint, sessionComplete, pauseSession, safetyConcern} every turn. Code keeps safety, storage and arithmetic only. S03-S08 keep the existing engine path unchanged.",
+    "userDecision": "2026-09-25, by the user: wipe the S01/S02 code, run them on the prompt documents, keep the safety code. Safety code is shared by all eight sessions and does not depend on the S01/S02 flow logic; it needs a node/prompt id to record against and an orientation node to resume to, so each spec keeps a three-node shell (opening/session_start -> conversation/orientation -> closing/session_complete).",
+    "whySessionLocalIsInsufficient": "A prompt-driven turn is a new completion path: runtime-execution-api.ts must route S01/S02 to it (start, turn, resume, retry), the risk check must be callable without field extraction (runtime-context.ts), the triggered-safety block must be shared by both paths, and the patient view must read focus/input hints from fields (runtime-session-api.ts). Shared registrations of the retired S01/S02 modules must be removed.",
+    "blastRadius": "Shared edits are routing branches keyed on PROMPT_DRIVEN_SESSIONS, a behaviour-preserving extraction of the risk check and the triggered-safety block, and removal of S01/S02-only registrations. S03-S08 behaviour must be unchanged: the full test suite is the regression check.",
+    "manualMismatch": "REPORTED, not applied: .claude/rules/tbct-session-manual.md maps S01/S02 wording to spec.ts/messages.ts and lists problems/problemRatings/goals/goalRatings as protected S02 fields; neither holds after this change. The rule file is left for the user to update.",
+    "allowedPaths": ["src/patient/sessions/s01/**", "src/patient/sessions/s02/**", "src/app/api/s01-generation/**", "src/app/api/distortion-candidates/**", "src/app/api/runtime/prompt-session/**", "src/shared/runtime/**", "src/shared/api/**", "src/shared/dialogue-agent/**", "src/shared/protocol/**", "src/shared/worksheet/**", "src/shared/memory/**", "src/shared/assessment/model-observability.ts", "src/clinician/lib/session-catalog.test.ts", "src/clinician/lib/api/protocol-api.test.ts", "src/patient/pages/patient-session-page.tsx", "src/test/**", "scripts/run-local-session.ts", "scripts/audit-sessions-01-08.ts", "scripts/audit-sessions-01-08-constrained.ts", "docs/prompts/**", "artifacts/prompts/**", "docs/ai/TBCT_SESSIONS_1_3.md", "docs/ai/CODEMAP.md", "docs/ai/TBCT_SESSION_OWNER_MANUAL.md", ".claude/rules/tbct-session-manual.md", ".claude/TASK_SCOPE.json"],
+    "doNotTouch": ["src/patient/sessions/s03/**", "src/patient/sessions/s04/**", "src/patient/sessions/s05/**", "src/patient/sessions/s06/**", "src/patient/sessions/s07/**", "src/patient/sessions/s08/**", "src/shared/protocol/tbct-source-text.generated.ts", "src/shared/mocks/data.ts"],
+    "rulesUpdate": "2026-09-25, by the user: update .claude/rules/tbct-session-manual.md and docs/ai/TBCT_SESSION_OWNER_MANUAL.md for the prompt-driven S01/S02 (edit map, protected identifiers, generated-file prohibition, file map). S03-S08 rules unchanged.",
+    "planFile": "/Users/hyeranhwang/.claude/plans/1-2-lexical-crane.md"
+  },
+  "note2026_09_25_session_prompt_documents": {
+    "task": "S01/S02 prompt-driven redesign, phase 1 of 2: author the session prompts as documents (Markdown -> bilingual review PDF + English prompt PDF -> extracted text -> generated TS with hash). No engine change in this phase; phase 2 (prompt-driven runtime path, safety kept in code) is planned separately.",
+    "userDecision": "2026-09-25, by the user: the current session composition is right (S01 = problems/goals -> own case -> three-person example -> cognitive distortions -> homework; S02 = CD-Quest), so the prompts describe the implemented flow, cited to the book (Oliveira 2015, ch.1-2) and the recorded sessions (2026-09-11, 2026-09-18). Book-only elements (goal indicator question, participant summarizes homework/session, 'how was your week', feedback request) are NOT in the body; they are listed under 'Notes for review' for Prof. de Oliveira. Manuscript is bilingual (English then Korean); the model receives the English text. PDF via Markdown -> HTML -> headless Chrome; text extracted from the English prompt PDF and verified against the manuscript.",
+    "safetyDivision": "Code keeps authority: detection, fixed crisis message, pause/escalation, alerts, resume. The common prompt only tells the model to cooperate (never handle a crisis or continue the exercise, report concern via safetyConcern:true, stay within the exercise for non-crisis distress, resume gently after a pause). The docx crisis wording and S03's SAFETY PROTOCOL are deliberately not copied into the prompts.",
+    "sourceDocs": "Book ch.1 (pp.5-24: problems, goals, CCD L1 with Paul/Leslie, Kathleen three-person example pp.10-11, distortions p.12/p.23, homework p.24) and ch.2 (pp.25-40: CD-Quest, Paul worked example, grid, case dialogue). AI Prompts docx used for section format and tone only. Protocol V9: prompts versioned and frozen; hash recorded.",
+    "allowedPaths": ["docs/prompts/**", "artifacts/prompts/**", "scripts/render-prompt-pdf.mjs", "scripts/extract-prompt-text.mjs", "scripts/generate-session-prompts.mjs", "src/shared/protocol/session-prompts.generated.ts", "src/shared/protocol/session-prompts.test.ts", "package.json", ".claude/TASK_SCOPE.json"],
+    "doNotTouch": ["src/patient/sessions/**", "src/shared/runtime/**", "src/shared/api/**", "src/shared/dialogue-agent/**", "src/shared/protocol/tbct-source-text.generated.ts"],
+    "planFile": "/Users/hyeranhwang/.claude/plans/1-2-lexical-crane.md"
+  },
   "note2026_09_21_gate_needs_the_standard": {
     "task": "With the Anthropic gate live, \"네 말할수있습니다\" was still written into the worksheet as a participant's example -- while the guide, in the same turn, correctly said it had not heard the situation yet.",
     "cause": "Two model calls judge the same thing and only one had been told the standard. The dialogue agent gets the step's full task intent; the semantic gate got the generic system prompt, nodeGoal, and expectedAnswerDescription -- which was EMPTY, because it reads promptItem.modelGuidance || aiInstruction and neither was settable from a session spec. aiInstruction is the first line of the manual source range, which says nothing about what a valid answer is.",
@@ -124,6 +144,13 @@
     "regressionFound": "Taking distortionExamples out of outputFields lost the shared list path's readiness guard, so ' 네 알겠습니다.' was stored as the participant's example. Caught by runtime-source-fidelity.test.ts. isAcknowledgementOnly now mirrors runtime-context.ts's isListAcknowledgementOnly session-locally, and applies to the ask turn only -- on the discussion turn an acknowledgement IS a complete answer.",
     "notVerified": "The discussion turn's real behaviour needs a live ANTHROPIC_API_KEY. Its deterministic fallback cannot point at the participant's own words, so it asks them where the pattern shows up instead. What is verified offline: the two-turn rhythm, storage, the pointer, the phase, the replacement path, the acknowledgement guard, the repeat budget, and the mustMention/mustNotMention gates as unit tests.",
     "allowedPaths": [
+    "docs/prompts/**",
+    "artifacts/prompts/**",
+    "scripts/render-prompt-pdf.mjs",
+    "scripts/extract-prompt-text.mjs",
+    "scripts/generate-session-prompts.mjs",
+    "src/shared/protocol/session-prompts.generated.ts",
+    "src/shared/protocol/session-prompts.test.ts",
       ".claude/TASK_SCOPE.json",
       "src/patient/sessions/s02/**",
       "src/shared/runtime/testing/session-fidelity-fixtures.ts"
@@ -155,7 +182,7 @@
   },
   "task": "TBCT Sessions 1-3 session-local enhancement work (content/flow/wording), following prompts/.claude/rules/tbct-session-manual.md",
   "createdAt": "2026-08-13",
-  "updatedAt": "2026-09-21",
+  "updatedAt": "2026-09-25",
   "allowedPaths": [
     "src/patient/pages/homework-list-page.tsx",
     "src/patient/pages/patient-list-page.tsx",

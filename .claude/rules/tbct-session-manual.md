@@ -2,6 +2,7 @@ TBCT Session Manual — Mandatory Editing Rules
 
 HARNESS VERSION: 2026-08-13-manual-v2
 Source: TBCT STUDIO | 세션 담당자 매뉴얼 (S01~S08)
+Updated 2026-09-25: S01 and S02 are prompt-driven (.claude/TASK_SCOPE.json note2026_09_25_prompt_driven_s01_s02). Section 1b replaces sections 1, 2 and 7 for those two sessions; sections 3 and 4 were updated. Everything else, and every rule for S03~S08, is unchanged.
 This rule is mandatory for every TBCT session implementation task.
 
 0. Core principle
@@ -30,9 +31,37 @@ Homework UI: session-specific src/patient/sessions/s0N/homework.tsx
 
 Do not touch a shared file merely because it is easier.
 
+This map is for S03~S08. S01 and S02 use section 1b.
+
+1b. Prompt-driven sessions — S01 and S02
+
+S01 and S02 have no step graph, turn rules, task intents or fixed messages. One system prompt runs each session end to end; code only handles safety, storage and arithmetic. Edit them here:
+
+What the AI says and the order of the session: docs/prompts/TBCT_AI_Prompt_S01.md, docs/prompts/TBCT_AI_Prompt_S02.md (clinical layer, one per session)
+
+Rules every prompt-driven session shares (persona, terms, how values are recorded, the per-turn output, safety cooperation): docs/prompts/TBCT_AI_Prompt_Common.md
+
+Manuscripts are bilingual: change the English and the Korean (::: ko block) together. The English is what the model reads.
+
+After any manuscript change: bump version in its front matter, then run npm run prompts:build. It renders the PDFs, extracts the prompt text from the English PDF, fails if that text differs from the manuscript, and regenerates src/shared/protocol/session-prompts.generated.ts. Run npx vitest run src/shared/protocol/session-prompts.test.ts afterwards.
+
+Values the model may record: src/patient/sessions/s0N/prompt-fields.ts. A name must match the worksheet binding (s0N/worksheet-binding.ts) or the code that reads it. A name not listed there is rejected at runtime.
+
+Arithmetic (never the model's): S02's CD-Quest scores, total and count of 4+ — src/patient/sessions/s02/cdquest-score.ts and the derive function in s02/prompt-fields.ts.
+
+Worksheet and homework UI: unchanged, as in section 1.
+
+Runtime (shared, affects both sessions): src/shared/api/prompt-session-api.ts, src/shared/dialogue-agent/prompt-session-agent.ts, src/shared/runtime/prompt-driven-sessions.ts.
+
+src/patient/sessions/s0N/spec.ts is a three-node shell (opening → conversation (orientation) → closing) that safety records and clinician resume need. Do not put conversation content back into it, and do not re-create messages.ts, turn-rules.ts, task-intents.ts or dialogue-guidance.ts for S01/S02.
+
+Safety stays in code for S01/S02 as for every session. Never write a crisis response, risk assessment or crisis resource into a prompt manuscript: the fixed safety message and the safety clarification come from code, and the prompt only tells the model to stop and set safetyConcern.
+
+A change to the flow or wording that departs from the book (Oliveira 2015, ch.1-2) or from the recorded sessions is recorded in that manuscript's "Notes for review" section.
+
 2. AI utterance precedence — check in this exact order
 
-When the user asks to change what the AI says, determine which layer actually controls the utterance before editing.
+When the user asks to change what the AI says, determine which layer actually controls the utterance before editing. (S03~S08. For S01/S02 the manuscript in docs/prompts is the only layer — section 1b.)
 
 Fixed text / strongest precedence
 src/patient/sessions/s0N/messages.ts -> resolveStaticText()
@@ -56,31 +85,45 @@ src/shared/protocol/tbct-source-text.generated.ts
 
 It is generated from the source manual and tied to source-line/hash verification. Manual edits can invalidate references and verification across all eight sessions.
 
+src/shared/protocol/session-prompts.generated.ts and artifacts/prompts/*
+
+They are generated from docs/prompts by npm run prompts:build and hash-checked. Edit the manuscript and rebuild instead.
+
 If a task appears to require changing this file, stop and report why before proceeding. Find the generator/source path instead.
 
 4. Protected identifiers — do not rename
 
 Some output field names/slugs are consumed by shared screens or runtime logic as string identifiers. A rename can silently break behavior without a compile error.
 
-S01
-
-No protected output field names are specified in the manual.
-
-Still avoid renames unless the task requires them.
-
-S02 — Problem and Goal
+S01 — prompt-driven
 
 Never rename:
 
-problems
+s01Problems
 
-problemRatings
+s01RepresentativeProblem
 
-goals
+s01Goal
 
-goalRatings
+session-continuity.ts carries these into S02 (previousS01*). Every other name in s01/prompt-fields.ts is read by the S01 worksheet binding; keep them in step.
 
-These are referenced by clinician progress UI, homework UI, and score aggregation.
+S02 — Cognitive distortions / CD-Quest, prompt-driven
+
+Never rename:
+
+distortionExamples
+
+cdQuestScores
+
+cdQuestFrequency
+
+cdQuestIntensity
+
+cdQuestTotal
+
+distortionExamples and cdQuestScores are read by the clinician progress panel and the CD-Quest homework baseline; all five by the S02 worksheet. The rows stay in the order of src/shared/protocol/cognitive-distortions.ts.
+
+The former S02 names problems, problemRatings, goals and goalRatings are no longer produced, but older clinician/homework code still reads them as strings: do not reuse those names for anything else.
 
 S03 — Intra-TR
 
@@ -222,11 +265,11 @@ Run narrow tests plus regression tests for impacted shared behavior.
 
 7. S01~S03 authoritative file map
 
-S01 — TBCT model introduction
+S01 — TBCT model introduction (prompt-driven)
 
-Flow/content: src/patient/sessions/s01/spec.ts
+Flow and wording: docs/prompts/TBCT_AI_Prompt_S01.md (+ TBCT_AI_Prompt_Common.md), then npm run prompts:build
 
-Fixed AI text: src/patient/sessions/s01/messages.ts
+Recordable values: src/patient/sessions/s01/prompt-fields.ts
 
 Worksheet: src/patient/sessions/s01/worksheet.tsx
 
@@ -234,19 +277,25 @@ Binding: src/patient/sessions/s01/worksheet-binding.ts
 
 Homework: src/patient/sessions/s01/homework.tsx
 
-S02 — Problems and goals
+Shell only: src/patient/sessions/s01/spec.ts
 
-Flow/content: src/patient/sessions/s02/spec.ts
+Protected: s01Problems, s01RepresentativeProblem, s01Goal
 
-Fixed AI text: src/patient/sessions/s02/messages.ts
+S02 — Cognitive distortions / CD-Quest (prompt-driven)
+
+Flow and wording: docs/prompts/TBCT_AI_Prompt_S02.md (+ TBCT_AI_Prompt_Common.md), then npm run prompts:build
+
+Recordable values and arithmetic: src/patient/sessions/s02/prompt-fields.ts, src/patient/sessions/s02/cdquest-score.ts
 
 Worksheet: src/patient/sessions/s02/worksheet.tsx
 
 Binding: src/patient/sessions/s02/worksheet-binding.ts
 
-Homework: src/patient/sessions/s02/homework.tsx
+Homework: src/patient/sessions/s02/homework.tsx, src/patient/sessions/s02/cdquest-form.tsx
 
-Protected: problems, problemRatings, goals, goalRatings
+Shell only: src/patient/sessions/s02/spec.ts
+
+Protected: distortionExamples, cdQuestScores, cdQuestFrequency, cdQuestIntensity, cdQuestTotal
 
 S03 — Intra-personal Thought Record (Intra-TR)
 
@@ -304,7 +353,7 @@ Check git status and preserve pre-existing user changes.
 
 Create/update .claude/TASK_SCOPE.json with exact allowed paths.
 
-Confirm whether the requested AI wording is controlled by static text, patientText, or rationale.
+Confirm whether the requested AI wording is controlled by static text, patientText, or rationale (S03~S08), or by the prompt manuscript (S01/S02).
 
 Confirm no protected field/slug rename is required.
 
@@ -324,7 +373,9 @@ Confirm no unrelated session file was modified.
 
 Confirm protected identifiers remain intact.
 
-Confirm no generated-source file was hand-edited.
+Confirm no generated-source file was hand-edited (tbct-source-text.generated.ts, session-prompts.generated.ts, artifacts/prompts/*).
+
+For S01/S02 manuscript changes: npm run prompts:build passed and session-prompts.test.ts passes.
 
 Before any git push, verify local-only DB/LLM endpoints, localhost URLs, credentials, ports, paths, .env values, and development-only settings are not committed and cannot override deployment configuration.
 
