@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "patient-dev-mock",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "NEXT_PUBLIC_TBCT_PATIENT_MOCK=1 npm run dev"],
+      "port": 3000
+    }
+  ]
+}

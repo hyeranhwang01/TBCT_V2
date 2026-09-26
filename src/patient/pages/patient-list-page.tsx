@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, CircleDot, ClipboardList, History, Play } from "lucide-react";
+import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { PatientShell } from "@/patient/components/patient-shell";
 import { UpcomingAppointmentsCard } from "@/patient/components/upcoming-appointments-card";
+import { PatientInputControls } from "@/patient/components/patient-input-controls";
 import { OnboardingTour } from "@/shared/components/onboarding/onboarding-tour";
 import { Badge, Button, Card, PageSkeleton } from "@/shared/components/ui/primitives";
 import { createCanonicalTestRuntimeSession, listRuntimeSessionsForParticipant } from "@/shared/api/runtime-session-api";
@@ -18,11 +20,15 @@ import { UI_LOCALE_STORAGE_KEY, useT } from "@/shared/i18n/context";
 import { useDevMode } from "@/shared/dev-mode/dev-mode";
 import { mapToUiLocale } from "@/shared/i18n/locales";
 import { useAuth } from "@/shared/auth/auth-context";
+import { useReducedMotionPreference } from "@/shared/motion/use-reduced-motion-preference";
+import { isPatientMockModeEnabled } from "@/shared/mocks/patient-dev-mock";
 
 export type ListedSession = Awaited<ReturnType<typeof listRuntimeSessionsForParticipant>>[number];
 type JourneyState = "completed" | "in_progress" | "next" | "upcoming";
 
-const SESSION_TITLES = {
+// Exported so patient-session-complete-page.tsx can label a just-finished
+// session by number without re-declaring the same eight titles.
+export const SESSION_TITLES = {
   ko: ["", "TBCT 모델 소개", "문제와 목표", "개인 내적 사고 기록", "대인관계 사고 기록", "참여 격자", "색상별 증상 위계", "합의된 역할극", "첫 번째 시도"],
   en: ["", "TBCT model introduction", "Problems and goals", "Intrapersonal thought record", "Interpersonal thought record", "Participation grid", "Color-coded symptoms hierarchy", "Consensual role-play", "Trial one"],
 } as const;
@@ -114,6 +120,34 @@ export function PatientListPage() {
         <div className="space-y-5">
           <PatientJourney journey={journey} participant={participant} localPreview={localPreview} />
           {participant && <div data-tour-id="appointments"><UpcomingAppointmentsCard participantId={participant.id} /></div>}
+          {/* Dev-mock only: no real session ever stops on a boolean/single-choice
+              node this early, and submitting an answer to reach one requires a
+              real authenticated turn (/api/runtime/turn), which dev-mock cannot
+              fake locally -- so these two input kinds are otherwise unreachable
+              in a local check. Renders the real PatientInputControls component
+              with a hand-built prompt payload (no runtime session behind it,
+              onSubmit is a no-op) purely so the button design itself can be
+              reviewed locally. Never rendered outside dev-mock, never in production. */}
+          {isPatientMockModeEnabled() && (
+            <Card className="p-6">
+              <div className="text-sm font-bold text-text-primary">{locale === "ko" ? "로컬 미리보기 전용 -- 입력 버튼 디자인" : "Local preview only -- input button design"}</div>
+              <div className="mt-1 text-xs text-text-secondary">
+                {locale === "ko"
+                  ? "실제 세션 응답 제출은 이 로컬 환경에서 재현할 수 없어요(별도 인증 필요). 새 버튼 디자인만 여기서 확인하세요."
+                  : "Actually submitting a session answer can't be reproduced in this local environment (it needs separate auth). This just previews the new button design."}
+              </div>
+              <div className="mt-4 grid gap-6 sm:grid-cols-2">
+                <div>
+                  <div className="mb-2 text-xs font-semibold text-text-muted">{locale === "ko" ? "예 / 아니요" : "Yes / No"}</div>
+                  <PatientInputControls payload={{ kind: "boolean" }} locale={locale === "ko" ? "ko-KR" : "en-US"} onSubmit={() => {}} />
+                </div>
+                <div>
+                  <div className="mb-2 text-xs font-semibold text-text-muted">{locale === "ko" ? "단일 선택" : "Single choice"}</div>
+                  <PatientInputControls payload={{ kind: "single_choice", choices: locale === "ko" ? ["학교", "가족", "친구 관계"] : ["School", "Family", "Friendships"] }} locale={locale === "ko" ? "ko-KR" : "en-US"} onSubmit={() => {}} />
+                </div>
+              </div>
+            </Card>
+          )}
         </div>
       </PatientShell>
       <OnboardingTour steps={PATIENT_TOUR_STEPS} active={tour.active} onDone={tour.finish} />
@@ -121,10 +155,19 @@ export function PatientListPage() {
   );
 }
 
+// Staggers the eight journey dots in on mount -- purely decorative, so it's
+// skipped outright under prefers-reduced-motion rather than just shortened.
+const journeyContainer = { animate: { transition: { staggerChildren: 0.045 } } };
+const journeyDot = {
+  initial: { opacity: 0, y: 6, scale: 0.9 },
+  animate: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.28, ease: [0.2, 0.8, 0.2, 1] } },
+};
+
 export function PatientJourney({ journey, participant, localPreview }: { journey: ReturnType<typeof buildPatientJourney>; participant: Awaited<ReturnType<typeof getOrCreateParticipantForUiLocale>> | undefined; localPreview: boolean }) {
   const { t, locale } = useT();
   const router = useRouter();
   const { enabled: devMode } = useDevMode();
+  const reducedMotion = useReducedMotionPreference();
   const [isStarting, setIsStarting] = useState(false);
   const completed = journey.filter((item) => item.state === "completed").length;
   const current = journey.find((item) => item.state === "in_progress" || item.state === "next");
@@ -169,16 +212,21 @@ export function PatientJourney({ journey, participant, localPreview }: { journey
           <span>{completed} / 8</span>
         </div>
       </div>
-      <div className="mt-7 grid grid-cols-4 gap-y-7 md:grid-cols-8">
+      <motion.div
+        className="mt-7 grid grid-cols-4 gap-y-7 md:grid-cols-8"
+        variants={reducedMotion ? undefined : journeyContainer}
+        initial={reducedMotion ? false : "initial"}
+        animate={reducedMotion ? undefined : "animate"}
+      >
         {journey.map((item, index) => {
           const dot = (
-            <div className={`relative z-10 flex h-10 w-10 items-center justify-center rounded-full border text-sm font-bold ${stateStyles[item.state]}`}>
+            <div className={`relative z-10 flex h-10 w-10 items-center justify-center rounded-full border text-sm font-bold shadow-sm ${stateStyles[item.state]}`}>
               {item.state === "completed" ? <Check className="h-5 w-5" /> : item.state === "in_progress" ? <CircleDot className="h-5 w-5" /> : item.number}
             </div>
           );
           return (
-            <div key={item.number} className="relative flex flex-col items-center text-center">
-              {index > 0 && <div className={`absolute right-1/2 top-5 z-0 hidden h-0.5 w-full md:block ${item.state === "completed" ? "bg-success" : "bg-border"}`} />}
+            <motion.div key={item.number} variants={reducedMotion ? undefined : journeyDot} className="relative flex flex-col items-center text-center">
+              {index > 0 && <div className={`absolute right-1/2 top-5 z-0 hidden h-0.5 w-full transition-colors duration-500 md:block ${item.state === "completed" ? "bg-success" : "bg-border"}`} />}
               {/* Developer mode makes every step its own entry point. Without
                   it the dots stay exactly what they were: a picture of where
                   the patient is, with the one "continue" button below. */}
@@ -196,11 +244,12 @@ export function PatientJourney({ journey, participant, localPreview }: { journey
                 dot
               )}
               <span className={`mt-2 text-xs ${item.state === "upcoming" ? "font-medium text-text-muted" : "font-semibold text-text-primary"}`}>{locale === "ko" ? `${item.number}회기` : `Session ${item.number}`}</span>
+              <span className={`truncate-2 mt-0.5 max-w-[80px] text-[10px] leading-tight ${item.state === "upcoming" ? "text-text-muted/70" : "text-text-secondary"}`}>{SESSION_TITLES[locale][item.number]}</span>
               <span className="sr-only">{t(`patientJourney.${item.state}`)}</span>
-            </div>
+            </motion.div>
           );
         })}
-      </div>
+      </motion.div>
       {current && (
         <div data-tour-id="journey-continue" className="mt-8 rounded-2xl border border-clinical-blue-light bg-gradient-to-r from-clinical-blue-light/55 via-surface to-ai-violet-light/25 p-5 sm:flex sm:items-center sm:justify-between sm:gap-6">
           <div className="flex items-center gap-3">

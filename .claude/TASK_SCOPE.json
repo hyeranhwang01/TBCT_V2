@@ -5,7 +5,11 @@
     "sharedFileJustification": "PromptSpec gains an optional modelGuidance and the compiler passes it through (source-fidelity-catalog.ts). Purely additive, no default behaviour change, and there was no session-local way to reach the gate at all -- which is the escalation test in .claude/rules/tbct-session-manual.md section 6.",
     "theStandard": "Set on review-distortion: a valid answer is a concrete moment or the thought in it; a bare confirmation (네 / 네 있었어요 / 네 말할 수 있습니다 / yes I have) is clarification_request because the situation has not been given; having none for this pattern (딱히 없어요 / 떠오르지 않아요) is collection_stop.",
     "verifiedLive": "The assessment route is open and takes a plain AssessmentRequest, so each phrasing can be checked against production directly with curl -- that is how the gap was found (네 있었어요 came back accept_answer with four other phrasings correct).",
-    "allowedPaths": [".claude/TASK_SCOPE.json", "src/patient/sessions/s02/**", "src/shared/protocol/source-fidelity-catalog.ts"]
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/patient/sessions/s02/**",
+      "src/shared/protocol/source-fidelity-catalog.ts"
+    ]
   },
   "note2026_09_21_anthropic_assessment_provider": {
     "task": "The semantic gate had no model behind it in production, so \"네 있었어요\" was still filed as a cognitive-distortion example after the gate was supposedly restored.",
@@ -16,7 +20,10 @@
     "cloudSwitchRespected": "allowCloudPatientAssessment is honoured, not waived, even though this vendor already sees the text -- it is a deliberate switch and not mine to weaken. That makes ALLOW_CLOUD_PATIENT_ASSESSMENT=true a second required variable; without it every walkthrough answer throws, and assessRuntimePatientInput fails CLOSED, so the step would re-ask forever. Set both or neither.",
     "unchangedByDefault": "ASSESSMENT_PROVIDER unset still selects deterministic, so nothing changes until the deployment is switched over. Pinned by a test.",
     "stillOpen": "DeterministicAssessmentModel remains an English stop list and is still the fallback whenever the provider fails. It would accept \"네 있었어요\" again. Hardening it was the other half of the recommendation and has not been done.",
-    "allowedPaths": [".claude/TASK_SCOPE.json", "src/shared/assessment/**"]
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/shared/assessment/**"
+    ]
   },
   "note2026_09_21_s02_ask_for_the_moment": {
     "task": "The walkthrough asked a yes/no question and stored the answer as a list item. Reworded to ask for the moment itself.",
@@ -27,7 +34,11 @@
     "alsoAGeneralRule": "walkthroughAskIntent's keep gained \"Ask for the moment itself, not for a yes or no\" with the reason, so the shape does not drift back on a rephrase.",
     "verificationLimit": "Whether this actually reduces \"네 있었어요\" shows only in a live session; the offline assessment accepts most sentences. What the tests pin is that the question no longer asks a yes/no in either locale, that the way out survives, and that the clarification path does not re-ask one.",
     "s01NotInScope": "S01's three list questions are closed in Korean too (\"또 다른 어려움이 있을까요? 없으면 없다고 하셔도 괜찮아요\") and it has no model-judged gate at all, so its exposure is larger. Deliberately left until S02 has been run live -- the same structure should not be spread to two sessions before it is confirmed in one.",
-    "allowedPaths": [".claude/TASK_SCOPE.json", "src/patient/sessions/s02/**", "src/shared/api/runtime-execution-api.ts"]
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/patient/sessions/s02/**",
+      "src/shared/api/runtime-execution-api.ts"
+    ]
   },
   "note2026_09_21_s02_model_judges_the_answer": {
     "task": "\"네 있었어요\" was filed in the worksheet as the participant's example for pattern 3, while the guide was -- correctly -- asking them what the example actually was. The real example, given on the next turn, was never stored.",
@@ -36,7 +47,11 @@
     "rowAccounting": "By the time turn rules run, the collection path has already appended, so there is no 'before' left to compare against. s02RowCount holds how many rows the walkthrough has settled; an ask turn that accepted shows rows.length > s02RowCount, a discussion turn trims back to it, and the empty-row case rebuilds from it. Without this the phase never advanced, because fields was compared against itself.",
     "whatTheTestsCanShow": "The offline deterministic assessment accepts most sentences, so it cannot demonstrate the reported bug. The contract is pinned instead with a scripted assessment model (setAssessmentModelForTests, the idiom the untracked collection-semantic-gate.test.ts uses): clarification_request stores nothing, keeps the pattern and does not start the discussion; accept_answer files it and moves to the discussion. The old test that asserted the keyword behaviour was removed rather than adjusted -- it pinned the thing that was wrong.",
     "fixtureKey": "session-fidelity-fixtures.ts pool key back to /distortionExamples/i. Left on the scratch name it matched nothing, the generic three-sentence fallback cycled, isDuplicateListEntry rejected the repeats and S02 audited at 67 turns with 15 fallbacks.",
-    "allowedPaths": [".claude/TASK_SCOPE.json", "src/patient/sessions/s02/**", "src/shared/runtime/testing/session-fidelity-fixtures.ts"]
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/patient/sessions/s02/**",
+      "src/shared/runtime/testing/session-fidelity-fixtures.ts"
+    ]
   },
   "note2026_09_21_cdquest_grid_always_and_editable": {
     "task": "Three follow-ups on the grid: show it from the start, let the participant correct a score the way they can correct an example, and explain how to read it once instead of fifteen times.",
@@ -44,7 +59,10 @@
     "editableScore": "The guide reads the score out of what the participant SAYS, so a misread one is a measured value that would otherwise stay wrong -- and the example cell beside it has always been editable. Clicking the chip opens the same frequency/intensity buttons the homework form uses (GradeButtons, now exported from cdquest-form.tsx), and saving writes cdQuestScores, cdQuestFrequency and cdQuestIntensity together so a row never holds a score apart from what it was made of.",
     "totalFollowsTheRows": "Session Signals sums the scores on screen rather than reading cdQuestTotal, so a corrected score shows at once. The two agree unless a row was edited after the program worked the total out; cdQuestTotal is only what the total step speaks, and the homework baseline already computed from cdQuestScores rather than from it.",
     "explainOnce": "scoringIntent branches on whether anything has been scored yet. First pattern: read one cell out loud as a worked example ('six or seven days and only a little comes to a 3'), then ask. After that: ask straight out, no walkthrough -- unless they ask how it works, which is explicitly still allowed. Reciting the bands fifteen times is what made the scoring read as a form.",
-    "allowedPaths": [".claude/TASK_SCOPE.json", "src/patient/sessions/s02/**"]
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/patient/sessions/s02/**"
+    ]
   },
   "note2026_09_21_cdquest_grid_on_screen": {
     "task": "There was no scoring grid anywhere in the session: the bands were recited in words, fifteen times over, and the worksheet only displayed the result. The grid is now beside the conversation and the turn points at it.",
@@ -52,7 +70,10 @@
     "cellsAreComputed": "CdQuestGrid renders cdQuestScore(frequency, intensity) per cell rather than a table typed into the component, so the grid a participant reads and the arithmetic the session records cannot drift apart. Pinned by a test that rebuilds the expected cells from the same function.",
     "whenItShows": "From the step that explains it (cdQuestScalePresented / cdQuestScaleUnderstood) through the scoring, and whenever scores exist. Not during the walkthrough, where it would be one more thing to read while trying to think of an example -- the recording brought it out at 43:00 for the same reason.",
     "pointerRegressionFound": "activeCanonicalFieldKey is the PROMPT's outputFields[0] (patient-session-page.tsx:473). Both loops now answer into a scratch scalar (distortionTurnAnswer, cdQuestItemScore) rather than the list they build, so the worksheet -- which matched only the list names -- had had NO current-row highlight since that change, and the scoring pointer had never once activated. Both now match the scratch name too, with a test.",
-    "allowedPaths": [".claude/TASK_SCOPE.json", "src/patient/sessions/s02/**"]
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/patient/sessions/s02/**"
+    ]
   },
   "note2026_09_21_ask_before_reading": {
     "task": "The discussion turn read every example, however thin it was. It now collects the missing detail first when it cannot see where the pattern shows.",
@@ -61,7 +82,10 @@
     "notExplorationOnPurpose": "conversationMove: explore would be the obvious mechanism and is wrong here. MAX_EXPLORATION_TURNS_PER_SESSION is 6, counted over the whole session (recentMessages is view.messages, not a window), and the walkthrough alone has fifteen patterns. It would work six times and then REJECT the turn (exploration_not_held) and ship the approved text, which is worse than never doing it. The discussion turn already asks and waits, so the question is simply the turn's own question, conversationMove advance, no budget involved and no shared file touched. Note explorationTurnsInStep is hardcoded to 0 in runtime-orchestrator.ts, so the per-step cap never binds.",
     "knownGap": "s02/turn-rules.ts decides how long a discussion runs from the length of the reply, so a question the guide asks can be answered and then cut off as the loop moves to the next pattern. The fix discussed was to hold one more turn when the previous discussion turn ended in a question; deferred at the user's request until the prompt alone is seen in a live session.",
     "verificationLimit": "Offline this can only be pinned as 'the instruction reaches the contract'. Whether it is followed shows only in a live session.",
-    "allowedPaths": [".claude/TASK_SCOPE.json", "src/patient/sessions/s02/**"]
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/patient/sessions/s02/**"
+    ]
   },
   "note2026_09_21_distortion_definitions_audit": {
     "task": "All fifteen registry definitions checked line by line against the recorded second session, after the catastrophizing turn came out missing its point.",
@@ -72,7 +96,12 @@
     "theRealFailureWasDelivery": "The reported defect was NOT a wrong definition: catastrophizing already said the outcome is taken as unbearable, and the guide dropped that half while paraphrasing. Nothing required it to survive -- the walkthrough's only mustMention is the pattern NAME. Addressed with a keep line rather than a per-pattern gate, since the user rejected gating the wording: several of the fifteen are defined in two parts and half of one is a different pattern.",
     "sharedFileNote": "cognitive-distortions.ts is shared with S01, whose candidate text composes descriptionKo verbatim. The amended definitions therefore also improve S01's suggestions, which is intended. S01's tests assert non-emptiness and compose from the registry, so no S01 text is pinned. descriptionEn kept short on purpose: distortion-candidates.ts composes up to five of them into one message against a 700-character cap.",
     "notDone": "The consequence the counselor attaches to should-statements (anger) is not in the entry. Left out because it is a consequence rather than what the pattern IS, and the other fourteen entries do not carry consequences either.",
-    "allowedPaths": [".claude/TASK_SCOPE.json", "src/shared/protocol/cognitive-distortions.ts", "src/shared/protocol/cognitive-distortions.test.ts", "src/patient/sessions/s02/**"]
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/shared/protocol/cognitive-distortions.ts",
+      "src/shared/protocol/cognitive-distortions.test.ts",
+      "src/patient/sessions/s02/**"
+    ]
   },
   "note2026_09_21_structured_output_leak": {
     "task": "A turn reached the participant ending '...어떻게 느껴지세요?</patientFacingMessage>\\n<parameter name=\"keepCurrentNode\">true'. The model wrote the rest of its structured call inside the first field and nothing between there and the screen looked at the text.",
@@ -80,14 +109,22 @@
     "whyEnforceNotLog": "The other content guards are log-mode because their matches are judgement calls. This one is not: a patient must never read markup, and the approved text is always a better turn than a broken one. Enforcing also means one rewrite is tried first.",
     "tests": "dialogue-agent.test.ts: four leaked shapes rejected with reason structured_output_leak, three ordinary sentences (including one with quoted speech) unaffected, and the guard mode pinned.",
     "notDiagnosed": "Why the model produced it. The Anthropic path uses a proper tool_use block and guards stop_reason=max_tokens, so the malformed output came back inside the tool input itself. Worth watching in the turn records if it recurs.",
-    "allowedPaths": [".claude/TASK_SCOPE.json", "src/shared/dialogue-agent/dialogue-output-validator.ts", "src/shared/dialogue-agent/dialogue-agent.test.ts", "src/patient/sessions/s02/**"]
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/shared/dialogue-agent/dialogue-output-validator.ts",
+      "src/shared/dialogue-agent/dialogue-agent.test.ts",
+      "src/patient/sessions/s02/**"
+    ]
   },
   "note2026_09_21_worksheet_text_fused_forms": {
     "task": "The cell still held '...좋았던거라고 생각했음' after the first cleanup pass.",
     "cause": "That pass only removed a DETACHED quote ('...싫어할꺼야 라고 생각했습니다') and deliberately left the fused form alone, because cutting at the particle leaves '...좋았던거'. Leaving it alone was safe but did not do the job.",
     "fix": "Three shapes now, each leaving grammatical Korean: a detached quote loses the frame; '거/것 + 라고 + report verb' unwinds to '거야'; '-다고 + report verb' unwinds to '-다'; and a nominalised report ('...어떡하지 하는 생각이 들어요') loses the tail. Anything else still falls through to the sentence-end check and is left as written.",
     "honestCaveat": "The 거야 branch adds a syllable the participant did not type. It is the plain form their own quotative was quoting, not new content, and it is the only way to leave that shape grammatical -- but it is an addition, not purely a removal.",
-    "allowedPaths": [".claude/TASK_SCOPE.json", "src/patient/sessions/s02/**"]
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/patient/sessions/s02/**"
+    ]
   },
   "note2026_09_21_s02_one_step_per_message": {
     "task": "Two defects visible in the first live S02 run, once the dialogue agent was actually reached.",
@@ -95,7 +132,10 @@
     "falseAcknowledgement": "A message the program does not wait on opened with '네, 좋아요', agreeing with something said two messages earlier. lastParticipantMessage stays set across consecutive program messages, so the rule is keyed on whether the turn waits for an answer instead.",
     "worksheetText": "The cell held the whole sentence, reporting frame and all: '...나를 싫어할꺼야 라고 생각했습니다'. normalizeExampleForWorksheet takes the frame off, deterministically -- no model, no summarising, nothing reworded, because distortionExamples is assistantMustNotSupply and the ask was to clean rather than summarise. The chat message keeps what they typed.",
     "worksheetTextIsNarrowOnPurpose": "Korean fuses the quotative particle into the clause as often as it detaches it. Cutting at the particle in '...무너질 거라고 생각했어요' leaves '...무너질 거', and the first build of this did exactly that to five of eleven test sentences. So the frame comes off ONLY when what remains already ends like a finished sentence; the fused case is left exactly as written. A miss costs nothing, a bad cut would. Reconstructing the fused case would mean adding words the participant did not write.",
-    "allowedPaths": [".claude/TASK_SCOPE.json", "src/patient/sessions/s02/**"],
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/patient/sessions/s02/**"
+    ],
     "verification": "npx tsc --noEmit 0 errors; npx vitest run 89 of 91 files, 998 of 1006 tests (the 8 are the untracked pre-redesign files); npm run audit:sessions 8/8, 0 fallbacks, S02 51 turns; npm run lint 0 errors."
   },
   "note2026_09_21_s02_safety_ids_disabled_claude": {
@@ -107,7 +147,10 @@
     "nothingLost": "TBCT-S02-CRISIS-PAUSE matches no row in safetyRules, so it carried no safety behaviour. Verified by test that a risk disclosure mid-walkthrough still ends the session: it is caught by the session-level override (deliverSafetyOverrideTurn -> turnOutcome safety_override, status escalated), which never consulted safetyRuleIds. The node-level crisisSignal edges are a separate, untouched mechanism.",
     "regressionTests": "s02/spec.test.ts now pins that the ONLY safety-critical S02 prompt is pause-and-escalate, that the steps the session is made of are not excluded, and that a risk disclosure still stops the session without being stored as an example.",
     "stillUnverified": "That the deployed session now reads as a conversation. The audit runs with AI_PROVIDER=mock and the local runner has no key, so both still show deterministic text. Only a live session on the deployment shows the change.",
-    "allowedPaths": [".claude/TASK_SCOPE.json", "src/patient/sessions/s02/**"],
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/patient/sessions/s02/**"
+    ],
     "verification": "npx tsc --noEmit 0 errors; npx vitest run 88 of 90 files, 991 of 999 tests (the 8 are the untracked pre-redesign files); npm run audit:sessions 8/8, 0 fallbacks, S02 51 turns; npm run lint 0 errors."
   },
   "note2026_09_21_s02_walkthrough_discussion": {
@@ -128,7 +171,11 @@
       "src/patient/sessions/s02/**",
       "src/shared/runtime/testing/session-fidelity-fixtures.ts"
     ],
-    "doNotTouch": ["src/patient/sessions/s01/**", "src/shared/runtime/runtime-context.ts", "src/shared/protocol/**"],
+    "doNotTouch": [
+      "src/patient/sessions/s01/**",
+      "src/shared/runtime/runtime-context.ts",
+      "src/shared/protocol/**"
+    ],
     "foundNotMine": "src/patient/sessions/s02/collection-semantic-gate.test.ts and rating-correction-lifecycle.test.ts are UNTRACKED, appeared mid-session, and assert the pre-redesign S02 (problems/goals, tbct-s02-n09-p01-reflect-goal-score). Their 8 failures predate this work and are not caused by it. Left untouched: they are somebody else's file, and what they should assert now is not mine to decide.",
     "verification": "npx tsc --noEmit 0 errors; npx vitest run 88 of 90 files and 988 of 996 tests (the 8 failures are the untracked files above); npm run audit:sessions 8/8, 0 fallbacks, S02 51 participant turns and 61 program turns (was 36/46); npx tsx scripts/run-local-session.ts tbct-s02 completes with the discussion turn wording varying per turn rather than repeating; npm run lint 0 errors."
   },
@@ -150,7 +197,12 @@
       "src/shared/i18n/dictionaries/ko.ts",
       "src/shared/i18n/dictionaries/en.ts"
     ],
-    "doNotTouch": ["src/patient/sessions/**", "src/shared/runtime/**", "src/shared/protocol/**", "src/shared/api/**"],
+    "doNotTouch": [
+      "src/patient/sessions/**",
+      "src/shared/runtime/**",
+      "src/shared/protocol/**",
+      "src/shared/api/**"
+    ],
     "verification": "npx tsc --noEmit; npx vitest run (88 files / 973 tests); npm run lint; npm run build with placeholder Supabase env vars (the local build otherwise stops on NEXT_PUBLIC_SUPABASE_URL, which is unrelated to this change and is configured on Vercel)."
   },
   "task": "TBCT Sessions 1-3 session-local enhancement work (content/flow/wording), following prompts/.claude/rules/tbct-session-manual.md",
@@ -360,7 +412,12 @@
       "src/test/fakes/dialogue-agent.fake.ts",
       ".claude/TASK_SCOPE.json"
     ],
-    "doNotTouch": ["src/shared/protocol/tbct-source-text.generated.ts", "sql/**", "src/patient/sessions/s0N/spec.ts", "src/patient/sessions/s0N/messages.ts"],
+    "doNotTouch": [
+      "src/shared/protocol/tbct-source-text.generated.ts",
+      "sql/**",
+      "src/patient/sessions/s0N/spec.ts",
+      "src/patient/sessions/s0N/messages.ts"
+    ],
     "blastRadius": "All 8 sessions: (a) every patient-content turn (acknowledge/reflect_and_ask/clarify/repair/restore_context/request_missing_field) on a protected field is now assembled from parts in S01-S07 as it already was in S08; (b) a summarize_and_confirm turn delays the next task by one turn; (c) the Groq continuity fallback cannot produce messageParts, so on gated turns it degrades to the approved static text (already true for S08). Mock/no-provider runs (audit:sessions, simulated-patient-runner) never produce a summary check, so their transcripts are unchanged.",
     "regressionPlan": "npm run type-check && npm run lint && npx vitest run (from a worktree outside the nested parent repo) && npm run audit:sessions; live: npm run audit:sessions:constrained and scripts/run-local-session.ts with ANTHROPIC_API_KEY.",
     "followUp2026_09_11": "After a mock-Claude audit (scratch script answering only api.anthropic.com, all 8 sessions end to end), the user approved two follow-ups: (1) contractMayRequireAssembly now gates EVERY turn of an enabled session regardless of field ownership -- the audit shipped 5 invented conclusions without confirmation on the 13/272 prompts whose field is an administrative flag; (2) at most one summary check per protocol node (reflection-check.ts summaryCheckAlreadyUsedInNode) -- a model summarizing at every allowed turn took S01-S08 from 239 to 462 patient turns. Remaining known gap by design: explain_term/explain_scale/explain_rationale/show_required_visual/acknowledge_pause stay free prose (protocol explanation), guarded only by the prompt rule."
@@ -488,7 +545,10 @@
       "src/patient/sessions/s01/turn-rules.test.ts",
       "src/patient/sessions/s01/worksheet-binding.ts (S01_SUMMARY_WRITE_FIELDS only)"
     ],
-    "doNotTouch": ["src/shared/protocol/tbct-source-text.generated.ts", "sql/**"],
+    "doNotTouch": [
+      "src/shared/protocol/tbct-source-text.generated.ts",
+      "sql/**"
+    ],
     "blastRadius": "All eight sessions' dialogue-agent turns (prompt, tool schema, validation, confirmation flow) and worksheet projection provenance. Session specs, messages and progression are unchanged. S01's write-situation-line / write-thought-line prompts are no longer activated (their flags are not set); a confirmed summary fills situationLine / thoughtLine instead.",
     "regressionPlan": "npm run type-check; npx vitest run; live (needs ANTHROPIC_API_KEY in .env.local): npm run audit:sessions:constrained and npx tsx scripts/run-local-session.ts tbct-s01 reviewed by a person before any push."
   },
@@ -621,7 +681,12 @@
       "src/shared/api/runtime-execution-api.ts (pass clarificationAttemptCount to applyS01TurnRules only; added 2026-09-19 for the no-pick follow-up: a re-ask turn does not commit its fields, so the S01 rules need the engine's own re-ask count)"
     ],
     "followUp2026_09_19_no_pick": "Live S01 after fd1a140: '없어' at the representative question was stored as the representative difficulty. By the user (option A): a no-pick answer is never stored; the question is asked once more, and a second no-pick keeps all listed difficulties together (s01RepresentativeProblemSource all_items) -- the program never picks one for them.",
-    "doNotTouch": ["src/shared/protocol/tbct-source-text.generated.ts", "sql/**", "src/patient/sessions/s02/**", "src/patient/sessions/s03/**"],
+    "doNotTouch": [
+      "src/shared/protocol/tbct-source-text.generated.ts",
+      "sql/**",
+      "src/patient/sessions/s02/**",
+      "src/patient/sessions/s03/**"
+    ],
     "blastRadius": "S01 dialogue-agent turns only (taskIntent is undefined for every other session, and with S01_TASK_INTENTS=off). Step order, completion, what an answer stores, safety routing and the deterministic fallback text path are unchanged; without a dialogue provider nothing changes. One extra Claude call at most on a turn that misses must-include content.",
     "regressionPlan": "npm run type-check; npx vitest run; npm run lint; npm run audit:sessions; live before/after with scripts/run-local-session.ts tbct-s01 --interactive (S01_TASK_INTENTS=off vs default) on scripted participants, reviewed by the user and the research team before any push."
   },
@@ -646,7 +711,12 @@
       "src/shared/dialogue-agent/task-intent.test.ts",
       "src/**/*.test.ts (only S01 flow tests whose first answer went to the difficulties question)"
     ],
-    "doNotTouch": ["src/shared/protocol/tbct-source-text.generated.ts", "sql/**", "src/patient/sessions/s02/**", "src/patient/sessions/s03/**"],
+    "doNotTouch": [
+      "src/shared/protocol/tbct-source-text.generated.ts",
+      "sql/**",
+      "src/patient/sessions/s02/**",
+      "src/patient/sessions/s03/**"
+    ],
     "blastRadius": "S01's first node only: one more program turn (the consent) before the difficulties question. Other nodes' prompt ids are unchanged (ids are positional within a node). Other sessions unchanged.",
     "regressionPlan": "npm run type-check; npx vitest run; npm run lint; npm run audit:sessions; local run of scripts/run-local-session.ts tbct-s01 --interactive; after deploy, a new S01 session."
   },
@@ -679,73 +749,97 @@
     "manualDivergence": "REPORTED, not silently applied. The RCT prompt manual (artifacts/tbct-source-text.txt, S01 = lines 18-222) has no summary in 'Step 6 - Closing the Session', and its Tone and Style (lines 180-193) says 'Ask, do not tell ... at every point where you would be tempted to explain, describe, or summarize - ask a question instead'. This step follows the book and the recording instead. Per .claude/rules/tbct-session-manual.md section 8 the manual is left unchanged and the divergence is stated in the completion report.",
     "regressionPlan": "npx vitest run src/patient/sessions/s01; npm run type-check; npx vitest run src/shared/dialogue-agent src/shared/runtime; npm run audit:sessions; npx tsx scripts/run-local-session.ts tbct-s01. With a live key, check once that the recap does not leak the participant's own answers."
   },
-    "note2026_09_21_s02_cognitive_distortions": {
-      "task": "S02 redesign, stage 1 of 3: replace 'Problems and Goals' (CCPH/CCGH) with the session the real second counseling session actually was -- a walkthrough of the 15 cognitive distortions with the participant's own examples -- plus the worksheet that fills in as they name them. CD-Quest scoring is stage 2; the remaining homework UI and the clinician progress panel are stage 3.",
-      "evidence": "The 2026-09-18 recording (57 min) was transcribed locally (whisper.cpp large-v3-turbo) because Zoom's own VTT was English ASR over Korean speech: 0 Hangul lines, 5,408 characters of noise. The real transcript says 왜곡 41 times and 목표/척도/색상/총점 zero times. The book this protocol comes from (Oliveira 2015) has CD-Quest as chapter 2 and its own Table C1 assigns it 'every session from Session 2 on'. CCPH/CCGH appears nowhere in that book -- not in 224 pages, not among the appendix forms. Recorded in docs/ai/TBCT_SESSION_MAPPING.md.",
-      "userDecision": "2026-09-21, by the user: follow the real counseling session. CCPH/CCGH is deleted rather than relocated, because it is absent from the book; the problems-and-goals content it carried is already in S01's problems-and-goals node (book ch.1 'Identifying the Problems' / 'Setting Therapy Goals'). Same division of labour as S01: step order, completion, storage and safety in code, all wording left to Claude. The closing recap follows S01's 2026-09-21 session-recap exactly; the feedback request stays out. The research claim is stated with a plain-language source. Work is split into stages because doing it in one pass is less careful.",
-      "stageSeam": "The 15-type walkthrough and its worksheet ship together: the participant watches the table fill in. In the recording (15:00) the participant asks to write in it herself -- 'the screen share, can I not write in it now?' -- and at 43:00 reads the filled table back. Splitting the talk from the table would ship half a step.",
-      "researchCitation": "n04 research-evidence cites de Oliveira, Osorio, Sudak, Abreu, Crippa, Powell, Landeiro & Wenzel (2011), 'Initial psychometric properties of the Cognitive Distortions Questionnaire (CD-Quest)', ABCT 45th Annual Meeting, Toronto: Federal University of Bahia, 184 university students, CD-Quest vs depression (BDI) r=0.65 and anxiety (BAI) r=0.51. It is a CORRELATIONAL study, so the intent's keep rules forbid the causal claim the recording makes ('reducing distortions lowers depression'); mustMention pins the source and the sample.",
-      "manualDivergence": "REPORTED, not silently applied (.claude/rules/tbct-session-manual.md section 8). The RCT prompt manual has no CD-Quest section at all, so the 15-type nodes cite its S01 cognitive-distortions range [145,155], where the 15-type list and the 'never name a distortion for them' rule actually live. Stage 2's CD-Quest scoring has no source range to cite and will be reported the same way. The manual is left unchanged; the proper fix is the research team adding a CD-Quest section, after which artifacts/tbct-source-text.txt is regenerated.",
-      "boundaryCrossed": "src/patient/sessions/s01/cognitive-distortions.ts carried the comment 'Deliberately NOT shared-Runtime content: S02-S08 never import this file'. S02 needs the same 15-type registry, and its order is already exactly the order of the real session. The file is promoted to src/shared/protocol/cognitive-distortions.ts and s01 re-exports it, so every existing S01 import path and test keeps working. The boundary is crossed deliberately and recorded here, not silently.",
-      "scopeWidened2026_09_21": "src/shared/runtime/testing/session-fidelity-fixtures.ts added after the first local run: the synthetic patient had no reply pool for distortionExamples, so it cycled three generic sentences and every fourth pattern was rejected as a duplicate -- the walkthrough stalled and neither the audit nor the local run actually walked all fifteen patterns. Test support only; one additive reply pool.",
+  "note2026_09_21_s02_cognitive_distortions": {
+    "task": "S02 redesign, stage 1 of 3: replace 'Problems and Goals' (CCPH/CCGH) with the session the real second counseling session actually was -- a walkthrough of the 15 cognitive distortions with the participant's own examples -- plus the worksheet that fills in as they name them. CD-Quest scoring is stage 2; the remaining homework UI and the clinician progress panel are stage 3.",
+    "evidence": "The 2026-09-18 recording (57 min) was transcribed locally (whisper.cpp large-v3-turbo) because Zoom's own VTT was English ASR over Korean speech: 0 Hangul lines, 5,408 characters of noise. The real transcript says 왜곡 41 times and 목표/척도/색상/총점 zero times. The book this protocol comes from (Oliveira 2015) has CD-Quest as chapter 2 and its own Table C1 assigns it 'every session from Session 2 on'. CCPH/CCGH appears nowhere in that book -- not in 224 pages, not among the appendix forms. Recorded in docs/ai/TBCT_SESSION_MAPPING.md.",
+    "userDecision": "2026-09-21, by the user: follow the real counseling session. CCPH/CCGH is deleted rather than relocated, because it is absent from the book; the problems-and-goals content it carried is already in S01's problems-and-goals node (book ch.1 'Identifying the Problems' / 'Setting Therapy Goals'). Same division of labour as S01: step order, completion, storage and safety in code, all wording left to Claude. The closing recap follows S01's 2026-09-21 session-recap exactly; the feedback request stays out. The research claim is stated with a plain-language source. Work is split into stages because doing it in one pass is less careful.",
+    "stageSeam": "The 15-type walkthrough and its worksheet ship together: the participant watches the table fill in. In the recording (15:00) the participant asks to write in it herself -- 'the screen share, can I not write in it now?' -- and at 43:00 reads the filled table back. Splitting the talk from the table would ship half a step.",
+    "researchCitation": "n04 research-evidence cites de Oliveira, Osorio, Sudak, Abreu, Crippa, Powell, Landeiro & Wenzel (2011), 'Initial psychometric properties of the Cognitive Distortions Questionnaire (CD-Quest)', ABCT 45th Annual Meeting, Toronto: Federal University of Bahia, 184 university students, CD-Quest vs depression (BDI) r=0.65 and anxiety (BAI) r=0.51. It is a CORRELATIONAL study, so the intent's keep rules forbid the causal claim the recording makes ('reducing distortions lowers depression'); mustMention pins the source and the sample.",
+    "manualDivergence": "REPORTED, not silently applied (.claude/rules/tbct-session-manual.md section 8). The RCT prompt manual has no CD-Quest section at all, so the 15-type nodes cite its S01 cognitive-distortions range [145,155], where the 15-type list and the 'never name a distortion for them' rule actually live. Stage 2's CD-Quest scoring has no source range to cite and will be reported the same way. The manual is left unchanged; the proper fix is the research team adding a CD-Quest section, after which artifacts/tbct-source-text.txt is regenerated.",
+    "boundaryCrossed": "src/patient/sessions/s01/cognitive-distortions.ts carried the comment 'Deliberately NOT shared-Runtime content: S02-S08 never import this file'. S02 needs the same 15-type registry, and its order is already exactly the order of the real session. The file is promoted to src/shared/protocol/cognitive-distortions.ts and s01 re-exports it, so every existing S01 import path and test keeps working. The boundary is crossed deliberately and recorded here, not silently.",
+    "scopeWidened2026_09_21": "src/shared/runtime/testing/session-fidelity-fixtures.ts added after the first local run: the synthetic patient had no reply pool for distortionExamples, so it cycled three generic sentences and every fourth pattern was rejected as a duplicate -- the walkthrough stalled and neither the audit nor the local run actually walked all fifteen patterns. Test support only; one additive reply pool.",
     "pastNotesLeftAlone": "note2026_09_19_s01_task_intents, note2026_09_19_s01_opening_intro and note2026_09_21_s01_closing_recap each list src/patient/sessions/s02/** under doNotTouch. Those entries record the scope of THOSE tasks and are left unchanged -- editing them would falsify what was permitted then. This note carries its own allowedPaths.",
-      "allowedPaths": [
-        ".claude/TASK_SCOPE.json",
-        "src/patient/sessions/s02/**",
-        "src/shared/protocol/cognitive-distortions.ts",
-        "src/patient/sessions/s01/cognitive-distortions.ts",
-        "src/patient/sessions/s01/distortion-table.tsx",
-        "src/shared/api/runtime-execution-api.ts",
-        "src/shared/dialogue-agent/dialogue-contract-compiler.ts",
-        "src/shared/dialogue-agent/task-intent.test.ts",
-        "src/shared/runtime/runtime-release-normalizer.ts",
-        "src/shared/runtime/runtime-context.ts",
-        "src/shared/runtime/session-continuity-bridge.test.ts",
-        "src/shared/worksheet/composed-worksheet-registry.ts",
-        "src/app/preview/worksheets/page.tsx",
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/patient/sessions/s02/**",
+      "src/shared/protocol/cognitive-distortions.ts",
+      "src/patient/sessions/s01/cognitive-distortions.ts",
+      "src/patient/sessions/s01/distortion-table.tsx",
+      "src/shared/api/runtime-execution-api.ts",
+      "src/shared/dialogue-agent/dialogue-contract-compiler.ts",
+      "src/shared/dialogue-agent/task-intent.test.ts",
+      "src/shared/runtime/runtime-release-normalizer.ts",
+      "src/shared/runtime/runtime-context.ts",
+      "src/shared/runtime/session-continuity-bridge.test.ts",
+      "src/shared/worksheet/composed-worksheet-registry.ts",
+      "src/app/preview/worksheets/page.tsx",
       "src/shared/runtime/testing/session-fidelity-fixtures.ts",
-        "src/shared/runtime/runtime-static-message.test.ts",
-        "src/shared/runtime/runtime-orchestrator.test.ts",
-        "src/types/homework.ts",
-        "src/shared/i18n/dictionaries/ko.ts",
-        "src/shared/i18n/dictionaries/en.ts",
-        "src/patient/pages/homework-page.tsx",
-        "src/clinician/pages/monitoring/session-progress-panel.tsx",
-        "src/clinician/pages/monitoring/session-progress-panel.test.ts",
-        "docs/ai/TBCT_SESSION_MAPPING.md",
-        "docs/ai/TBCT_SESSIONS_1_3.md"
-      ],
-      "doNotTouch": [
-        "src/shared/protocol/tbct-source-text.generated.ts",
-        "sql/**",
-        "src/patient/sessions/s01/spec.ts",
-        "src/patient/sessions/s01/messages.ts",
-        "src/patient/sessions/s01/task-intents.ts",
-        "src/patient/sessions/s03/**",
-        "src/patient/sessions/s04/**",
-        "src/patient/sessions/s05/**",
-        "src/patient/sessions/s06/**",
-        "src/patient/sessions/s07/**",
-        "src/patient/sessions/s08/**"
-      ],
-      "whySessionLocalIsInsufficient": {
-        "src/shared/api/runtime-execution-api.ts": "applyS01TurnRules is called behind a hard sessionDefinitionId === 'tbct-s01'. S02 needs its own turn rules for the agenda-consent flow, so the hook becomes a session -> rules registry.",
-        "src/shared/dialogue-agent/dialogue-contract-compiler.ts": "taskIntentFor and stepSpecificGuidanceFor are both gated on the same literal session id. Both become registries so s02/task-intents.ts and s02/dialogue-guidance.ts can be reached. Additive: a session without an entry behaves exactly as before.",
-        "src/shared/runtime/runtime-release-normalizer.ts": "PASSIVE_ACKNOWLEDGMENT_PROMPT_IDS is an exact-id set and 10 of its 11 entries are the S02 prompts being deleted. Without the new ids a participant's bare yes after a passive acknowledgement is rejected as filler.",
-        "src/shared/runtime/runtime-context.ts": "distortionExamples accumulates one entry per distortion type and allDistortionsReviewed drives the repeat_until loop. Field extraction only happens in shared code. Also removes now-dead exact S02 prompt-id references (goal-dream, the two rating-card checks, the discomfort/distress check).",
-        "src/shared/worksheet/composed-worksheet-registry.ts": "PATIENT_COMPOSED_WORKSHEET_SESSIONS holds S01 only; the participant must see the 15-type table fill in. One entry added."
-      },
-      "blastRadius": "S02 end to end -- its spec, wording, worksheet and tests are replaced. Other sessions: the four shared changes are additive registries or exact-id sets, so a session with no registry entry behaves byte-for-byte as before. The protected field names problems/problemRatings/goals/goalRatings stay in the codebase for the clinician progress view, homework UI and score aggregation; S02 simply stops writing them, which leaves those consumers with no S02 data until stage 3.",
-      "stage3Scope2026_09_21": "Stage 3 takes the session's shape out to the screens AROUND the session, which still assume CCPH/CCGH: s02/homework.tsx (a blank CD-Quest form, the practice the recording hands out at 53:30) plus its test, the tbct-s02 homework label in types/homework.ts, the homework.s02.* dictionary keys, the homework page's case, and the clinician progress panel's tbct-s02 item/score pair. Each is one line or one mapping apart from the homework component itself. Nothing in the runtime changes.",
-      "stage3ProtectedFields2026_09_21": "problems / problemRatings / goals / goalRatings stay named in the manual's protected list. Stage 1 left the NAMES alone because the clinician panel, the homework UI and score aggregation reference them as strings, where a rename raises no compile error. Stage 3 removes S02's last consumers of them but MUST re-count the remaining references before judging any cleanup, and must not delete a name another session still reads.",
-      "stage2Done2026_09_21": "CD-Quest shipped: 4 nodes (cdquest-intro, cdquest-scoring, cdquest-total, direction), the book's Table A1 grid in s02/turn-rules.ts (score = frequency + intensity - 1, 0 if it did not occur), score/frequency/intensity columns on the worksheet, and the total written when the fifteenth score lands. closing moved n06->n10 and safety-pause n07->n11. Shared files: 0 behaviour changes -- only the test fixture (session-fidelity-fixtures.ts, already in scope) and 3 renumbered prompt ids in two shared tests.",
-      "stage2FieldNaming": "The scoring prompt's outputField is cdQuestItemScore (one item's score), NOT the accumulated cdQuestScores list. A field named in outputFields is overwritten with the raw answer text by the shared extraction (runtime-context.ts, the expectedFields.length === 1 branch), which wiped the list on every turn whose answer contained a digit. Keeping the list out of outputFields leaves it entirely to s02/turn-rules.ts. cdQuestFrequency/cdQuestIntensity/cdQuestTotal are written the same way. No protected identifier was renamed.",
-      "stage2FixtureCarveOut": "session-fidelity-fixtures.ts: cdQuestItemScore joins participationRatingStable in FREE_TEXT_DESPITE_NUMERIC_NAME. A field name containing 'score' otherwise gets a bare number, which answers neither half of the CD-Quest question, so every scoring turn was a clarification and the loop never advanced. Test fixture only; no runtime behaviour.",
-      "stage3Done2026_09_21": "s02/homework.tsx is now the CD-Quest form (CdQuestHomework), with the grid and the row order shared with the session via cdquest-form.tsx + shared/protocol/cognitive-distortions.ts. Entries are cdquest_round, schemaVersion 1, one entry per round holding all fifteen rows. Earlier scores stay hidden until the round is complete, per the book's re-rating rule. types/homework.ts labels tbct-s02 CD-Quest (category unchanged: ongoing); the homework.s02.* dictionary keys were rewritten in both locales; homework-page.tsx points at the new component; the clinician progress tab reads distortionExamples/cdQuestScores and its keys are pinned against the S02 bindings by a new test. The worksheet preview fixture was also stale (it filled problems/goals, which match no binding any more, so the S02 preview drew an empty table) and now shows a mid-round CD-Quest.",
-      "stage3ProtectedFieldsVerdict2026_09_21": "Counted after stage 3: problems / problemRatings / goals / goalRatings are still referenced in 15 files outside s02 -- runtime-context.ts (14 references), assessment-providers.ts (5), runtime-input-assessment.ts, runtime-execution-api.ts, dialogue-contract-compiler.ts, assessment-contract.ts and their tests. Nothing was removed or renamed. The protected list in .claude/rules/tbct-session-manual.md stands as written.",
-      "knownGapBetweenStages": "Until stage 2, S02 assigns the S01-style homework (keep the 15-type list nearby and add examples) rather than the blank CD-Quest form the recording hands out, and the session ends after the walkthrough. Until stage 3, types/homework.ts still labels tbct-s02 'Check-in' and the clinician progress panel still lists problems/goals for it.",
-      "baseline2026_09_21": "main 47fe283 in ~/Desktop/TBCT: tsc 0 errors; vitest 82 files / 956 tests pass; audit:sessions 8/8 pass, 0 fallbacks (S01 50 participant / 61 program turns).",
-      "regressionPlan": "npx tsc --noEmit; npx vitest run src/patient/sessions/s02; npx vitest run src/shared/dialogue-agent src/shared/runtime src/shared/worksheet; npx vitest run (full, shared files changed); npm run audit:sessions; npx tsx scripts/run-local-session.ts tbct-s02; npm run lint; git diff --stat.",
-      "planFile": "/Users/hyeranhwang/.claude/plans/2-melodic-biscuit.md"
-    }
+      "src/shared/runtime/runtime-static-message.test.ts",
+      "src/shared/runtime/runtime-orchestrator.test.ts",
+      "src/types/homework.ts",
+      "src/shared/i18n/dictionaries/ko.ts",
+      "src/shared/i18n/dictionaries/en.ts",
+      "src/patient/pages/homework-page.tsx",
+      "src/clinician/pages/monitoring/session-progress-panel.tsx",
+      "src/clinician/pages/monitoring/session-progress-panel.test.ts",
+      "docs/ai/TBCT_SESSION_MAPPING.md",
+      "docs/ai/TBCT_SESSIONS_1_3.md"
+    ],
+    "doNotTouch": [
+      "src/shared/protocol/tbct-source-text.generated.ts",
+      "sql/**",
+      "src/patient/sessions/s01/spec.ts",
+      "src/patient/sessions/s01/messages.ts",
+      "src/patient/sessions/s01/task-intents.ts",
+      "src/patient/sessions/s03/**",
+      "src/patient/sessions/s04/**",
+      "src/patient/sessions/s05/**",
+      "src/patient/sessions/s06/**",
+      "src/patient/sessions/s07/**",
+      "src/patient/sessions/s08/**"
+    ],
+    "whySessionLocalIsInsufficient": {
+      "src/shared/api/runtime-execution-api.ts": "applyS01TurnRules is called behind a hard sessionDefinitionId === 'tbct-s01'. S02 needs its own turn rules for the agenda-consent flow, so the hook becomes a session -> rules registry.",
+      "src/shared/dialogue-agent/dialogue-contract-compiler.ts": "taskIntentFor and stepSpecificGuidanceFor are both gated on the same literal session id. Both become registries so s02/task-intents.ts and s02/dialogue-guidance.ts can be reached. Additive: a session without an entry behaves exactly as before.",
+      "src/shared/runtime/runtime-release-normalizer.ts": "PASSIVE_ACKNOWLEDGMENT_PROMPT_IDS is an exact-id set and 10 of its 11 entries are the S02 prompts being deleted. Without the new ids a participant's bare yes after a passive acknowledgement is rejected as filler.",
+      "src/shared/runtime/runtime-context.ts": "distortionExamples accumulates one entry per distortion type and allDistortionsReviewed drives the repeat_until loop. Field extraction only happens in shared code. Also removes now-dead exact S02 prompt-id references (goal-dream, the two rating-card checks, the discomfort/distress check).",
+      "src/shared/worksheet/composed-worksheet-registry.ts": "PATIENT_COMPOSED_WORKSHEET_SESSIONS holds S01 only; the participant must see the 15-type table fill in. One entry added."
+    },
+    "blastRadius": "S02 end to end -- its spec, wording, worksheet and tests are replaced. Other sessions: the four shared changes are additive registries or exact-id sets, so a session with no registry entry behaves byte-for-byte as before. The protected field names problems/problemRatings/goals/goalRatings stay in the codebase for the clinician progress view, homework UI and score aggregation; S02 simply stops writing them, which leaves those consumers with no S02 data until stage 3.",
+    "stage3Scope2026_09_21": "Stage 3 takes the session's shape out to the screens AROUND the session, which still assume CCPH/CCGH: s02/homework.tsx (a blank CD-Quest form, the practice the recording hands out at 53:30) plus its test, the tbct-s02 homework label in types/homework.ts, the homework.s02.* dictionary keys, the homework page's case, and the clinician progress panel's tbct-s02 item/score pair. Each is one line or one mapping apart from the homework component itself. Nothing in the runtime changes.",
+    "stage3ProtectedFields2026_09_21": "problems / problemRatings / goals / goalRatings stay named in the manual's protected list. Stage 1 left the NAMES alone because the clinician panel, the homework UI and score aggregation reference them as strings, where a rename raises no compile error. Stage 3 removes S02's last consumers of them but MUST re-count the remaining references before judging any cleanup, and must not delete a name another session still reads.",
+    "stage2Done2026_09_21": "CD-Quest shipped: 4 nodes (cdquest-intro, cdquest-scoring, cdquest-total, direction), the book's Table A1 grid in s02/turn-rules.ts (score = frequency + intensity - 1, 0 if it did not occur), score/frequency/intensity columns on the worksheet, and the total written when the fifteenth score lands. closing moved n06->n10 and safety-pause n07->n11. Shared files: 0 behaviour changes -- only the test fixture (session-fidelity-fixtures.ts, already in scope) and 3 renumbered prompt ids in two shared tests.",
+    "stage2FieldNaming": "The scoring prompt's outputField is cdQuestItemScore (one item's score), NOT the accumulated cdQuestScores list. A field named in outputFields is overwritten with the raw answer text by the shared extraction (runtime-context.ts, the expectedFields.length === 1 branch), which wiped the list on every turn whose answer contained a digit. Keeping the list out of outputFields leaves it entirely to s02/turn-rules.ts. cdQuestFrequency/cdQuestIntensity/cdQuestTotal are written the same way. No protected identifier was renamed.",
+    "stage2FixtureCarveOut": "session-fidelity-fixtures.ts: cdQuestItemScore joins participationRatingStable in FREE_TEXT_DESPITE_NUMERIC_NAME. A field name containing 'score' otherwise gets a bare number, which answers neither half of the CD-Quest question, so every scoring turn was a clarification and the loop never advanced. Test fixture only; no runtime behaviour.",
+    "stage3Done2026_09_21": "s02/homework.tsx is now the CD-Quest form (CdQuestHomework), with the grid and the row order shared with the session via cdquest-form.tsx + shared/protocol/cognitive-distortions.ts. Entries are cdquest_round, schemaVersion 1, one entry per round holding all fifteen rows. Earlier scores stay hidden until the round is complete, per the book's re-rating rule. types/homework.ts labels tbct-s02 CD-Quest (category unchanged: ongoing); the homework.s02.* dictionary keys were rewritten in both locales; homework-page.tsx points at the new component; the clinician progress tab reads distortionExamples/cdQuestScores and its keys are pinned against the S02 bindings by a new test. The worksheet preview fixture was also stale (it filled problems/goals, which match no binding any more, so the S02 preview drew an empty table) and now shows a mid-round CD-Quest.",
+    "stage3ProtectedFieldsVerdict2026_09_21": "Counted after stage 3: problems / problemRatings / goals / goalRatings are still referenced in 15 files outside s02 -- runtime-context.ts (14 references), assessment-providers.ts (5), runtime-input-assessment.ts, runtime-execution-api.ts, dialogue-contract-compiler.ts, assessment-contract.ts and their tests. Nothing was removed or renamed. The protected list in .claude/rules/tbct-session-manual.md stands as written.",
+    "knownGapBetweenStages": "Until stage 2, S02 assigns the S01-style homework (keep the 15-type list nearby and add examples) rather than the blank CD-Quest form the recording hands out, and the session ends after the walkthrough. Until stage 3, types/homework.ts still labels tbct-s02 'Check-in' and the clinician progress panel still lists problems/goals for it.",
+    "baseline2026_09_21": "main 47fe283 in ~/Desktop/TBCT: tsc 0 errors; vitest 82 files / 956 tests pass; audit:sessions 8/8 pass, 0 fallbacks (S01 50 participant / 61 program turns).",
+    "regressionPlan": "npx tsc --noEmit; npx vitest run src/patient/sessions/s02; npx vitest run src/shared/dialogue-agent src/shared/runtime src/shared/worksheet; npx vitest run (full, shared files changed); npm run audit:sessions; npx tsx scripts/run-local-session.ts tbct-s02; npm run lint; git diff --stat.",
+    "planFile": "/Users/hyeranhwang/.claude/plans/2-melodic-biscuit.md"
+  },
+  "note2026_09_22_patient_ui_overhaul": {
+    "task": "Full visual/layout/interaction redesign of the patient-facing UI per docs/ai/HANDOVER_2026-09-22_patient-ui-redesign.md. User explicitly expanded scope beyond S01-S03 to cover the whole patient app shell (home journey, session-complete aha-moment, in-session input controls, profile). Explicit instruction: proceed autonomously, no further scope confirmation needed, deliver a polished result.",
+    "constraint": "Visual/layout/interaction only -- no API/DB schema, session transition logic, safety logic, or protected-field changes. Never touch clinician-only files or shared global design tokens (tailwind.config.ts, globals.css :root tokens, primitives.tsx) since those are shared with the clinician app and outside this task's blast radius.",
+    "plan": [
+      "patient-session-complete-page.tsx: wire the already-built-but-unused getPatientProgressSeries + SessionProgressChart into an animated before/after aha-moment hero (dead code discovered during exploration, zero shared-logic risk)",
+      "patient-list-page.tsx: export SESSION_TITLES for reuse, entrance animation polish on the journey dots",
+      "patient-profile-page.tsx + new patient/components/toggle-switch.tsx: replace raw checkboxes with toggle switches, card grouping",
+      "patient-input-controls.tsx: visual-only polish (bigger touch targets, boolean emoji buttons) -- applies uniformly to all S01-S08 since this is genuinely shared input-rendering infra, not session content; no kind/branching/field logic changed",
+      "shared/i18n/dictionaries/{en,ko}.ts: additive-only new keys for the new hero copy"
+    ],
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/patient/pages/patient-session-complete-page.tsx",
+      "src/patient/pages/patient-list-page.tsx",
+      "src/patient/pages/patient-profile-page.tsx",
+      "src/patient/components/toggle-switch.tsx",
+      "src/patient/components/patient-input-controls.tsx",
+      "src/shared/i18n/dictionaries/en.ts",
+      "src/shared/i18n/dictionaries/ko.ts",
+      "docs/ai/HANDOVER_2026-09-22_patient-ui-redesign.md",
+      ".claude/launch.json",
+      "src/shared/mocks/patient-dev-mock.ts"
+    ]
+  }
 }

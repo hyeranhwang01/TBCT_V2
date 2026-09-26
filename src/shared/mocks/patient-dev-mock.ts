@@ -30,6 +30,7 @@ import { getOrCreateParticipantForUiLocale } from "@/shared/api/participant-api"
 import { createCanonicalTestRuntimeSession } from "@/shared/api/runtime-session-api";
 import { updateRuntimeSessionRecord } from "@/shared/data/repositories/runtime-session-repository";
 import { ensureHomeworkRecord } from "@/shared/data/repositories/homework-repository";
+import { projectRuntimeFieldsToWorksheet } from "@/shared/worksheet/worksheet-projection";
 import { HOMEWORK_LABEL_BY_SESSION, type HomeworkStatus } from "@/types/homework";
 import type { RuntimeSessionStatus } from "@/types/runtime-session";
 
@@ -96,6 +97,20 @@ async function seed() {
         sessionDefinitionId: seedSession.sessionDefinitionId,
         participantId: participant.id,
         initialStatus: seedSession.homeworkStatus,
+      });
+    }
+    // s03's completed run gets real worksheet field values so the
+    // patient-session-complete-page.tsx "before -> after" hero has something
+    // to chart locally: `status: "completed"` above only forces the session
+    // ROW, it never runs the real node graph, so without this the belief
+    // fields getPatientProgressSeries looks for are simply absent and the
+    // hero silently falls back to its generic (no-chart) copy -- exactly
+    // like every real session that hasn't reached this pair of fields yet.
+    if (seedSession.sessionDefinitionId === "tbct-s03" && seedSession.status === "completed") {
+      await projectRuntimeFieldsToWorksheet({
+        runtimeSessionId: session.id,
+        sessionDefinitionId: "tbct-s03",
+        fields: { automaticThoughtBeliefPercent: 80, revisedAutomaticThoughtBeliefPercent: 35 },
       });
     }
   }

@@ -55,9 +55,17 @@ export function PatientInputControls({
   }
   if (kind === "single_choice") {
     return (
-      <div className="grid gap-2">
+      <div className="grid gap-2.5">
         {choices.map((choice) => (
-          <Button key={choice} variant="secondary" disabled={disabled} onClick={() => onSubmit({ kind: "single_choice", value: choice })}>{choiceLabel(choice, locale)}</Button>
+          <Button
+            key={choice}
+            variant="secondary"
+            disabled={disabled}
+            className="h-auto justify-start whitespace-normal px-4 py-3 text-left text-[15px] leading-snug"
+            onClick={() => onSubmit({ kind: "single_choice", value: choice })}
+          >
+            {choiceLabel(choice, locale)}
+          </Button>
         ))}
       </div>
     );
@@ -76,9 +84,13 @@ export function PatientInputControls({
   }
   if (kind === "boolean") {
     return (
-      <div className="flex gap-2">
-        <Button variant="secondary" disabled={disabled} onClick={() => onSubmit({ kind: "boolean", value: true })}>{isKorean ? "네" : "Yes"}</Button>
-        <Button variant="secondary" disabled={disabled} onClick={() => onSubmit({ kind: "boolean", value: false })}>{isKorean ? "아니요" : "No"}</Button>
+      <div className="grid grid-cols-2 gap-3">
+        <Button variant="secondary" disabled={disabled} className="h-14 flex-col gap-1 text-base" onClick={() => onSubmit({ kind: "boolean", value: true })}>
+          <span className="text-xl" aria-hidden="true">🙆</span>{isKorean ? "네" : "Yes"}
+        </Button>
+        <Button variant="secondary" disabled={disabled} className="h-14 flex-col gap-1 text-base" onClick={() => onSubmit({ kind: "boolean", value: false })}>
+          <span className="text-xl" aria-hidden="true">🙅</span>{isKorean ? "아니요" : "No"}
+        </Button>
       </div>
     );
   }
@@ -258,7 +270,7 @@ function ChoiceRow({ disabled, options, locale, onSelect }: { disabled?: boolean
   return (
     <div className="flex flex-wrap gap-2">
       {options.map((option) => (
-        <Button key={option} variant="secondary" disabled={disabled} onClick={() => onSelect(option)}>
+        <Button key={option} variant="secondary" disabled={disabled} className="h-auto px-4 py-2.5 text-[15px]" onClick={() => onSelect(option)}>
           {choiceLabel(option, locale)}
         </Button>
       ))}
@@ -276,7 +288,14 @@ function MultiChoiceInput({ choices, disabled, locale, onSubmit }: { choices: st
     <div className="grid gap-3">
       <div className="flex flex-wrap gap-2">
         {choices.map((choice) => (
-          <Button key={choice} type="button" variant={selected.includes(choice) ? "primary" : "secondary"} disabled={disabled} onClick={() => toggle(choice)}>
+          <Button
+            key={choice}
+            type="button"
+            variant={selected.includes(choice) ? "primary" : "secondary"}
+            disabled={disabled}
+            className="h-auto px-4 py-2.5 text-[15px]"
+            onClick={() => toggle(choice)}
+          >
             {choiceLabel(choice, locale)}
           </Button>
         ))}
