@@ -10,6 +10,10 @@ export function injectLongitudinalMemory(current: RuntimeContext, memories: Long
       activeHomework: memories.filter((memory) => memory.memoryType === "homework_assignment").map((memory) => memory.content),
       relevantBarriers: memories.filter((memory) => memory.memoryType === "barrier").map((memory) => memory.content),
       copingStrategies: memories.filter((memory) => memory.memoryType === "coping_strategy").map((memory) => memory.content),
+      // Every selected memory with its id, in retrieval order -- the source
+      // of DialogueContract.participantMemory (dialogue-contract-compiler.ts)
+      // and of the per-turn injectedMemoryIds record.
+      items: memories.map((memory) => ({ id: memory.id, type: memory.memoryType, content: memory.content })),
     },
   };
 }

@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "prompts:build": "node scripts/render-prompt-pdf.mjs && node scripts/extract-prompt-text.mjs && node scripts/generate-session-prompts.mjs",
     "audit:sessions": "vite-node -c vitest.config.ts scripts/audit-sessions-01-08.ts",
     "audit:sessions:constrained": "vite-node -c vitest.config.ts scripts/audit-sessions-01-08-constrained.ts"
   },

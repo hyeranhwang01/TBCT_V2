@@ -1,3 +1,4 @@
+import { memoryAllowedOnTurn, resolveLongitudinalMemoryPolicy } from "@/shared/memory/memory-policy";
 import type { ClinicalStageNode, PromptItem } from "@/shared/protocol/source-fidelity-types";
 import type { RuntimePromptItem } from "@/types/protocol-runtime";
 import type { RuntimeMessage, RuntimeSession } from "@/types/runtime-session";
@@ -7,10 +8,6 @@ import { resolveBracketPlaceholders } from "@/shared/runtime/runtime-static-mess
 import type { DialogueContract, ExpectedInputType } from "@/shared/dialogue-agent/dialogue-agent-contract";
 import { dialogueContractSchema } from "@/shared/dialogue-agent/dialogue-agent-contract";
 import type { WorksheetBinding, WorksheetValueType } from "@/types/worksheet";
-import { isS01SummaryCheckForbidden, s01DialogueGuidance } from "@/patient/sessions/s01/dialogue-guidance";
-import { resolveS01TaskIntent, s01TaskIntentsEnabled } from "@/patient/sessions/s01/task-intents";
-import { isS02SummaryCheckForbidden, s02DialogueGuidance } from "@/patient/sessions/s02/dialogue-guidance";
-import { resolveS02TaskIntent, s02TaskIntentsEnabled } from "@/patient/sessions/s02/task-intents";
 
 // Pattern-based, session-agnostic construct terminology. Keyed by field-NAME
 // shape rather than an exact per-session map, because the same construct
@@ -149,6 +146,28 @@ function confirmedStateFor(session: RuntimeSession, node: ClinicalStageNode, tar
     if (fields[key] !== undefined && fields[key] !== "") state[key] = fields[key];
   }
   return state;
+}
+
+/** Longitudinal memory for THIS turn (.claude/TASK_SCOPE.json
+ * note2026_09_13_ari_memory_pipeline_plumbing). The session object arrives
+ * with the node's retrieved, clinician-approved memories already on
+ * runtimeContext.longitudinalMemory (runtime-execution-api.ts
+ * executeCurrentNode -> memory-context-injector.ts); this is the only place
+ * that reads them into the contract. WHICH turns may carry it is the PI's
+ * decision, not this file's: memory-policy.ts's injectionScope decides,
+ * given this turn's ownership facts. The default scope withholds memory
+ * entirely -- not trimmed -- whenever the turn asks for participant-owned
+ * content or the node is responsible for a protected field (S02/S03
+ * identifiers): the Patient Authorship Invariant (note2026_09_05) forbids
+ * the assistant from supplying, suggesting or completing such content, and
+ * a prior-session memory is exactly the kind of material it could be
+ * smoothed from. Whatever the scope, memory never enters confirmedState. */
+function participantMemoryFor(session: RuntimeSession, participantOwned: boolean, nodeRequiresProtectedField: boolean) {
+  const policy = resolveLongitudinalMemoryPolicy();
+  if (!memoryAllowedOnTurn(policy.injectionScope, { participantOwned, nodeRequiresProtectedField })) return undefined;
+  const items = session.runtimeContext.longitudinalMemory?.items ?? [];
+  const usable = items.filter((item) => item.id && item.content.trim());
+  return usable.length ? usable.map((item) => ({ id: item.id, type: item.type, content: item.content })) : undefined;
 }
 
 function choiceOptionsFor(promptItem: PromptItem) {
@@ -311,12 +330,7 @@ const SUMMARY_CHECK_FORBIDDEN_VALIDATION_KINDS: ReadonlySet<string> = new Set(["
 export function summaryCheckForbiddenFor(sourcePromptItem: PromptItem): boolean {
   const kind = (sourcePromptItem.validation as { kind?: unknown } | null)?.kind;
   return SUMMARY_CHECK_FORBIDDEN_PROMPT_IDS.has(sourcePromptItem.id)
-    || (typeof kind === "string" && SUMMARY_CHECK_FORBIDDEN_VALIDATION_KINDS.has(kind))
-    // S01/S02 ids are positional and get renumbered by their redesigns
-    // (note2026_09_12_s01_redesign, note2026_09_21_s02_cognitive_distortions),
-    // so their forbidden steps are matched by slug.
-    || (sourcePromptItem.sessionId === "tbct-s01" && isS01SummaryCheckForbidden(sourcePromptItem.id))
-    || (sourcePromptItem.sessionId === "tbct-s02" && isS02SummaryCheckForbidden(sourcePromptItem.id));
+    || (typeof kind === "string" && SUMMARY_CHECK_FORBIDDEN_VALIDATION_KINDS.has(kind));
 }
 
 /** Exported for the catalog-integrity test only (every id must exist). */
@@ -335,24 +349,18 @@ export function stepSpecificGuidanceFor(sourcePromptItem: PromptItem): string[] 
   return all.length ? all : undefined;
 }
 
-// Per-session step guidance and task intents. Both were a hard
-// `=== "tbct-s01"` until S02 got the same treatment
-// (.claude/TASK_SCOPE.json note2026_09_21_s02_cognitive_distortions). A session
-// with no entry is unchanged: no guidance appended, and no task intent, so its
-// turns stay grounded on the approved sentence exactly as before.
-const DIALOGUE_GUIDANCE_BY_SESSION: Partial<Record<string, (promptItemId: string) => string[]>> = {
-  "tbct-s01": s01DialogueGuidance,
-  "tbct-s02": s02DialogueGuidance,
-};
+// Per-session step guidance and task intents. S01 and S02 were the only
+// entries; both are prompt-driven now (.claude/TASK_SCOPE.json
+// note2026_09_25_prompt_driven_s01_s02) and never compile a dialogue
+// contract. A session with no entry gets no guidance appended and no task
+// intent, so its turns stay grounded on the approved sentence.
+const DIALOGUE_GUIDANCE_BY_SESSION: Partial<Record<string, (promptItemId: string) => string[]>> = {};
 type ResolvedTaskIntent = Omit<NonNullable<DialogueContract["taskIntent"]>, "asksParticipant">;
 type SessionTaskIntentResolver = {
   enabled: () => boolean;
   resolve: (promptItemId: string, locale: string, context: { fields?: Record<string, unknown> }) => ResolvedTaskIntent | undefined;
 };
-const TASK_INTENTS_BY_SESSION: Partial<Record<string, SessionTaskIntentResolver>> = {
-  "tbct-s01": { enabled: s01TaskIntentsEnabled, resolve: resolveS01TaskIntent },
-  "tbct-s02": { enabled: s02TaskIntentsEnabled, resolve: resolveS02TaskIntent },
-};
+const TASK_INTENTS_BY_SESSION: Partial<Record<string, SessionTaskIntentResolver>> = {};
 
 function taskIntentFor(sourcePromptItem: PromptItem, session: RuntimeSession, asksParticipant: boolean): DialogueContract["taskIntent"] {
   const resolver = TASK_INTENTS_BY_SESSION[sourcePromptItem.sessionId];
@@ -469,6 +477,7 @@ export function compileDialogueContract(input: {
     nodeRequiresProtectedField,
     worksheetEditAvailable: hasWorksheetBindings(session.sessionDefinitionId),
     confirmedState: confirmedStateFor(session, node, targetField),
+    participantMemory: participantMemoryFor(session, ownership.participantOwned, nodeRequiresProtectedField),
     // Named to exactly match dialogueResponseTypeSchema's responseType enum
     // (dialogue-agent-contract.ts), not a separate vocabulary -- these used
     // to be free-standing action names ("ask_current_task",

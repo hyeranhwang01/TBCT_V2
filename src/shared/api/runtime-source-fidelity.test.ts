@@ -78,44 +78,14 @@ describe("canonical source-fidelity runtime", () => {
     expect(session.sessionDefinitionId).toBe("tbct-s08");
   });
 
-  it("does not mistake Korean readiness for a problem and accepts the patient's actual problem without repetition", async () => {
-    const previousProvider = process.env.AI_PROVIDER;
-    process.env.AI_PROVIDER = "mock";
-    try {
-      // The list-collecting step is where a bare acknowledgement must not be
-      // mistaken for content. Before the 2026-09-21 S02 redesign that step was
-      // the problems question; it is now the fifteen-pattern walkthrough, whose
-      // field is likewise validation.kind "array".
-      const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s02", locale: "ko-KR" });
-      await startRuntimeSession(session.id);
-      for (const answer of ["틈틈이 적어봤는데 어떤 유형인지 고르는 게 어려웠어요", "네"]) {
-        const view = await getRuntimeSession(session.id);
-        await submitPatientInput(session.id, view?.session.currentPromptItemId?.includes("-today-agenda") ? { kind: "boolean", value: true } : { kind: "text", value: answer });
-      }
-      const before = await getRuntimeSession(session.id);
-      const listPromptId = before?.session.currentPromptItemId;
-      expect(listPromptId).toContain("-review-distortion");
-
-      await submitPatientInput(session.id, { kind: "text", value: "네 알겠습니다." });
-      const afterReadiness = await getRuntimeSession(session.id);
-      expect(afterReadiness?.session.runtimeContext.fields.distortionExamples).toBeUndefined();
-      expect(afterReadiness?.session.currentPromptItemId).toBe(listPromptId);
-
-      const actualExample = "제 생각에는 저는 포기하는 용기가 없는 것 같아요";
-      await submitPatientInput(session.id, { kind: "text", value: actualExample });
-      const afterExample = await getRuntimeSession(session.id);
-      expect(afterExample?.session.runtimeContext.fields.distortionExamples).toEqual([actualExample]);
-    } finally {
-      if (previousProvider === undefined) delete process.env.AI_PROVIDER;
-      else process.env.AI_PROVIDER = previousProvider;
-    }
-  }, 15_000);
-
+  // S01 and S02 are prompt-driven (note2026_09_25_prompt_driven_s01_s02), so
+  // the node engine's own behaviours below are checked on S04, whose first
+  // prompt is an ordinary free-text question.
   it("keeps the active PromptItem and sends a clarification when a patient sends a greeting or gibberish", async () => {
     const previousProvider = process.env.AI_PROVIDER;
     process.env.AI_PROVIDER = "mock";
     try {
-      const session = await createCanonicalTestRuntimeSession();
+      const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s04" });
       await startRuntimeSession(session.id);
       const before = await getRuntimeSession(session.id);
       const activePromptItemId = before?.session.currentPromptItemId;
@@ -171,7 +141,7 @@ describe("canonical source-fidelity runtime", () => {
     const previousProvider = process.env.AI_PROVIDER;
     process.env.AI_PROVIDER = "mock";
     try {
-      const session = await createCanonicalTestRuntimeSession();
+      const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s04" });
       await startRuntimeSession(session.id);
       const before = await getRuntimeSession(session.id);
       const expectedSessionVersion = before?.session.version ?? 0;
@@ -198,7 +168,7 @@ describe("canonical source-fidelity runtime", () => {
     const previousProvider = process.env.AI_PROVIDER;
     process.env.AI_PROVIDER = "mock";
     try {
-      const session = await createCanonicalTestRuntimeSession();
+      const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s04" });
       await startRuntimeSession(session.id);
       const before = await getRuntimeSession(session.id);
       const activePromptItemId = before?.session.currentPromptItemId;
@@ -231,7 +201,7 @@ describe("canonical source-fidelity runtime", () => {
     const previousProvider = process.env.AI_PROVIDER;
     process.env.AI_PROVIDER = "mock";
     try {
-      const session = await createCanonicalTestRuntimeSession({ locale: "en-US" });
+      const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s04", locale: "en-US" });
       await startRuntimeSession(session.id);
       const before = await getRuntimeSession(session.id);
       const activePromptItemId = before?.session.currentPromptItemId;
@@ -263,7 +233,7 @@ describe("canonical source-fidelity runtime", () => {
     const previousProvider = process.env.AI_PROVIDER;
     process.env.AI_PROVIDER = "mock";
     try {
-      const session = await createCanonicalTestRuntimeSession();
+      const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s04" });
       await startRuntimeSession(session.id);
 
       await submitPatientInput(session.id, { kind: "text", value: "hi" });
@@ -309,7 +279,7 @@ describe("canonical source-fidelity runtime", () => {
     const previousProvider = process.env.AI_PROVIDER;
     process.env.AI_PROVIDER = "mock";
     try {
-      const session = await createCanonicalTestRuntimeSession();
+      const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s04" });
       await startRuntimeSession(session.id);
       const delivered = await getRuntimeSession(session.id);
       expect(delivered?.session.status).toBe("waiting_for_input");
@@ -336,7 +306,7 @@ describe("canonical source-fidelity runtime", () => {
     const previousProvider = process.env.AI_PROVIDER;
     process.env.AI_PROVIDER = "mock";
     try {
-      const session = await createCanonicalTestRuntimeSession();
+      const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s04" });
       await startRuntimeSession(session.id);
       await expect(retryStalledRuntimeNode(session.id)).rejects.toThrow(/not allowed/);
     } finally {
@@ -427,7 +397,7 @@ describe("canonical source-fidelity runtime", () => {
     const previousProvider = process.env.AI_PROVIDER;
     process.env.AI_PROVIDER = "mock";
     try {
-      await runProtocolValidation("TBCT-BR-001", "tbct-s01");
+      await runProtocolValidation("TBCT-BR-001", "tbct-s04");
       const published = await publishProtocolRelease("TBCT-BR-001", {
         version: `runtime-progress-${Date.now()}`,
         targetEnvironment: "development",
@@ -437,20 +407,18 @@ describe("canonical source-fidelity runtime", () => {
         projectId: "TBCT-BR-001",
         protocolId: "TBCT-BR-001",
         releaseId: published.release.id,
-        sessionDefinitionId: "tbct-session-01",
+        sessionDefinitionId: "tbct-session-04",
         patientAlias: "TBCT-DEMO-002",
         locale: "en-US",
       });
 
       await startRuntimeSession(session.id);
-      // S01 opens with today's order and a yes/no consent (note2026_09_19_s01_opening_intro).
-      await submitPatientInput(session.id, { kind: "boolean", value: true });
       const before = await getRuntimeSession(session.id);
       const answeredPromptId = before?.session.currentPromptItemId;
       const assistantMessageCountBefore = before?.messages.filter((message) => message.role === "assistant").length ?? 0;
       expect(answeredPromptId).toBeDefined();
 
-      const result = await submitPatientInput(session.id, { kind: "text", value: "This is a current situation, not only an interpretation." });
+      const result = await submitPatientInput(session.id, { kind: "text", value: "My partner cancelled our plans at the last minute yesterday." });
       const after = await getRuntimeSession(session.id);
       const traces = await listRuntimeExecutionTraces(session.id);
       const assistantMessages = after?.messages.filter((message) => message.role === "assistant") ?? [];
@@ -461,7 +429,9 @@ describe("canonical source-fidelity runtime", () => {
       expect(after?.session.runtimeState?.activeNodeId).toBe(after?.session.currentNodeId);
       expect(after?.session.runtimeState?.activePromptItemId).toBe(after?.session.currentPromptItemId);
       expect(result.turnOutcome).toBe("normal");
-      expect(assistantMessages).toHaveLength(assistantMessageCountBefore + 1);
+      // S04 follows an accepted answer with a passive message and the next
+      // question, so the count can grow by more than one.
+      expect(assistantMessages.length).toBeGreaterThan(assistantMessageCountBefore);
       expect(latestAssistantMessage?.nodeId).toBe(after?.session.currentNodeId);
       expect(latestAssistantMessage?.promptItemId).toBe(after?.session.currentPromptItemId);
       expect(traces.length).toBeGreaterThan(0);
@@ -480,55 +450,20 @@ describe("canonical source-fidelity runtime", () => {
     // WorksheetPane (which only re-checks on its own poll or on an explicit
     // cache invalidation right after this same call) could visibly lag behind
     // what the patient had just answered. This asserts the field this exact
-    // input fills (tbct-s01's situationThoughtDistinction, the first patient
-    // turn of the canonical S01 flow -- see "keeps release-pinned runtime
-    // state aligned..." above for the same input/field pairing) is already
+    // input fills (tbct-s04's interpersonalSituation, the first patient turn
+    // of the canonical S04 flow) is already
     // reflected in getWorksheetView the instant submitPatientInput resolves,
     // with no wait/poll of any kind in between.
     const previousProvider = process.env.AI_PROVIDER;
     process.env.AI_PROVIDER = "mock";
     try {
-      const session = await createCanonicalTestRuntimeSession();
+      const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s04" });
       await startRuntimeSession(session.id);
-      // S01 opens with today's order and a yes/no consent (note2026_09_19_s01_opening_intro).
-      await submitPatientInput(session.id, { kind: "boolean", value: true });
+      await submitPatientInput(session.id, { kind: "text", value: "My partner cancelled our plans at the last minute yesterday." });
+      const view = await getWorksheetView(session.id, "tbct-s04");
+      const situationField = view?.fields.find((field) => field.definition.worksheetFieldKey === "interpersonalSituation");
 
-      // S01 redesign (note2026_09_12): the first S01 answer is now the first
-      // difficulty, bound to the "My difficulties" worksheet list.
-      await submitPatientInput(session.id, { kind: "text", value: "This is a current situation, not only an interpretation." });
-      const view = await getWorksheetView(session.id, "tbct-s01");
-      const problemsField = view?.fields.find((field) => field.definition.worksheetFieldKey === "s01Problems");
-
-      expect(problemsField?.value?.value).toBeTruthy();
-    } finally {
-      if (previousProvider === undefined) delete process.env.AI_PROVIDER;
-      else process.env.AI_PROVIDER = previousProvider;
-    }
-  }, 15_000);
-
-  it("does not let the next S01 answer overwrite the participant's earlier answer", async () => {
-    // Replaces the old situation-or-thought overwrite regression test: that
-    // unconditional re-ask no longer exists in the S01 redesign
-    // (note2026_09_12_s01_redesign). The same guarantee -- a later answer
-    // never overwrites an earlier one -- is checked on the first two S01
-    // answers here; src/patient/sessions/s01/spec.test.ts checks that the raw
-    // situation answer survives the participant's own one-line version.
-    const previousProvider = process.env.AI_PROVIDER;
-    process.env.AI_PROVIDER = "mock";
-    try {
-      const session = await createCanonicalTestRuntimeSession();
-      await startRuntimeSession(session.id);
-      // S01 opens with today's order and a yes/no consent (note2026_09_19_s01_opening_intro).
-      await submitPatientInput(session.id, { kind: "boolean", value: true });
-
-      await submitPatientInput(session.id, { kind: "text", value: "I worry about everything at work." });
-      await submitPatientInput(session.id, { kind: "text", value: "Yesterday I kept re-reading one email for an hour." });
-
-      const view = await getWorksheetView(session.id, "tbct-s01");
-      const problemsField = view?.fields.find((field) => field.definition.worksheetFieldKey === "s01Problems");
-
-      expect(JSON.stringify(problemsField?.value?.value)).toContain("I worry about everything at work.");
-      expect(JSON.stringify(problemsField?.value?.value)).not.toContain("re-reading one email");
+      expect(situationField?.value?.value).toBeTruthy();
     } finally {
       if (previousProvider === undefined) delete process.env.AI_PROVIDER;
       else process.env.AI_PROVIDER = previousProvider;

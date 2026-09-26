@@ -4,6 +4,8 @@ import { dispatchWorksheetStoreOp } from "@/shared/data/server/worksheet-store";
 import { dispatchSafetyStoreOp } from "@/shared/data/server/safety-monitoring-store";
 import { dispatchParticipantStoreOp } from "@/shared/data/server/participant-store";
 import { dispatchHomeworkStoreOp } from "@/shared/data/server/homework-store";
+import { dispatchProtocolStudioStoreOp } from "@/shared/data/server/protocol-studio-store";
+import { PROTOCOL_STUDIO_STORE_ENDPOINT } from "@/shared/runtime/protocol-studio-store-ops";
 import { RUNTIME_STORE_ENDPOINT } from "@/shared/runtime/runtime-store-ops";
 import { WORKSHEET_STORE_ENDPOINT } from "@/shared/runtime/worksheet-store-ops";
 import { SAFETY_STORE_ENDPOINT } from "@/shared/runtime/safety-store-ops";
@@ -48,6 +50,11 @@ const IN_PROCESS_STORES = new Map<string, (op: never) => Promise<unknown>>([
   [SAFETY_STORE_ENDPOINT, dispatchSafetyStoreOp as (op: never) => Promise<unknown>],
   [PARTICIPANT_STORE_ENDPOINT, dispatchParticipantStoreOp as (op: never) => Promise<unknown>],
   [HOMEWORK_STORE_ENDPOINT, dispatchHomeworkStoreOp as (op: never) => Promise<unknown>],
+  // Audit log (saveAuditEntry): the memory pipeline writes one audit entry
+  // per summary/candidate/approval on the server turn (memory-helpers.ts
+  // recordMemoryAudit). Same auth reasoning as the five above -- reached
+  // only from inside the already-authenticated turn.
+  [PROTOCOL_STUDIO_STORE_ENDPOINT, dispatchProtocolStudioStoreOp as (op: never) => Promise<unknown>],
 ]);
 
 const authenticatedFetch: InternalFetch = async (input, init = {}) => {

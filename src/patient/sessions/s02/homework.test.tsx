@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { LocaleProvider, UI_LOCALE_STORAGE_KEY } from "@/shared/i18n/context";
 import { COGNITIVE_DISTORTIONS } from "@/shared/protocol/cognitive-distortions";
-import { cdQuestScore } from "@/patient/sessions/s02/turn-rules";
+import { cdQuestScore } from "@/patient/sessions/s02/cdquest-score";
 import {
   CDQUEST_ROUND_ENTRY_TYPE,
   CdQuestForm,

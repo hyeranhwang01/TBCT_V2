@@ -1,4 +1,5 @@
 import { getProtocolRelease, getProtocolReleases } from "@/shared/data/repositories/protocol-repository";
+import { PROMPT_FOCUS_FIELD, PROMPT_INPUT_HINT, isPromptDrivenSession } from "@/shared/runtime/prompt-driven-sessions";
 import {
   CANONICAL_PROTOCOL_ID,
   CANONICAL_PROMPT_ITEMS,
@@ -362,7 +363,9 @@ export async function getPatientRuntimeSession(sessionId: string): Promise<Patie
       runtimeContext: { riskLevel: hydratedSession.runtimeContext.riskLevel },
     },
     currentNode: currentNode ? { id: currentNode.id, title: currentNode.title } : undefined,
-    currentPromptInput: currentPromptItem
+    currentPromptInput: isPromptDrivenSession(hydratedSession.sessionDefinitionId) && currentPromptItem
+      ? promptDrivenInput(hydratedSession.runtimeContext.fields)
+      : currentPromptItem
       ? reflectionCheckOpen
         ? { type: "question", validation: null, outputFields: currentPromptItem.outputFields }
         : { type: currentPromptItem.type, validation: currentPromptItem.validation, outputFields: currentPromptItem.outputFields }
@@ -370,6 +373,24 @@ export async function getPatientRuntimeSession(sessionId: string): Promise<Patie
     messages,
     hasSafetyReview: hydratedSession.status === "safety_paused" || hydratedSession.status === "escalated",
   } satisfies PatientRuntimeSessionView;
+}
+
+// Prompt-driven sessions (.claude/TASK_SCOPE.json
+// note2026_09_25_prompt_driven_s01_s02) have one prompt for the whole
+// conversation, so the input control and the worksheet highlight come from
+// what the model said about its last message (prompt-session-api.ts stores
+// them) rather than from a prompt item. The patient page needs no change.
+function promptDrivenInput(fields: Record<string, unknown>): NonNullable<PatientRuntimeSessionView["currentPromptInput"]> {
+  const hint = fields[PROMPT_INPUT_HINT];
+  const focus = typeof fields[PROMPT_FOCUS_FIELD] === "string" ? [fields[PROMPT_FOCUS_FIELD] as string] : [];
+  const validation = hint === "yes_no"
+    ? { kind: "boolean" }
+    : hint === "rating_0_100"
+      ? { kind: "rating", min: 0, max: 100 }
+      : hint === "score_0_5"
+        ? { kind: "rating", min: 0, max: 5 }
+        : null;
+  return { type: validation?.kind === "rating" ? "rating" : "question", validation, outputFields: focus };
 }
 
 export async function listRuntimeSessions() {

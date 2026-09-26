@@ -1,6 +1,20 @@
 import type { AuditEntry } from "@/types";
 import type { MemorySensitivity, MemoryType } from "@/types/longitudinal-memory";
 import { makeId } from "@/shared/id";
+import { saveAuditEntry } from "@/shared/data/repositories/audit-log-repository";
+
+/** Writes a memory-pipeline audit entry to the Neon audit log and never
+ * throws: an audit write must not be able to fail a patient's last turn
+ * (completeRuntimeSession) or a clinician's approval click. These used to
+ * be direct Dexie auditEntries.put(...) calls, which threw on the server
+ * (no IndexedDB in Node). A failure is logged so it is visible, not lost. */
+export async function recordMemoryAudit(input: Partial<AuditEntry> & Pick<AuditEntry, "action" | "resource" | "version">): Promise<void> {
+  try {
+    await saveAuditEntry(createMemoryAuditEntry(input));
+  } catch (error) {
+    console.warn("[memory] audit entry not saved", { action: input.action, resource: input.resource, error: error instanceof Error ? error.message : String(error) });
+  }
+}
 
 export function createMemoryAuditEntry(input: Partial<AuditEntry> & Pick<AuditEntry, "action" | "resource" | "version">): AuditEntry {
   const now = new Date().toISOString();

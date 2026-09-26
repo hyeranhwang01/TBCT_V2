@@ -254,6 +254,21 @@ export function systemPromptBlocks(contract: DialogueContract): { stable: string
     contract.scaleExplanation ? `Scale meaning if asked: ${contract.scaleExplanation}` : "",
     contract.stepSpecificGuidance?.length ? `Protocol rules for this step (mandatory):\n${contract.stepSpecificGuidance.map((rule) => `- ${rule}`).join("\n")}` : "",
     contract.clinicianGuidance ? `The clinical team's note for this step: ${contract.clinicianGuidance}` : "",
+    // Longitudinal memory: same additive-only layer as the clinical team's
+    // note above, and the same rule -- nothing here can loosen a hard rule.
+    // These are clinician-approved SYSTEM SUMMARIES of earlier sessions,
+    // never the participant's words in this conversation, which is why the
+    // instruction forbids quoting or re-confirming them and why they are not
+    // in confirmedState. The compiler omits participantMemory entirely on
+    // any turn that asks for participant-owned content.
+    ...(contract.participantMemory?.length
+      ? [
+          "",
+          "Reference context from this participant's EARLIER sessions (clinician-approved system summaries, NOT things the participant said in this conversation):",
+          ...contract.participantMemory.map((memory) => `- [${memory.type}] ${memory.content}`),
+          "Use this only to make your framing continuous with their earlier work (e.g. not re-explaining something they already worked on). Do not quote it, summarize it back to them, or ask them to confirm it; do not present it as something they said today; and it never changes the current task, its expected input, or any rule above.",
+        ]
+      : []),
     `Expected answer for this turn: ${contract.expectedInputType}${contract.choiceOptions?.length ? ` (options: ${contract.choiceOptions.join(" / ")})` : ""}. Only ask for a number or mention a scale when this turn expects a rating.`,
     `Confirmed so far (refer to it naturally, never recite it): ${JSON.stringify(contract.confirmedState)}`,
     contract.isFirstPromptOfSession

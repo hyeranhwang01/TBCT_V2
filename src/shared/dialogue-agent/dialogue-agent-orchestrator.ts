@@ -1,3 +1,4 @@
+import { resolveLongitudinalMemoryPolicy } from "@/shared/memory/memory-policy";
 import type { ClinicalStageNode, PromptItem } from "@/shared/protocol/source-fidelity-types";
 import type { RuntimePromptItem } from "@/types/protocol-runtime";
 import type { RuntimeMessage, RuntimeSession } from "@/types/runtime-session";
@@ -96,6 +97,14 @@ export type DialogueAgentTurnResult = {
   fallbackReason?: string;
   provider: string;
   model?: string;
+  // Ids of the approved longitudinal memories that were in this turn's
+  // contract (contract.participantMemory) -- recorded on the assistant
+  // message metadata so an audit can reconstruct which prior-session
+  // memories the model saw on any given turn. Absent when none were.
+  injectedMemoryIds?: string[];
+  /** Version of the memory policy (memory-policy.ts) that decided the
+   * injection above -- set only when injectedMemoryIds is. */
+  memoryPolicyVersion?: string;
   latencyMs?: number;
   // Set only when the shipped text ends in a confirmation the runtime must
   // wait for -- the caller opens a pending check from it. Never set on a
@@ -182,6 +191,8 @@ export async function resolveDialogueAgentMessage(input: {
   });
   const context = { sessionId: input.session.id, turnId: input.turnId };
 
+  const injectedMemoryIds = contract.participantMemory?.length ? contract.participantMemory.map((memory) => memory.id) : undefined;
+  const memoryPolicyVersion = injectedMemoryIds ? resolveLongitudinalMemoryPolicy().version : undefined;
   const result = await callDialogueAgent(contract, context);
   if (result.failed) {
     // An environment with no dialogue provider configured is running
@@ -190,7 +201,7 @@ export async function resolveDialogueAgentMessage(input: {
     // back FROM. Counting it as a fallback made every turn of a provider-free
     // run look like a quality regression and hid the real fallbacks among them.
     const notConfigured = result.notConfigured === true;
-    return { patientMessage: input.deterministicFallbackText, decision: result.decision, usedFallback: !notConfigured, fallbackReason: notConfigured ? "dialogue_provider_not_configured" : result.failureReason, provider: result.provider };
+    return { patientMessage: input.deterministicFallbackText, decision: result.decision, usedFallback: !notConfigured, fallbackReason: notConfigured ? "dialogue_provider_not_configured" : result.failureReason, provider: result.provider, injectedMemoryIds, memoryPolicyVersion };
   }
   let decision = result.decision;
   let validation = validateDialogueDecision(decision, contract);
@@ -228,7 +239,7 @@ export async function resolveDialogueAgentMessage(input: {
       }
     }
     if (gaps.length) {
-      return { patientMessage: input.deterministicFallbackText, decision, usedFallback: true, fallbackReason: "task_intent_missing_content", provider, model, latencyMs, guardLogs: [...validation.guardLogs, ...fidelityLogs] };
+      return { patientMessage: input.deterministicFallbackText, decision, usedFallback: true, fallbackReason: "task_intent_missing_content", provider, model, latencyMs, guardLogs: [...validation.guardLogs, ...fidelityLogs] , injectedMemoryIds, memoryPolicyVersion };
     }
   }
 
@@ -262,13 +273,13 @@ export async function resolveDialogueAgentMessage(input: {
       }
     }
     if (fidelity.checked && !fidelity.faithful) {
-      return { patientMessage: input.deterministicFallbackText, decision, usedFallback: true, fallbackReason: "summary_added_meaning", provider, model, latencyMs, guardLogs: [...(validation.guardLogs ?? []), ...fidelityLogs] };
+      return { patientMessage: input.deterministicFallbackText, decision, usedFallback: true, fallbackReason: "summary_added_meaning", provider, model, latencyMs, guardLogs: [...(validation.guardLogs ?? []), ...fidelityLogs] , injectedMemoryIds, memoryPolicyVersion };
     }
     if (summary) recordable = fidelity.checked && !fidelity.tentative;
   }
 
   if (!validation.accepted) {
-    return { patientMessage: input.deterministicFallbackText, decision, usedFallback: true, fallbackReason: validation.reason, provider, model, latencyMs, guardLogs: [...validation.guardLogs, ...fidelityLogs] };
+    return { patientMessage: input.deterministicFallbackText, decision, usedFallback: true, fallbackReason: validation.reason, provider, model, latencyMs, guardLogs: [...validation.guardLogs, ...fidelityLogs] , injectedMemoryIds, memoryPolicyVersion };
   }
   const summaryCheck = validation.summaryCheck ? { ...validation.summaryCheck, ...(recordable === undefined ? {} : { recordable }) } : undefined;
   return {
@@ -282,5 +293,7 @@ export async function resolveDialogueAgentMessage(input: {
     exploration: validation.exploration,
     patientThemes: decision.patientThemes ? keepVerbatimThemes(decision.patientThemes, participantTexts) : undefined,
     guardLogs: [...validation.guardLogs, ...fidelityLogs],
+    injectedMemoryIds,
+    memoryPolicyVersion,
   };
 }

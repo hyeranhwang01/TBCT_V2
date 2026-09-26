@@ -1,5 +1,6 @@
 import type { ClinicalStageNode, PromptItem } from "@/shared/protocol/source-fidelity-types";
 import type { RuntimeSessionStatus } from "@/types/runtime-session";
+import { isPromptDrivenSession, promptSessionFieldSet } from "@/shared/runtime/prompt-driven-sessions";
 
 /** Estimates how far through the current session's prompt sequence a
  * patient is, as a 0-100 percentage for the progress bar in
@@ -21,8 +22,19 @@ export function computeSessionProgressPercent(input: {
   completedPromptItemIds: string[];
   skippedPromptItemIds: string[];
   sessionStatus: RuntimeSessionStatus;
+  /** The session's recorded values -- used for prompt-driven sessions, which
+   * have one prompt for the whole conversation (note2026_09_25_prompt_driven_s01_s02). */
+  fields?: Record<string, unknown>;
 }): number | undefined {
   if (input.sessionStatus === "completed" || input.sessionStatus === "terminated") return 100;
+  if (isPromptDrivenSession(input.sessionDefinitionId)) {
+    const specs = promptSessionFieldSet(input.sessionDefinitionId).fields;
+    const filled = specs.filter((spec) => {
+      const value = input.fields?.[spec.name];
+      return Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null && value !== "";
+    }).length;
+    return Math.min(Math.round((filled / specs.length) * 100), 95);
+  }
 
   const relevantNodeIds = new Set(
     input.nodes.filter((node) => node.sessionId === input.sessionDefinitionId && node.type !== "clinician_escalation").map((node) => node.id),

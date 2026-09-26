@@ -25,7 +25,7 @@ function minimalSession(overrides: Partial<RuntimeSession> = {}): RuntimeSession
     protocolId: "tbct-br-001",
     protocolVersion: "1",
     releaseId: "release-1",
-    sessionDefinitionId: "tbct-s01",
+    sessionDefinitionId: "tbct-s03",
     participantId: "participant-1",
     status: "waiting_for_input",
     patientAlias: "Synthetic",
@@ -57,15 +57,20 @@ function minimalRuntimePromptItem(overrides: Partial<RuntimePromptItem> = {}): R
   };
 }
 
-describe("dialogue contract compiler: generic classification (S01/S02 fields)", () => {
-  it("marks a real content field (candidateOneEmotion) as participant-owned and assistantMustNotSupply", () => {
-    // S01's Neutral Example was simplified so the automatic thought is
-    // stated by the counselor (recorded deterministically via
-    // completionEffect) rather than elicited from the participant -- see
-    // .claude/TASK_SCOPE.json's note2026_08_17 entry. candidateOneEmotion is
-    // now the first genuinely participant-owned field in this node.
-    const node = CANONICAL_STAGE_NODES.find((item) => item.sessionId === "tbct-s01" && item.title.includes("First Person"))!;
-    const promptItem = CANONICAL_PROMPT_ITEMS.find((item) => item.id.includes("candidate-one-emotion"))!;
+// S01 and S02 are prompt-driven (note2026_09_25_prompt_driven_s01_s02) and
+// never compile a dialogue contract, so the generic cases below use S03.
+function s03Prompt(slug: string) {
+  const promptItem = CANONICAL_PROMPT_ITEMS.find((item) => item.sessionId === "tbct-s03" && item.id.endsWith(`-${slug}`))!;
+  const node = CANONICAL_STAGE_NODES.find((item) => item.id === promptItem.nodeId)!;
+  return { node, promptItem };
+}
+// No S03-S08 node carries a participantRationale; the mechanism is generic, so
+// the rationale is set on a real S03 node here.
+const RATIONALE = "Picking one concrete moment helps separate what actually happened from the thought your mind added about it.";
+
+describe("dialogue contract compiler: generic classification", () => {
+  it("marks a real content field (primaryEmotion) as participant-owned and assistantMustNotSupply", () => {
+    const { node, promptItem } = s03Prompt("primary-emotion");
     expect(node).toBeDefined();
     expect(promptItem).toBeDefined();
 
@@ -80,23 +85,18 @@ describe("dialogue contract compiler: generic classification (S01/S02 fields)", 
       isFirstPromptOfSession: false,
     });
 
-    expect(contract.targetField).toBe("candidateOneEmotion");
+    expect(contract.targetField).toBe("primaryEmotion");
     expect(contract.participantOwned).toBe(true);
     expect(contract.assistantMustNotSupply).toBe(true);
-    // S01 now has a reviewed worksheet-binding registry entry (tbct-s01.ts).
+    // S03 has a reviewed worksheet-binding registry entry.
     expect(contract.worksheetEditAvailable).toBe(true);
     // Pattern-based terminology should recognize "Emotion" in the field name.
     expect(contract.expectedConstruct).toContain("feeling");
   });
 
-  it("marks an administrative gate field (distortionsIntroductionAcknowledged) as not participant-owned", () => {
-    // S01's cognitive-distortions node no longer gates on a physical list
-    // (distortionListAvailable/confirm-list removed -- see
-    // .claude/TASK_SCOPE.json's note2026_08_17d entry); its remaining
-    // administrative field is the intro-distortions delivery marker.
-    const node = CANONICAL_STAGE_NODES.find((item) => item.sessionId === "tbct-s01" && item.title.includes("Cognitive Distortions"))!;
-    const promptItem = CANONICAL_PROMPT_ITEMS.find((item) => item.id.includes("intro-distortions"))!;
-    expect(promptItem.outputFields).toContain("distortionsIntroductionAcknowledged");
+  it("marks an administrative gate field (redirectionContractAcknowledged) as not participant-owned", () => {
+    const { node, promptItem } = s03Prompt("redirection-contract");
+    expect(promptItem.outputFields).toContain("redirectionContractAcknowledged");
 
     const contract = compileDialogueContract({
       session: minimalSession(),
@@ -140,18 +140,8 @@ describe("dialogue contract compiler: generic classification (S01/S02 fields)", 
   });
 
   it("carries the node's participantRationale through to the contract", () => {
-    const node = CANONICAL_STAGE_NODES.find((item) => item.sessionId === "tbct-s01" && item.title.includes("Own Situation"))!;
-    // Not outputFields.includes("situationThoughtDistinction") -- this
-    // node's own "situation-or-thought" prompt no longer declares that
-    // outputField (see source-fidelity-catalog.ts's fix comment on it); it
-    // was an unconditional re-ask of the *same* field a genuinely
-    // conditional clarification (like specific-moment/emotion-to-thought-redirect)
-    // would use, and it silently overwrote the participant's real situation
-    // answer with whatever they said in reply to "is that a situation or a
-    // thought?" instead. Locate it by slug, same as other tests in this
-    // file do for prompts with no output field to search by.
-    const promptItem = CANONICAL_PROMPT_ITEMS.find((item) => item.nodeId === node.id && item.id.includes("recent-moment"))!;
-
+    const { node: q1, promptItem } = s03Prompt("describe-situation");
+    const node = { ...q1, participantRationale: RATIONALE };
     const contract = compileDialogueContract({
       session: minimalSession(),
       node,
@@ -219,13 +209,9 @@ describe("revision_request: honest handling depends on worksheetEditAvailable", 
     // registry entry, so this exercises the still-real "no worksheet"
     // branch with a session id the registry has never heard of, rather than
     // pretending a real session has no worksheet. The node/promptItem are
-    // still a real S01 pair -- compileDialogueContract looks up bindings by
+    // still a real S03 pair -- compileDialogueContract looks up bindings by
     // session.sessionDefinitionId independently of node.sessionId.
-    const node = CANONICAL_STAGE_NODES.find((item) => item.sessionId === "tbct-s01" && item.title.includes("Own Situation"))!;
-    // No outputFields on this node's own prompt to search by (see the fix
-    // comment on "situation-or-thought" in source-fidelity-catalog.ts) --
-    // locate it by slug instead, same as the earlier test in this file does.
-    const promptItem = CANONICAL_PROMPT_ITEMS.find((item) => item.nodeId === node.id && item.id.includes("recent-moment"))!;
+    const { node, promptItem } = s03Prompt("describe-situation");
     const contract = compileDialogueContract({
       session: minimalSession({ sessionDefinitionId: "unregistered-session-definition" }),
       node,
@@ -248,11 +234,11 @@ describe("revision_request: honest handling depends on worksheetEditAvailable", 
 
 describe("transition framing signals (isFirstPromptOfSession / isFirstPromptOfNode / isRoleTransitionPrompt)", () => {
   it("passes isFirstPromptOfSession and isFirstPromptOfNode through as given by the caller", () => {
-    const node = CANONICAL_STAGE_NODES.find((item) => item.sessionId === "tbct-s02")!;
+    const node = CANONICAL_STAGE_NODES.find((item) => item.sessionId === "tbct-s03")!;
     const promptItem = CANONICAL_PROMPT_ITEMS.find((item) => item.nodeId === node.id)!;
 
     const sessionOpening = compileDialogueContract({
-      session: minimalSession({ sessionDefinitionId: "tbct-s02" }),
+      session: minimalSession({ sessionDefinitionId: "tbct-s03" }),
       node,
       sourcePromptItem: promptItem,
       runtimePromptItem: minimalRuntimePromptItem({ nodeId: node.id }),
@@ -265,7 +251,7 @@ describe("transition framing signals (isFirstPromptOfSession / isFirstPromptOfNo
     expect(sessionOpening.isFirstPromptOfNode).toBe(true);
 
     const midSessionTurn = compileDialogueContract({
-      session: minimalSession({ sessionDefinitionId: "tbct-s02" }),
+      session: minimalSession({ sessionDefinitionId: "tbct-s03" }),
       node,
       sourcePromptItem: promptItem,
       runtimePromptItem: minimalRuntimePromptItem({ nodeId: node.id }),
@@ -297,9 +283,8 @@ describe("transition framing signals (isFirstPromptOfSession / isFirstPromptOfNo
     });
     expect(roleTransitionContract.isRoleTransitionPrompt).toBe(true);
 
-    // An ordinary S01 prompt (not a role transition) must not be flagged.
-    const ordinaryNode = CANONICAL_STAGE_NODES.find((item) => item.sessionId === "tbct-s01" && item.title.includes("First Person"))!;
-    const ordinaryPrompt = CANONICAL_PROMPT_ITEMS.find((item) => item.id.includes("candidate-one-emotion"))!;
+    // An ordinary S03 prompt (not a role transition) must not be flagged.
+    const { node: ordinaryNode, promptItem: ordinaryPrompt } = s03Prompt("primary-emotion");
     const ordinaryContract = compileDialogueContract({
       session: minimalSession(),
       node: ordinaryNode,
@@ -316,11 +301,8 @@ describe("transition framing signals (isFirstPromptOfSession / isFirstPromptOfNo
 
 describe("explain_rationale: answers 'why are you asking this' using the node's own rationale", () => {
   it("uses participantRationale instead of the generic objective-based repair when one exists", () => {
-    const node = CANONICAL_STAGE_NODES.find((item) => item.sessionId === "tbct-s01" && item.title.includes("Own Situation"))!;
-    // No outputFields on this node's own prompt to search by (see the fix
-    // comment on "situation-or-thought" in source-fidelity-catalog.ts) --
-    // locate it by slug instead, same as the earlier test in this file does.
-    const promptItem = CANONICAL_PROMPT_ITEMS.find((item) => item.nodeId === node.id && item.id.includes("recent-moment"))!;
+    const { node: q1, promptItem } = s03Prompt("describe-situation");
+    const node = { ...q1, participantRationale: RATIONALE };
     const contract = compileDialogueContract({
       session: minimalSession(),
       node,

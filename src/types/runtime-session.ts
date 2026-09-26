@@ -74,6 +74,11 @@ export interface RuntimeContext {
     activeHomework: string[];
     relevantBarriers: string[];
     copingStrategies: string[];
+    /** The same selected memories with their ids and types, in retrieval
+     * order -- what dialogue-contract-compiler.ts puts on the contract
+     * (participantMemory) and what the turn log records. Optional so a
+     * session persisted before 2026-09-13 still parses. */
+    items?: Array<{ id: string; type: string; content: string }>;
   };
 }
 
