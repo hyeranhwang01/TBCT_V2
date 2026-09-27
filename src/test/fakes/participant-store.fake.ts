@@ -2,11 +2,7 @@ import type {
   GoalTrackingRecord,
   HomeworkTrackingRecord,
   LongitudinalMemory,
-  MemoryCandidate,
   MemoryConsentEvent,
-  MemoryRetrievalResult,
-  MemoryReviewDecision,
-  MemoryUsageLog,
   RuntimeParticipant,
   RuntimeSessionSummary,
 } from "@/types/longitudinal-memory";
@@ -25,10 +21,6 @@ import { fakeIsSupersededAttempt } from "@/test/fakes/runtime-session-store.fake
 const participants = new Map<string, RuntimeParticipant>();
 const memories = new Map<string, LongitudinalMemory>();
 const summaries = new Map<string, RuntimeSessionSummary>();
-const candidates = new Map<string, MemoryCandidate>();
-const reviewDecisions = new Map<string, MemoryReviewDecision>();
-const retrievalRuns = new Map<string, MemoryRetrievalResult>();
-const usageLogs = new Map<string, MemoryUsageLog>();
 const goalRecords = new Map<string, GoalTrackingRecord>();
 const homeworkRecords = new Map<string, HomeworkTrackingRecord>();
 const consentEvents: MemoryConsentEvent[] = [];
@@ -48,10 +40,6 @@ export function resetFakeParticipantStore() {
   participants.clear();
   memories.clear();
   summaries.clear();
-  candidates.clear();
-  reviewDecisions.clear();
-  retrievalRuns.clear();
-  usageLogs.clear();
   goalRecords.clear();
   homeworkRecords.clear();
   consentEvents.length = 0;
@@ -158,31 +146,6 @@ export async function dispatchFakeParticipantStoreOp(op: ParticipantStoreOp): Pr
       summaries.set(op.summaryId, clone(next));
       return next;
     }
-    case "listMemoryCandidates":
-      return op.participantId
-        ? sortedBy([...candidates.values()].filter((candidate) => candidate.participantId === op.participantId), (candidate) => candidate.updatedAt)
-        : sortedBy([...candidates.values()], (candidate) => candidate.updatedAt, "desc");
-    case "getMemoryCandidate": return candidates.has(op.candidateId) ? clone(candidates.get(op.candidateId)) : undefined;
-    case "saveMemoryCandidate": candidates.set(op.candidate.id, clone(op.candidate)); return op.candidate;
-    case "updateMemoryCandidate": {
-      const current = candidates.get(op.candidateId);
-      if (!current) throw new Error("Memory candidate not found");
-      const next = { ...current, ...op.patch, updatedAt: new Date().toISOString() };
-      candidates.set(op.candidateId, clone(next));
-      return next;
-    }
-    case "deleteMemoryCandidate": candidates.delete(op.candidateId); return undefined;
-    case "saveMemoryReviewDecision": reviewDecisions.set(op.decision.id, clone(op.decision)); return op.decision;
-    case "listMemoryReviewDecisions":
-      return sortedBy([...reviewDecisions.values()].filter((decision) => decision.memoryId === op.memoryId), (decision) => decision.createdAt);
-    case "saveMemoryRetrievalRun": retrievalRuns.set(op.run.id, clone(op.run)); return op.run;
-    case "listMemoryRetrievalRuns":
-      return sortedBy([...retrievalRuns.values()].filter((run) => run.runtimeSessionId === op.runtimeSessionId), (run) => run.createdAt);
-    case "saveMemoryUsageLog": usageLogs.set(op.log.id, clone(op.log)); return op.log;
-    case "listMemoryUsageLogs":
-      return sortedBy([...usageLogs.values()].filter((log) => log.runtimeSessionId === op.runtimeSessionId), (log) => log.createdAt);
-    case "listAllMemoryUsageLogs":
-      return sortedBy([...usageLogs.values()].filter((log) => log.participantId === op.participantId), (log) => log.createdAt);
     case "listGoalTrackingRecords":
       return sortedBy([...goalRecords.values()].filter((record) => record.participantId === op.participantId), (record) => record.updatedAt);
     case "saveGoalTrackingRecord": goalRecords.set(op.record.id, clone(op.record)); return op.record;

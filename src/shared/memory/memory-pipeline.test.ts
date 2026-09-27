@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { saveParticipant } from "@/shared/data/repositories/participant-repository";
 import {
   listLongitudinalMemories,
-  listMemoryCandidates,
   listHomeworkTrackingRecords,
   saveLongitudinalMemory,
 } from "@/shared/data/repositories/longitudinal-memory-repository";
@@ -122,7 +121,6 @@ describe("tracking from a stored session summary, without IndexedDB", () => {
 
     // Cross-session memory is the participant's own words now (chunks, with
     // consent), not candidates for clinician review.
-    expect(await listMemoryCandidates(PARTICIPANT_ID)).toEqual([]);
     expect((await getSessionSummary("SUM-1"))?.memoryCandidateIds).toEqual([]);
     expect(await listHomeworkTrackingRecords(PARTICIPANT_ID)).toMatchObject([{ description: "이번 주에 자동적 사고 3개 기록하기", status: "assigned" }]);
   });

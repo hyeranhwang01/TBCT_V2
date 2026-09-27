@@ -8,13 +8,9 @@ import type {
   GoalTrackingRecord,
   HomeworkTrackingRecord,
   LongitudinalMemory,
-  MemoryCandidate,
   MemoryConsentDecision,
   MemoryConsentEvent,
   MemoryConsentSource,
-  MemoryRetrievalResult,
-  MemoryReviewDecision,
-  MemoryUsageLog,
   RuntimeParticipant,
   RuntimeSessionSummary,
 } from "@/types/longitudinal-memory";
@@ -62,18 +58,6 @@ export type ParticipantStoreOp =
   | { op: "getSessionSummary"; summaryId: string }
   | { op: "saveSessionSummary"; summary: RuntimeSessionSummary }
   | { op: "updateSessionSummary"; summaryId: string; patch: Partial<RuntimeSessionSummary> }
-  | { op: "listMemoryCandidates"; participantId?: string }
-  | { op: "getMemoryCandidate"; candidateId: string }
-  | { op: "saveMemoryCandidate"; candidate: MemoryCandidate }
-  | { op: "updateMemoryCandidate"; candidateId: string; patch: Partial<MemoryCandidate> }
-  | { op: "deleteMemoryCandidate"; candidateId: string }
-  | { op: "saveMemoryReviewDecision"; decision: MemoryReviewDecision }
-  | { op: "listMemoryReviewDecisions"; memoryId: string }
-  | { op: "saveMemoryRetrievalRun"; run: MemoryRetrievalResult }
-  | { op: "listMemoryRetrievalRuns"; runtimeSessionId: string }
-  | { op: "saveMemoryUsageLog"; log: MemoryUsageLog }
-  | { op: "listMemoryUsageLogs"; runtimeSessionId: string }
-  | { op: "listAllMemoryUsageLogs"; participantId: string }
   | { op: "listGoalTrackingRecords"; participantId: string }
   | { op: "saveGoalTrackingRecord"; record: GoalTrackingRecord }
   | { op: "updateGoalTrackingRecord"; recordId: string; patch: Partial<GoalTrackingRecord> }

@@ -1,7 +1,7 @@
 import { makeId } from "@/shared/id";
 import { recordMemoryAudit } from "@/shared/memory/memory-helpers";
 import { generateDeterministicSessionSummary } from "@/shared/memory/session-summary-generator";
-import { saveGoalTrackingRecord, saveHomeworkTrackingRecord, updateMemoryCandidate } from "@/shared/data/repositories/longitudinal-memory-repository";
+import { saveGoalTrackingRecord, saveHomeworkTrackingRecord } from "@/shared/data/repositories/longitudinal-memory-repository";
 import { getSessionSummary, getSessionSummaryBySession, saveSessionSummary, updateSessionSummary } from "@/shared/data/repositories/session-summary-repository";
 import { getRuntimeSession } from "@/shared/api/runtime-session-api";
 
@@ -83,8 +83,4 @@ export async function recordSummaryTracking(summaryId: string) {
       }),
     ),
   );
-}
-
-export async function updateRuntimeMemoryCandidate(candidateId: string, patch: Parameters<typeof updateMemoryCandidate>[1]) {
-  return updateMemoryCandidate(candidateId, patch);
 }

@@ -368,3 +368,5 @@ One codebase, one Supabase project per country (KR, BR, FR), each with its own V
 5. Activate the study (`seed-trial.ts --country KR --activate --apply`). From then on AI sessions run only for allocated participants in AI arms with consent, on their frozen release.
 
 Analysis extract (per country, then concatenate the same-named files): `scripts/export-deidentified.ts --out ./extract-KR`. Retention: `scripts/purge-retention.ts` lists studies whose lock is older than the retention period; `--apply --confirm <study code>` erases their AI data.
+
+Unused tables are dropped by `sql/042_drop_unused_tables.sql`. A database that holds only test data can be emptied first with `scripts/reset-test-data.ts` (lists row counts; `--apply --confirm <host> --backup <dir>` saves every table to JSON, then empties all app tables; login accounts are not touched).

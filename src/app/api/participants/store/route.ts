@@ -80,18 +80,13 @@ async function isDeniedForPatient(op: ParticipantStoreOp, callerUserId: string):
   // decisions, summaries and tracking writes are clinician-only here.
   // Server-turn writes never reach this check (in-process dispatch, see
   // runtime-request-context.ts).
-  if (op.op === "listAllMemoryUsageLogs" || op.op === "listGoalTrackingRecords" || op.op === "listHomeworkTrackingRecords") {
+  if (op.op === "listGoalTrackingRecords" || op.op === "listHomeworkTrackingRecords") {
     const own = await getParticipantByAuthUserId(callerUserId);
     return !own || op.participantId !== own.id;
   }
-  if (op.op === "getSessionSummaryBySession" || op.op === "listMemoryRetrievalRuns" || op.op === "listMemoryUsageLogs") {
+  if (op.op === "getSessionSummaryBySession") {
     const [session, own] = await Promise.all([getRuntimeSessionRecord(op.runtimeSessionId), getParticipantByAuthUserId(callerUserId)]);
     return !session || !own || session.participantId !== own.id;
-  }
-  if (op.op === "saveMemoryRetrievalRun" || op.op === "saveMemoryUsageLog") {
-    const participantId = op.op === "saveMemoryRetrievalRun" ? op.run.participantId : op.log.participantId;
-    const own = await getParticipantByAuthUserId(callerUserId);
-    return !own || participantId !== own.id;
   }
   if (PATIENT_DENIED_MEMORY_PIPELINE_OPS.has(op.op)) return true;
   return false;
@@ -111,13 +106,6 @@ const PATIENT_DENIED_MEMORY_PIPELINE_OPS = new Set<ParticipantStoreOp["op"]>([
   "getSessionSummary",
   "saveSessionSummary",
   "updateSessionSummary",
-  "listMemoryCandidates",
-  "getMemoryCandidate",
-  "saveMemoryCandidate",
-  "updateMemoryCandidate",
-  "deleteMemoryCandidate",
-  "saveMemoryReviewDecision",
-  "listMemoryReviewDecisions",
   "saveGoalTrackingRecord",
   "updateGoalTrackingRecord",
   "saveHomeworkTrackingRecord",

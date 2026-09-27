@@ -3,11 +3,7 @@ import type {
   GoalTrackingRecord,
   HomeworkTrackingRecord,
   LongitudinalMemory,
-  MemoryCandidate,
   MemoryConsentEvent,
-  MemoryRetrievalResult,
-  MemoryReviewDecision,
-  MemoryUsageLog,
   RuntimeParticipant,
   RuntimeSessionSummary,
 } from "@/types/longitudinal-memory";
@@ -374,84 +370,6 @@ export async function updateSessionSummary(summaryId: string, patch: Partial<Run
   return next;
 }
 
-export async function listMemoryCandidates(participantId?: string): Promise<MemoryCandidate[]> {
-  return participantId
-    ? rowsData<MemoryCandidate>("SELECT data FROM memory_candidates WHERE participant_id = $1 ORDER BY updated_at ASC", [participantId])
-    : rowsData<MemoryCandidate>("SELECT data FROM memory_candidates ORDER BY updated_at DESC");
-}
-
-export async function getMemoryCandidate(candidateId: string): Promise<MemoryCandidate | undefined> {
-  return (await rowsData<MemoryCandidate>("SELECT data FROM memory_candidates WHERE id = $1", [candidateId]))[0];
-}
-
-export async function saveMemoryCandidate(candidate: MemoryCandidate) {
-  await getPgPool().query(
-    `INSERT INTO memory_candidates (id, participant_id, memory_type, status, source_session_id, created_at, updated_at, data)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-     ON CONFLICT (id) DO UPDATE SET participant_id=EXCLUDED.participant_id, memory_type=EXCLUDED.memory_type, status=EXCLUDED.status, source_session_id=EXCLUDED.source_session_id, updated_at=EXCLUDED.updated_at, data=EXCLUDED.data`,
-    [candidate.id, candidate.participantId, candidate.memoryType, candidate.status, candidate.sourceSessionId, candidate.createdAt, candidate.updatedAt, JSON.stringify(candidate)],
-  );
-  return candidate;
-}
-
-export async function updateMemoryCandidate(candidateId: string, patch: Partial<MemoryCandidate>): Promise<MemoryCandidate> {
-  const current = await getMemoryCandidate(candidateId);
-  if (!current) throw new Error("Memory candidate not found");
-  const next: MemoryCandidate = { ...current, ...patch, updatedAt: new Date().toISOString() };
-  await saveMemoryCandidate(next);
-  return next;
-}
-
-export async function deleteMemoryCandidate(candidateId: string) {
-  await getPgPool().query("DELETE FROM memory_candidates WHERE id = $1", [candidateId]);
-}
-
-export async function saveMemoryReviewDecision(decision: MemoryReviewDecision) {
-  await getPgPool().query(
-    `INSERT INTO memory_review_decisions (id, memory_id, participant_id, action, created_at, data)
-     VALUES ($1,$2,$3,$4,$5,$6)
-     ON CONFLICT (id) DO UPDATE SET memory_id=EXCLUDED.memory_id, participant_id=EXCLUDED.participant_id, action=EXCLUDED.action, data=EXCLUDED.data`,
-    [decision.id, decision.memoryId, decision.participantId, decision.action, decision.createdAt, JSON.stringify(decision)],
-  );
-  return decision;
-}
-
-export async function listMemoryReviewDecisions(memoryId: string): Promise<MemoryReviewDecision[]> {
-  return rowsData<MemoryReviewDecision>("SELECT data FROM memory_review_decisions WHERE memory_id = $1 ORDER BY created_at ASC", [memoryId]);
-}
-
-export async function saveMemoryRetrievalRun(run: MemoryRetrievalResult) {
-  await getPgPool().query(
-    `INSERT INTO memory_retrieval_runs (id, participant_id, runtime_session_id, created_at, data)
-     VALUES ($1,$2,$3,$4,$5)
-     ON CONFLICT (id) DO UPDATE SET data=EXCLUDED.data`,
-    [run.id, run.participantId, run.runtimeSessionId, run.createdAt, JSON.stringify(run)],
-  );
-  return run;
-}
-
-export async function listMemoryRetrievalRuns(runtimeSessionId: string): Promise<MemoryRetrievalResult[]> {
-  return rowsData<MemoryRetrievalResult>("SELECT data FROM memory_retrieval_runs WHERE runtime_session_id = $1 ORDER BY created_at ASC", [runtimeSessionId]);
-}
-
-export async function saveMemoryUsageLog(log: MemoryUsageLog) {
-  await getPgPool().query(
-    `INSERT INTO memory_usage_logs (id, memory_id, participant_id, runtime_session_id, created_at, data)
-     VALUES ($1,$2,$3,$4,$5,$6)
-     ON CONFLICT (id) DO UPDATE SET data=EXCLUDED.data`,
-    [log.id, log.memoryId, log.participantId, log.runtimeSessionId, log.createdAt, JSON.stringify(log)],
-  );
-  return log;
-}
-
-export async function listMemoryUsageLogs(runtimeSessionId: string): Promise<MemoryUsageLog[]> {
-  return rowsData<MemoryUsageLog>("SELECT data FROM memory_usage_logs WHERE runtime_session_id = $1 ORDER BY created_at ASC", [runtimeSessionId]);
-}
-
-export async function listAllMemoryUsageLogs(participantId: string): Promise<MemoryUsageLog[]> {
-  return rowsData<MemoryUsageLog>("SELECT data FROM memory_usage_logs WHERE participant_id = $1 ORDER BY created_at ASC", [participantId]);
-}
-
 export async function listGoalTrackingRecords(participantId: string): Promise<GoalTrackingRecord[]> {
   return rowsData<GoalTrackingRecord>("SELECT data FROM goal_tracking_records WHERE participant_id = $1 ORDER BY updated_at ASC", [participantId]);
 }
@@ -508,30 +426,6 @@ export async function dispatchParticipantStoreOp(op: ParticipantStoreOp): Promis
       return saveSessionSummary(op.summary);
     case "updateSessionSummary":
       return updateSessionSummary(op.summaryId, op.patch);
-    case "listMemoryCandidates":
-      return listMemoryCandidates(op.participantId);
-    case "getMemoryCandidate":
-      return getMemoryCandidate(op.candidateId);
-    case "saveMemoryCandidate":
-      return saveMemoryCandidate(op.candidate);
-    case "updateMemoryCandidate":
-      return updateMemoryCandidate(op.candidateId, op.patch);
-    case "deleteMemoryCandidate":
-      return deleteMemoryCandidate(op.candidateId);
-    case "saveMemoryReviewDecision":
-      return saveMemoryReviewDecision(op.decision);
-    case "listMemoryReviewDecisions":
-      return listMemoryReviewDecisions(op.memoryId);
-    case "saveMemoryRetrievalRun":
-      return saveMemoryRetrievalRun(op.run);
-    case "listMemoryRetrievalRuns":
-      return listMemoryRetrievalRuns(op.runtimeSessionId);
-    case "saveMemoryUsageLog":
-      return saveMemoryUsageLog(op.log);
-    case "listMemoryUsageLogs":
-      return listMemoryUsageLogs(op.runtimeSessionId);
-    case "listAllMemoryUsageLogs":
-      return listAllMemoryUsageLogs(op.participantId);
     case "listGoalTrackingRecords":
       return listGoalTrackingRecords(op.participantId);
     case "saveGoalTrackingRecord":
