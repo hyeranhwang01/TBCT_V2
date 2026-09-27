@@ -25,6 +25,9 @@ const ko = {
     },
   },
   adminUsers: {
+    pending: "의료진 승인 대기",
+    approveClinician: "의료진으로 승인",
+    revokeRole: "권한 해제",
     title: "계정 관리",
     description: "가입된 모든 임상의/환자 계정입니다. 계정을 정지하면 로그인만 막히고 연결된 데이터는 그대로 유지됩니다.",
     updated: "계정이 업데이트되었습니다",
@@ -40,6 +43,14 @@ const ko = {
     },
   },
   auth: {
+    pending: {
+      title: "의료진 승인 대기 중",
+      body: "의료진 계정은 관리자가 승인한 뒤에 사용할 수 있습니다. 승인되면 다시 로그인해 주세요.",
+    },
+    noRole: {
+      title: "사용 권한이 없는 계정",
+      body: "이 계정에는 아직 역할이 주어지지 않았습니다. 담당 연구팀에 문의해 주세요.",
+    },
     clinicianTitle: "의료진 로그인",
     patientTitle: "환자 로그인",
     patientWelcome: "환영합니다! 계정으로 로그인하여 맞춤형 치료를 시작하세요.",

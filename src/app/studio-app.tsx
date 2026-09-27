@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { LoaderCircle } from "lucide-react";
 import type { ComponentType } from "react";
 import { useAuth } from "@/shared/auth/auth-context";
+import { AccessPending } from "@/shared/components/auth/access-pending";
 
 const AssetsPage = dynamic(() => import("@/clinician/pages/protocol-studio/assets-page").then((mod) => mod.AssetsPage), { ssr: false });
 const ClinicalAssetRegistrationPage = dynamic(() => import("@/clinician/pages/protocol-studio/clinical-asset-registration-page").then((mod) => mod.ClinicalAssetRegistrationPage), { ssr: false });
@@ -168,7 +169,7 @@ function FullPageSpinner() {
 export function StudioApp() {
   const pathname = usePathname();
   const router = useRouter();
-  const { role, loading } = useAuth();
+  const { role, loading, user } = useAuth();
   const route = studioRoutes.find(({ matches }) => matches(pathname));
   // The "Protocol Overview" dashboard used to be the fallback for any
   // unmatched path (including "/" and the old "/dashboard" URL). It's been
@@ -186,11 +187,17 @@ export function StudioApp() {
     (audience === "clinician" && (role === "clinician" || role === "admin")) ||
     (audience === "admin" && role === "admin");
 
-  useEffect(() => {
-    if (loading || audience === "public" || authorized) return;
-    router.replace(audience === "patient" ? "/patient/login" : "/login");
-  }, [loading, audience, authorized, router]);
+  // Signed in but no granted role (a clinician signup awaiting approval):
+  // a notice, not a redirect -- sending them to the login page they just
+  // came through would loop.
+  const signedInWithoutRole = !loading && Boolean(user) && !role;
 
+  useEffect(() => {
+    if (loading || audience === "public" || authorized || signedInWithoutRole) return;
+    router.replace(audience === "patient" ? "/patient/login" : "/login");
+  }, [loading, audience, authorized, signedInWithoutRole, router]);
+
+  if (audience !== "public" && signedInWithoutRole) return <AccessPending />;
   if (audience !== "public" && (loading || !authorized)) return <FullPageSpinner />;
   return <Page />;
 }

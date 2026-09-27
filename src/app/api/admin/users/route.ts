@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { listAllUsers, setUserBanned } from "@/shared/supabase/admin";
+import { grantUserRole, listAllUsers, setUserBanned } from "@/shared/supabase/admin";
 import { getAuthenticatedCaller } from "@/shared/supabase/server";
 
 export const runtime = "nodejs";
 
-// Admin-only account management: list every registered user (any role)
-// and ban/unban them. This is the direct answer to "anyone can self-signup
+// Admin-only account management: list every registered user (any role),
+// ban/unban them, and grant or remove roles (approving a clinician signup). This is the direct answer to "anyone can self-signup
 // as a clinician, with no gatekeeping" -- see the admin-role feature's own
 // plan. Every user id -> email/role lookup here uses the service-role
 // admin client (src/shared/supabase/admin.ts), since an ordinary client can
@@ -27,12 +27,24 @@ export async function POST(request: Request) {
   if (!caller) return NextResponse.json({ ok: false, error: "Not authenticated." }, { status: 401 });
   if (caller.role !== "admin") return NextResponse.json({ ok: false, error: "Not authorized." }, { status: 403 });
   try {
-    const { userId, banned } = (await request.json()) as { userId?: string; banned?: boolean };
-    if (!userId || typeof banned !== "boolean") {
-      return NextResponse.json({ ok: false, error: "userId and banned are required." }, { status: 400 });
-    }
+    const body = (await request.json()) as { userId?: string; banned?: boolean; role?: unknown };
+    const { userId, banned } = body;
+    if (!userId) return NextResponse.json({ ok: false, error: "userId is required." }, { status: 400 });
     if (userId === caller.userId) {
-      return NextResponse.json({ ok: false, error: "You can't ban your own account." }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "You can't change your own account here." }, { status: 400 });
+    }
+    // Granting or removing a role (roles.ts): the only place a clinician
+    // role is given -- e.g. approving a pending clinician signup.
+    if ("role" in body) {
+      const role = body.role;
+      if (role !== null && role !== "clinician" && role !== "patient" && role !== "admin") {
+        return NextResponse.json({ ok: false, error: "role must be clinician, patient, admin or null." }, { status: 400 });
+      }
+      await grantUserRole(userId, role);
+      return NextResponse.json({ ok: true });
+    }
+    if (typeof banned !== "boolean") {
+      return NextResponse.json({ ok: false, error: "banned or role is required." }, { status: 400 });
     }
     await setUserBanned(userId, banned);
     return NextResponse.json({ ok: true });

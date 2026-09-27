@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Badge, Button, Card, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
-import { listAdminUsers, setAdminUserBanned } from "@/clinician/lib/api/admin-api";
+import { listAdminUsers, setAdminUserBanned, setAdminUserRole, type AdminUserSummary } from "@/clinician/lib/api/admin-api";
 import { useAuth } from "@/shared/auth/auth-context";
 import { useT } from "@/shared/i18n/context";
 
@@ -33,6 +33,20 @@ export function AdminUsersPage() {
     },
   });
 
+  // Roles are granted only here (src/shared/auth/roles.ts): approving a
+  // clinician signup, or removing a role from an account that should not
+  // have it.
+  const roleMutation = useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: AdminUserSummary["role"] }) => setAdminUserRole(userId, role),
+    onSuccess: async () => {
+      toast.success(t("adminUsers.updated"));
+      await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    },
+    onError: (error: unknown) => {
+      toast.error(error instanceof Error ? error.message : t("adminUsers.updateFailed"));
+    },
+  });
+
   if (usersQuery.isLoading) return <AppShell><PageSkeleton /></AppShell>;
 
   const users = [...(usersQuery.data ?? [])].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
@@ -51,7 +65,18 @@ export function AdminUsersPage() {
               <Badge tone={row.role === "admin" ? "primary" : row.role === "clinician" ? "success" : row.role === "patient" ? "neutral" : "warning"}>
                 {row.role ? t(`adminUsers.role.${row.role}`) : t("adminUsers.role.none")}
               </Badge>
+              {row.pendingRole && <Badge tone="warning">{t("adminUsers.pending")}</Badge>}
               {row.banned && <Badge tone="critical">{t("adminUsers.banned")}</Badge>}
+              {row.id !== user?.id && row.pendingRole && (
+                <Button variant="secondary" size="sm" loading={roleMutation.isPending} onClick={() => roleMutation.mutate({ userId: row.id, role: "clinician" })}>
+                  {t("adminUsers.approveClinician")}
+                </Button>
+              )}
+              {row.id !== user?.id && row.role && row.role !== "patient" && (
+                <Button variant="ghost" size="sm" loading={roleMutation.isPending} onClick={() => roleMutation.mutate({ userId: row.id, role: null })}>
+                  {t("adminUsers.revokeRole")}
+                </Button>
+              )}
               {row.id !== user?.id && (
                 <Button
                   variant="secondary"

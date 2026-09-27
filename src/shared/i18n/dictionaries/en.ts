@@ -25,6 +25,9 @@ const en = {
     },
   },
   adminUsers: {
+    pending: "Clinician approval pending",
+    approveClinician: "Approve as clinician",
+    revokeRole: "Remove role",
     title: "User accounts",
     description: "Every registered clinician and patient account. Ban an account to block sign-in without deleting anything it's linked to.",
     updated: "Account updated",
@@ -40,6 +43,14 @@ const en = {
     },
   },
   auth: {
+    pending: {
+      title: "Waiting for clinician approval",
+      body: "Clinician accounts can be used once an administrator approves them. Please sign in again after approval.",
+    },
+    noRole: {
+      title: "This account has no access yet",
+      body: "No role has been given to this account yet. Please contact the research team.",
+    },
     clinicianTitle: "Clinician sign in",
     patientTitle: "Patient sign in",
     patientWelcome: "Welcome! Log in to start your personalized care.",

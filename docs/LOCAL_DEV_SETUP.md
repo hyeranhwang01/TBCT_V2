@@ -344,3 +344,15 @@ rm -rf .next node_modules/.cache && pnpm dev
 - `git add -A` / `git add .` — 항상 **경로를 명시**해서 add
 - `git commit --no-verify` / `git push --no-verify` — 가드를 무력화한다
 - 빌드가 깨진다는 이유로 6개 파일 밖 파일을 **임의로** 추가 커밋 → 반드시 먼저 질문
+## Roles (2026-09-27)
+
+Roles are read only from Supabase `app_metadata` (see `src/shared/auth/roles.ts`); `user_metadata.role` is only what a signup asked for, because users can edit it themselves. Patients get their role automatically (`/api/auth/claim-role`); a clinician signup waits until an admin approves it on the account page. An account without a granted role is refused by every API route.
+
+Before deploying this change to an environment with existing accounts, move their roles (otherwise existing clinicians and admins are locked out and safety alerts find no clinician to email):
+
+```
+npx vite-node -c vitest.config.ts scripts/migrate-roles-to-app-metadata.ts                         # list; review the clinician/admin accounts
+npx vite-node -c vitest.config.ts scripts/migrate-roles-to-app-metadata.ts --apply --grant-staff   # after review
+```
+
+Then apply `sql/031_roles_from_app_metadata.sql` (row-level security reads the same role).

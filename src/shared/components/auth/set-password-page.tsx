@@ -6,6 +6,7 @@ import { LoaderCircle } from "lucide-react";
 import { Button, Card, Field, inputClass } from "@/shared/components/ui/primitives";
 import { useT } from "@/shared/i18n/context";
 import { getSupabaseBrowserClient } from "@/shared/supabase/client";
+import { grantedRole } from "@/shared/auth/roles";
 
 /**
  * Lands here from three kinds of Supabase auth emails -- an admin invite
@@ -52,7 +53,7 @@ export function SetPasswordPage() {
       const supabase = getSupabaseBrowserClient();
       const { data, error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) throw updateError;
-      const nextRole = data.user?.user_metadata?.role;
+      const nextRole = grantedRole(data.user);
       router.push(nextRole === "patient" ? "/projects/demo/patient" : "/projects/demo/protocols/tbct-br-001/canvas");
     } catch {
       setError(t("auth.setPassword.updateFailed"));

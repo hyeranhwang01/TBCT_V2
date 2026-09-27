@@ -1,28 +1,29 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/shared/supabase/client";
+import { grantedRole, pendingRole, type AppRole } from "@/shared/auth/roles";
 
-export type AppRole = "clinician" | "patient" | "admin";
+export type { AppRole };
 
 type AuthState = {
   user: User | null;
+  /** Granted by the server (app_metadata, roles.ts) -- never user_metadata. */
   role: AppRole | null;
+  /** A clinician signup waiting for an admin. */
+  pendingRole: "clinician" | null;
   loading: boolean;
   signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
 
-function roleFromUser(user: User | null): AppRole | null {
-  const role = user?.user_metadata?.role;
-  return role === "clinician" || role === "patient" || role === "admin" ? role : null;
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [claiming, setClaiming] = useState(false);
+  const claimedFor = useRef<string | null>(null);
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
 
   useEffect(() => {
@@ -40,16 +41,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.subscription.unsubscribe();
   }, [supabase]);
 
+  // A session without a granted role (a new signup, or an account from before
+  // roles moved to app_metadata) asks the server once: a patient signup is
+  // granted at once, a clinician signup becomes a pending request. The
+  // refreshed session then carries the new app_metadata.
+  useEffect(() => {
+    if (!user || grantedRole(user) || claimedFor.current === user.id) return;
+    claimedFor.current = user.id;
+    setClaiming(true);
+    fetch("/api/auth/claim-role", { method: "POST" })
+      .then(async (response) => {
+        const body = (await response.json().catch(() => null)) as { ok?: boolean; result?: { role?: string | null; pendingRole?: string } } | null;
+        if (body?.ok && (body.result?.role || body.result?.pendingRole)) await supabase.auth.refreshSession();
+      })
+      .catch(() => undefined)
+      .finally(() => setClaiming(false));
+  }, [user, supabase]);
+
   const value = useMemo<AuthState>(
     () => ({
       user,
-      role: roleFromUser(user),
-      loading,
+      role: grantedRole(user),
+      pendingRole: pendingRole(user),
+      loading: loading || claiming,
       signOut: async () => {
         await supabase.auth.signOut();
       },
     }),
-    [user, loading, supabase],
+    [user, loading, claiming, supabase],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
