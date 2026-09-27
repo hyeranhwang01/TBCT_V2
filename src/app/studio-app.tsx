@@ -40,7 +40,7 @@ const CrisisResourcesPage = dynamic(() => import("@/shared/components/crisis-res
 const RuntimeInspectorPage = dynamic(() => import("@/clinician/pages/monitoring/inspector-page").then((mod) => mod.RuntimeInspectorPage), { ssr: false });
 const RuntimeEscalationsPage = dynamic(() => import("@/clinician/pages/safety/escalations-page").then((mod) => mod.RuntimeEscalationsPage), { ssr: false });
 const RuntimeParticipantPage = dynamic(() => import("@/clinician/pages/monitoring/participant-page").then((mod) => mod.RuntimeParticipantPage), { ssr: false });
-const RuntimeMemoryReviewPage = dynamic(() => import("@/clinician/pages/monitoring/memory-review-page").then((mod) => mod.RuntimeMemoryReviewPage), { ssr: false });
+const MemoryChunksPage = dynamic(() => import("@/clinician/pages/monitoring/memory-chunks-page").then((mod) => mod.MemoryChunksPage), { ssr: false });
 const RuntimeSessionSummaryPage = dynamic(() => import("@/clinician/pages/monitoring/session-summary-page").then((mod) => mod.RuntimeSessionSummaryPage), { ssr: false });
 const RuntimeSafetyDashboardPage = dynamic(() => import("@/clinician/pages/safety/dashboard-page").then((mod) => mod.RuntimeSafetyDashboardPage), { ssr: false });
 const RuntimeSafetyEventsPage = dynamic(() => import("@/clinician/pages/safety/events-page").then((mod) => mod.RuntimeSafetyEventsPage), { ssr: false });
@@ -139,7 +139,9 @@ const studioRoutes: StudioRoute[] = [
   { matches: (pathname) => pathname.includes("/runtime/safety/notifications"), Page: RuntimeSafetyNotificationsPage },
   { matches: (pathname) => pathname.includes("/runtime/safety/analytics"), Page: RuntimeSafetyAnalyticsPage },
   { matches: (pathname) => pathname.includes("/runtime/safety"), Page: RuntimeSafetyDashboardPage },
-  { matches: (pathname) => pathname.includes("/runtime/memory-review"), Page: RuntimeMemoryReviewPage },
+  // Was the candidate review queue; now the participant's memory chunks
+  // (same path, so existing links keep working).
+  { matches: (pathname) => pathname.includes("/runtime/memory-review"), Page: MemoryChunksPage },
   { matches: (pathname) => pathname.includes("/runtime/participants/"), Page: RuntimeParticipantPage },
   { matches: (pathname) => pathname.includes("/runtime/sessions/") && pathname.endsWith("/summary"), Page: RuntimeSessionSummaryPage },
   { matches: (pathname) => pathname.includes("/runtime/escalations"), Page: RuntimeEscalationsPage },

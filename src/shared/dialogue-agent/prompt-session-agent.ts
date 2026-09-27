@@ -15,9 +15,12 @@ import { redactDirectIdentifiers } from "@/shared/assessment/privacy-redaction";
 import { recordModelUsage } from "@/shared/assessment/model-observability";
 import { SESSION_PROMPTS, sessionSystemPrompt } from "@/shared/protocol/session-prompts.generated";
 import { PROMPT_INPUT_HINTS, describePromptFields } from "@/shared/runtime/prompt-driven-sessions";
+import { tagSetJsonSchema } from "@/shared/memory/memory-tags";
 
 const DEFAULT_MODEL = "claude-sonnet-5";
 const TOOL_NAME = "submit_session_turn";
+
+const themeList = z.array(z.string()).optional();
 
 export const promptSessionTurnSchema = z.object({
   reply: z.string().trim().min(1),
@@ -27,6 +30,10 @@ export const promptSessionTurnSchema = z.object({
   sessionComplete: z.boolean().default(false),
   pauseSession: z.boolean().default(false),
   safetyConcern: z.boolean().default(false),
+  /** What the conversation is about now, from the closed tag list
+   * (memory-tags.ts). Read by the next call's memory retrieval; never shown
+   * to the participant. Optional: a turn without it is still valid. */
+  currentThemes: z.object({ domains: themeList, persons: themeList, emotions: themeList, beliefs: themeList, distortions: themeList }).nullable().optional(),
 });
 export type PromptSessionTurn = z.infer<typeof promptSessionTurnSchema>;
 
@@ -42,6 +49,7 @@ const TOOL_SCHEMA = {
     sessionComplete: { type: "boolean" },
     pauseSession: { type: "boolean" },
     safetyConcern: { type: "boolean" },
+    currentThemes: { ...tagSetJsonSchema(), description: "What the conversation is about right now, from these lists only. Empty lists when nothing applies." },
   },
 } as const;
 

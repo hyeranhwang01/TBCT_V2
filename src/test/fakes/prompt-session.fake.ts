@@ -31,6 +31,7 @@ export function installScriptedPromptSession(script: PromptSessionScript): Scrip
         sessionComplete: answer.sessionComplete ?? false,
         pauseSession: answer.pauseSession ?? false,
         safetyConcern: answer.safetyConcern ?? false,
+        currentThemes: answer.currentThemes ?? undefined,
       },
     };
   });

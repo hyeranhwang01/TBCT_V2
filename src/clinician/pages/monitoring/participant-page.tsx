@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/clinician/components/app-shell";
 import { Badge, Card, EmptyState, PageHeader, PageSkeleton, SectionHeader } from "@/shared/components/ui/primitives";
 import { getParticipantLongitudinalDashboard } from "@/shared/api/longitudinal-memory-api";
+import { MemoryConsentPanel } from "@/clinician/pages/monitoring/memory-consent-panel";
 
 export function RuntimeParticipantPage() {
   const params = useParams<{ participantId: string }>();
@@ -13,41 +14,31 @@ export function RuntimeParticipantPage() {
   const dashboardQuery = useQuery({ queryKey: ["runtime-participant-dashboard", participantId], queryFn: () => getParticipantLongitudinalDashboard(participantId), enabled: Boolean(participantId) });
   if (dashboardQuery.isLoading) return <AppShell><PageSkeleton /></AppShell>;
   if (!dashboardQuery.data) return <AppShell><Card className="m-6"><EmptyState title="Participant not found" /></Card></AppShell>;
-  const { participant, memories, homework, goals, usage } = dashboardQuery.data;
+  const { participant, chunks, homework, goals } = dashboardQuery.data;
+  const active = chunks.filter((chunk) => !chunk.suppressed);
   return (
     <AppShell>
-      <PageHeader title={participant.alias} description="Longitudinal participant record across sessions, memory approvals, homework, goals, and usage." eyebrow="Stage 3" meta={<><Badge tone="primary">{participant.status}</Badge><Badge tone="neutral">{participant.locale}</Badge></>} />
+      <PageHeader title={participant.alias} description="Longitudinal participant record across sessions: memory chunks, homework and goals." eyebrow="Stage 3" meta={<><Badge tone="primary">{participant.status}</Badge><Badge tone="neutral">{participant.locale}</Badge></>} />
       <div className="space-y-4 p-4 lg:p-6">
         <div className="grid gap-4 xl:grid-cols-4">
           <StatCard label="Sessions" value={`${participant.runtimeSessionIds.length}`} />
-          <StatCard label="Approved Memory" value={`${memories.filter((item) => item.status === "approved").length}`} />
+          <StatCard label="Memory chunks" value={`${active.length}`} />
           <StatCard label="Homework" value={`${homework.length}`} />
           <StatCard label="Goals" value={`${goals.length}`} />
         </div>
-        <div className="grid gap-4 xl:grid-cols-2">
-          <Card>
-            <SectionHeader title="Approved Memory" description="Cross-session approved items." />
-            <div className="space-y-2 p-4">
-              {memories.filter((item) => item.status === "approved").map((memory) => (
-                <div key={memory.id} className="rounded-panel border border-border p-3">
-                  <div className="text-sm font-semibold text-text-primary">{memory.title}</div>
-                  <div className="mt-1 text-xs text-text-secondary">{memory.content}</div>
-                </div>
-              ))}
-            </div>
-          </Card>
-          <Card>
-            <SectionHeader title="Memory Usage" description="Retrieval and injection history." />
-            <div className="space-y-2 p-4">
-              {usage.map((item) => (
-                <div key={item.id} className="rounded-panel border border-border p-3">
-                  <div className="text-xs font-semibold text-text-muted">{item.usageType}</div>
-                  <div className="mt-1 text-sm text-text-primary">{item.reason}</div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
+        <MemoryConsentPanel participant={participant} />
+        <Card>
+          <SectionHeader title="Memory chunks" description="What later sessions may retrieve (only with the participant's consent). Suppress one from the memory page." />
+          <div className="space-y-2 p-4">
+            {active.map((chunk) => (
+              <div key={chunk.id} className="rounded-panel border border-border p-3">
+                <div className="text-xs font-semibold text-text-muted">{chunk.chunkKind === "clinician_note" ? "Counsellor's note" : `Session ${chunk.sessionIndex}`} · {chunk.elementKind}</div>
+                <div className="mt-1 whitespace-pre-line text-sm text-text-primary">{chunk.content}</div>
+              </div>
+            ))}
+            {!active.length && <div className="text-xs text-text-secondary">No memory chunks yet.</div>}
+          </div>
+        </Card>
       </div>
     </AppShell>
   );

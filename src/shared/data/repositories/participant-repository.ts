@@ -1,14 +1,16 @@
 import { getLocalDb } from "@/shared/data/db/tbct-local-db";
 import { PARTICIPANT_STORE_ENDPOINT, type ParticipantStoreOp } from "@/shared/runtime/participant-store-ops";
 import { resolveStoreUrl, runtimeFetch } from "@/shared/runtime/resolve-store-url";
-import type { RuntimeParticipant, ParticipantConsentEvent, LongitudinalRecord } from "@/types/longitudinal-memory";
+import type { RuntimeParticipant, LongitudinalRecord, MemoryConsentEvent } from "@/types/longitudinal-memory";
 
 // The participant roster now lives in Neon Postgres (src/shared/data/server/participant-store.ts),
 // not local IndexedDB -- this is what lets a participant created from the
 // patient-facing runtime show up in the clinician Patient Monitoring
 // screens. Every function below keeps its original name/signature so call
-// sites are unaffected. Longitudinal records and consent events are not yet
-// part of this migration and remain local-only for now.
+// sites are unaffected. Longitudinal records are not yet part of this
+// migration and remain local-only for now. Consent events moved to Postgres
+// on 2026-09-27 (sql/025) -- they had been browser-only, so no trial record
+// of them existed.
 async function callStore<T>(op: ParticipantStoreOp): Promise<T> {
   const response = await runtimeFetch(resolveStoreUrl(PARTICIPANT_STORE_ENDPOINT), {
     method: "POST",
@@ -58,11 +60,10 @@ export async function saveLongitudinalRecord(record: LongitudinalRecord) {
   return record;
 }
 
-export async function saveParticipantConsentEvent(event: ParticipantConsentEvent) {
-  await getLocalDb().participantConsentEvents.put(event);
-  return event;
+export async function recordMemoryConsent(input: Omit<Extract<ParticipantStoreOp, { op: "recordMemoryConsent" }>, "op" | "actor">) {
+  return callStore<RuntimeParticipant>({ op: "recordMemoryConsent", ...input });
 }
 
-export async function listParticipantConsentEvents(participantId: string) {
-  return getLocalDb().participantConsentEvents.where("participantId").equals(participantId).sortBy("effectiveAt");
+export async function listMemoryConsentEvents(participantId: string) {
+  return callStore<MemoryConsentEvent[]>({ op: "listMemoryConsentEvents", participantId });
 }

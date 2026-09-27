@@ -1,9 +1,7 @@
-import { resolveLongitudinalMemoryPolicy } from "@/shared/memory/memory-policy";
 import { claimRuntimePatientTurn, claimRuntimeSessionStart, commitRuntimeAssistantTurn, saveRuntimeEscalation, saveRuntimeLog, updateRuntimeSessionRecord } from "@/shared/data/repositories/runtime-session-repository";
 import { cleanupExpiredTriggerSuppressions, findActiveTriggerSuppression, updateTriggerSuppression } from "@/shared/data/repositories/safety-event-repository";
 import { createRuntimeCheckpoint, getRuntimeSession, getRuntimeSessionForTurn, setRuntimeSessionStatus } from "@/shared/api/runtime-session-api";
-import { runMemoryRetrieval } from "@/shared/api/longitudinal-memory-api";
-import { extractMemoryCandidates, generateSessionSummary } from "@/shared/api/session-summary-api";
+import { generateSessionSummary, recordSummaryTracking } from "@/shared/api/session-summary-api";
 import { createSafetyEvent, findOpenSafetyEventByTriggerKey, patchSafetyEvent, placeSessionOnSafetyHold } from "@/shared/api/safety-operations-api";
 import { getRuntimeParticipant } from "@/shared/api/participant-api";
 import { mergeExtractedRuntimeContext, extractRuntimeState, refreshListRatingPointers, removeRatingForRemovedListItem, isExplicitPatientRefusal, violatesThirdPersonRequirement, normalizeText, looksLikeMetaQuestionAboutTheProcess, looksLikeMeaningClarificationRequest } from "@/shared/runtime/runtime-context";
@@ -15,7 +13,7 @@ import { executeRuntimeNodeMessage } from "@/shared/runtime/runtime-node-executo
 import { runSafetyOrchestrator } from "@/shared/runtime/runtime-safety-orchestrator";
 import { createRuntimeExecutionTrace } from "@/shared/runtime/runtime-execution-tracer";
 import { isPatientFacingLocaleConsistent } from "@/shared/runtime/runtime-output-validator";
-import { injectLongitudinalMemory } from "@/shared/memory/memory-context-injector";
+import { indexAtCompletion, tagInBackground } from "@/shared/memory/memory-indexer";
 import { projectRuntimeFieldsToWorksheet } from "@/shared/worksheet/worksheet-projection";
 import { isDialogueAgentEnabled, isSafetyCriticalPrompt, resolveDialogueAgentMessage } from "@/shared/dialogue-agent/dialogue-agent-orchestrator";
 import { checkAnswerRelevance } from "@/shared/dialogue-agent/answer-relevance-client";
@@ -1531,19 +1529,36 @@ export async function completeRuntimeSession(sessionId: string) {
   await updateRuntimeSessionRecord(sessionId, { status: "completed", completedAt: new Date().toISOString() });
   void saveRuntimeLog(makeLog(sessionId, "completion", "completed", "Session completed")).catch(() => {});
   const checkpoint = await createRuntimeCheckpoint(sessionId);
-  // The session is already "completed" and checkpointed above; the memory
-  // step (summary -> candidates for clinician review) must never be able to
-  // turn the participant's last turn into a 500. Until 2026-09-13 it threw
-  // on every server-side completion (the summary/candidate stores were
-  // browser IndexedDB), and none of the five call sites caught it. A
-  // failure is written to the runtime log so it is visible, not silent.
+  // The session is already "completed" and checkpointed above; the summary
+  // step must never be able to turn the participant's last turn into a 500.
+  // A failure is written to the runtime log so it is visible, not silent.
+  // (Memory candidates for clinician review are no longer extracted here:
+  // memory is the participant's own words, chunked below, used with their
+  // consent -- note2026_09_27_memory_rag_m3_m7.)
   try {
     const summary = await generateSessionSummary(sessionId);
-    await extractMemoryCandidates(summary.id);
+    await recordSummaryTracking(summary.id);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error("[runtime-execution-api] session summary / memory candidate extraction failed", { sessionId, error: message });
-    void saveRuntimeLog(makeLog(sessionId, "completion", "failed", "Session summary / memory candidate extraction failed", { error: message })).catch(() => {});
+    console.error("[runtime-execution-api] session summary failed", { sessionId, error: message });
+    void saveRuntimeLog(makeLog(sessionId, "completion", "failed", "Session summary failed", { error: message })).catch(() => {});
+  }
+  // Memory chunks (memory-indexer.ts): this session, and homework written
+  // since the last one. Same rule as above -- a failure is logged, never
+  // thrown at the participant.
+  try {
+    const indexed = await indexAtCompletion(sessionId);
+    void saveRuntimeLog(makeLog(sessionId, "completion", "completed", "Memory chunks stored", { output: indexed })).catch(() => {});
+    if (indexed.participantId) {
+      tagInBackground(indexed.participantId, (outcome) => {
+        if (outcome.status === "skipped_no_consent" || outcome.status === "nothing_to_tag") return;
+        void saveRuntimeLog(makeLog(sessionId, "completion", outcome.status === "done" ? "completed" : "failed", "Memory chunk tagging", { output: outcome as unknown as Record<string, unknown> })).catch(() => {});
+      });
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[runtime-execution-api] memory chunking failed", { sessionId, error: message });
+    void saveRuntimeLog(makeLog(sessionId, "completion", "failed", "Memory chunking failed", { error: message })).catch(() => {});
   }
   return checkpoint;
 }
@@ -1596,37 +1611,12 @@ export async function executeCurrentNode(sessionId: string, prefetchedView?: Run
   if (!node) throw new Error("Current node is missing");
   const activePromptItem = view.promptItems.find((item) => item.id === activeStep.promptItem.sourcePromptItemId);
   if (!activePromptItem) throw new Error("Current source PromptItem is missing");
-  // Cross-session memory is always part of the intervention (clinical
-  // decision 2026-09-21, see memory-policy.ts) -- retrieval runs on every
-  // node. How much and which types is still the PI's call, read from the
-  // policy rather than fixed here. A participant who has not consented is
-  // turned away inside runMemoryRetrieval, and lands in the skipped branch
-  // below, not here.
-  const memoryPolicy = resolveLongitudinalMemoryPolicy();
-  const retrieval = await runMemoryRetrieval({
-    participantId: session.participantId,
-    runtimeSessionId: session.id,
-    protocolId: session.protocolId,
-    protocolVersion: session.protocolVersion,
-    sessionDefinitionId: session.sessionDefinitionId,
-    currentNodeId: node.id,
-    currentNodeType: node.type as import("@/types/protocol-runtime").ProtocolNodeType,
-    currentClinicalIntent: node.clinicalPurpose ?? node.title,
-    requestedMemoryTypes: memoryPolicy.allowedMemoryTypes,
-    maxItems: memoryPolicy.maxItemsPerNode,
-  }).catch((error: unknown) => {
-    // Retrieval must never block a turn, but a failure must not be invisible
-    // either: until 2026-09-13 this failed on every server turn (IndexedDB
-    // stores) and nobody knew. A participant who has not consented to
-    // cross-session use is the expected, non-error case -- logged as
-    // skipped, not failed.
-    const message = error instanceof Error ? error.message : String(error);
-    const consentDisabled = message.includes("Cross-session retrieval is disabled");
-    if (!consentDisabled) console.error("[runtime-execution-api] memory retrieval failed", { sessionId, nodeId: node.id, error: message });
-    void saveRuntimeLog(makeLog(sessionId, "node_resolution", consentDisabled ? "skipped" : "failed", consentDisabled ? "Memory retrieval skipped: cross-session use not consented" : "Memory retrieval failed", { nodeId: node.id, error: consentDisabled ? undefined : message })).catch(() => {});
-    return null;
-  });
-  const runtimeContext = retrieval ? injectLongitudinalMemory(session.runtimeContext, retrieval.selected) : session.runtimeContext;
+  // Cross-session memory no longer comes in here: the old per-node retrieval
+  // of clinician-approved memories was replaced by per-turn chunk retrieval
+  // (memory-retrieval.ts, .claude/TASK_SCOPE.json
+  // note2026_09_27_memory_rag_m3_m7), which runs for the prompt-driven
+  // sessions. Sessions still on this engine (S03-S08) get it when they move.
+  const runtimeContext = session.runtimeContext;
   const skippedPromptItemIds = mergePromptItemIds(session.skippedPromptItemIds, activeStep.skippedPromptItemIds);
   const activeSession = { ...session, runtimeContext, skippedPromptItemIds };
   void saveRuntimeLog(makeLog(sessionId, "node_resolution", "completed", `Current node resolved: ${node.title}`, { nodeId: node.id })).catch(() => {});

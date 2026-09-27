@@ -4,15 +4,15 @@
     {
       "id": "common",
       "title": "Common rules for every session",
-      "version": "0.1.3",
-      "date": "2026-09-25",
+      "version": "0.1.4",
+      "date": "2026-09-27",
       "manuscript": "docs/prompts/TBCT_AI_Prompt_Common.md",
-      "manuscriptSha256": "722daba3dced6a838e5136a7a8cc7b78ef46e2899875dc28e478c9feb70e53e4",
-      "pdf": "docs/prompts/pdf/TBCT_AI_Prompt_Common_prompt_v0.1.3.pdf",
+      "manuscriptSha256": "00fe2e1ea3a07fb97eb487f6e5f6394d512b2ae8a8fb8ae2b1e167077979d02f",
+      "pdf": "docs/prompts/pdf/TBCT_AI_Prompt_Common_prompt_v0.1.4.pdf",
       "text": "artifacts/prompts/common.txt",
-      "textSha256": "b917b514f2dabf8dd2e61c3fdab06b5559d88999805f67bd4f4ce6f16402f8a0",
-      "textLineCount": 118,
-      "wordCount": 1552
+      "textSha256": "8f8199ca31b118b02c0ae3fadc1d6312c436bbc3cf6a675771c6ff690fca762f",
+      "textLineCount": 138,
+      "wordCount": 1795
     },
     {
       "id": "tbct-s01",
@@ -30,15 +30,15 @@
     {
       "id": "tbct-s02",
       "title": "Session 02 – Introducing the Cognitive Distortions Questionnaire",
-      "version": "0.1.2",
-      "date": "2026-09-25",
+      "version": "0.1.3",
+      "date": "2026-09-27",
       "manuscript": "docs/prompts/TBCT_AI_Prompt_S02.md",
-      "manuscriptSha256": "33bb069a10df87140b63498f9210825c0739771346baac10730510e510771390",
-      "pdf": "docs/prompts/pdf/TBCT_AI_Prompt_S02_prompt_v0.1.2.pdf",
+      "manuscriptSha256": "fa3941957a48a865668379ccb3480cdaafa0927e823de441ccaacc10fbd9627a",
+      "pdf": "docs/prompts/pdf/TBCT_AI_Prompt_S02_prompt_v0.1.3.pdf",
       "text": "artifacts/prompts/tbct-s02.txt",
-      "textSha256": "a9d6eb276f5c38b8924e0ca78f735de5994c1a800987830c0e632a22e221d25b",
-      "textLineCount": 272,
-      "wordCount": 3382
+      "textSha256": "55ccea5da00b1d8d99a34687cf56e5aa929a0f7d088021060fe1dbffa2fef462",
+      "textLineCount": 274,
+      "wordCount": 3482
     }
   ]
 }

@@ -49,6 +49,7 @@ src/
   - `src/shared/worksheet/composed-worksheet-registry.ts`
   - `src/shared/worksheet/worksheet-binding-registry.ts`
   - `src/shared/runtime/prompt-driven-sessions.ts` (S01/S02 field lists, 2026-09-25)
+  - `src/shared/memory/chunk-configs.ts` (S01/S02 memory-chunk cuts, 2026-09-27)
 
 **Why no `clinician/sessions/`.** Clinician UI is session-agnostic; nothing session-specific exists on that side. Create it with the same rule if that changes.
 
@@ -101,6 +102,10 @@ Called from [src/patient/pages/patient-session-page.tsx:77](../../src/patient/pa
 ## 3b. Prompt-driven sessions (S01, S02 — 2026-09-25)
 
 S01 and S02 do not use the node engine below. One system prompt per session (`src/shared/protocol/session-prompts.generated.ts`, built from `docs/prompts/*.md` by `npm run prompts:build`) runs the conversation through `src/shared/api/prompt-session-api.ts`; safety (`assessTurnRisk` → `handleTriggeredSafetyTurn` / fixed clarification), storage and arithmetic stay in code. Routed from `executeCurrentNode` / `submitPatientInput` by `isPromptDrivenSession`. Details: [TBCT_SESSIONS_1_3.md](TBCT_SESSIONS_1_3.md) §"Session 1 and Session 2".
+
+### 3c. Cross-session memory (2026-09-27)
+
+Consent (`src/shared/memory/memory-consent.ts`, popup in PatientShell) → chunks at completion (`memory-indexer.ts` → `chunk-builder.ts`, per-session cut in `s0N/memory-chunks.ts`, table sql/027) → tags (`chunk-tagger.ts`, closed list `memory-tags.ts`) → per-call retrieval in `prompt-session-api.ts` (`memory-retrieval.ts`, `chunk-scorer.ts`, log sql/029). Clinician side: `/runtime/memory-review` (`memory-chunks-page.tsx`), inspector cards. Evaluation: `src/shared/memory/eval/`, `scripts/eval-memory-retrieval.ts`. Details: [TBCT_SESSIONS_1_3.md](TBCT_SESSIONS_1_3.md).
 
 ## 4. Runtime execution engine (session-agnostic; drives Sessions 3-8)
 

@@ -9,12 +9,16 @@ import type {
   HomeworkTrackingRecord,
   LongitudinalMemory,
   MemoryCandidate,
+  MemoryConsentDecision,
+  MemoryConsentEvent,
+  MemoryConsentSource,
   MemoryRetrievalResult,
   MemoryReviewDecision,
   MemoryUsageLog,
   RuntimeParticipant,
   RuntimeSessionSummary,
 } from "@/types/longitudinal-memory";
+import type { MemoryChunk, MemoryChunkRetrieval, MemoryChunkTags } from "@/types/memory-chunks";
 
 export type ParticipantStoreOp =
   | { op: "listParticipants" }
@@ -26,6 +30,29 @@ export type ParticipantStoreOp =
   | { op: "getMemory"; memoryId: string }
   | { op: "saveMemory"; memory: LongitudinalMemory }
   | { op: "updateMemory"; memoryId: string; patch: Partial<LongitudinalMemory> }
+  // Memory consent (sql/025). The only way memoryConsent changes: appends the
+  // event and updates the participant in one transaction. `actor` is filled
+  // in by the store route from the authenticated caller.
+  | {
+      op: "recordMemoryConsent";
+      participantId: string;
+      decision: MemoryConsentDecision;
+      textVersion: string;
+      source: MemoryConsentSource;
+      locale: string;
+      actor?: Pick<MemoryConsentEvent, "actorUserId" | "actorRole">;
+    }
+  | { op: "listMemoryConsentEvents"; participantId: string }
+  // Memory chunks (sql/027). Written and read by the server; clinicians read
+  // and suppress. Never reachable by a patient caller (route.ts).
+  | { op: "saveMemoryChunks"; chunks: MemoryChunk[] }
+  | { op: "listMemoryChunks"; participantId: string; beforeSessionIndex?: number; includeSuppressed?: boolean }
+  | { op: "listMemoryChunksBySession"; runtimeSessionId: string }
+  | { op: "suppressMemoryChunk"; chunkId: string; reason: string; actorUserId?: string }
+  | { op: "listUntaggedMemoryChunks"; participantId: string }
+  | { op: "setMemoryChunkTags"; chunkId: string; tags: MemoryChunkTags; tagModel: string; tagPromptVersion: string }
+  | { op: "saveMemoryChunkRetrieval"; retrieval: MemoryChunkRetrieval }
+  | { op: "listMemoryChunkRetrievals"; runtimeSessionId: string }
   // Longitudinal-memory pipeline (sql/023_memory_pipeline.sql). These used
   // to be browser-only Dexie tables; a patient turn runs on the server, so
   // they had to move here for the pipeline to work at all -- see

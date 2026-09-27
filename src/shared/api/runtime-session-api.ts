@@ -36,7 +36,7 @@ import { EMPTY_CONTINUITY_SEED, S01_HOMEWORK_EXAMPLE_ENTRY_TYPE, computeSessionC
 import type { HomeworkRecord } from "@/types/homework";
 import { findPendingReflectionCheck } from "@/shared/runtime/reflection-check";
 import { findPendingExploration } from "@/shared/runtime/conversation-steering";
-import { listMemoryRetrievalRuns, listMemoryUsageLogs } from "@/shared/data/repositories/longitudinal-memory-repository";
+import { listMemoryChunkRetrievals, listMemoryChunks, listMemoryChunksBySession } from "@/shared/data/repositories/memory-chunk-repository";
 import { getPilotParticipantByRuntimeParticipantId, getPilotStudyArm, listProtocolAssignments } from "@/shared/data/repositories/pilot-repository";
 import { assertRuntimeTransition } from "@/shared/runtime/runtime-state-machine";
 import type { PatientRuntimeReleaseOption, PatientRuntimeSessionView, RuntimeCheckpoint, RuntimeContext, RuntimeSession, RuntimeSessionView } from "@/types/runtime-session";
@@ -247,7 +247,7 @@ export async function getRuntimeSession(sessionId: string): Promise<RuntimeSessi
     ? session
     : { ...session, runtimeState: normalizeRuntimeSessionState(session, runtimeRelease) };
   
-  const [messages, logs, checkpoints, escalations, providerEvents, validationEvents, participant, memoryRetrievalRuns, memoryUsageLogs] = await Promise.all([
+  const [messages, logs, checkpoints, escalations, providerEvents, validationEvents, participant, memoryChunkRetrievals, sessionMemoryChunks] = await Promise.all([
     listRuntimeMessages(sessionId),
     listRuntimeLogs(sessionId),
     listRuntimeCheckpoints(sessionId),
@@ -255,9 +255,15 @@ export async function getRuntimeSession(sessionId: string): Promise<RuntimeSessi
     listRuntimeProviderEvents(sessionId),
     listRuntimeValidationEvents(sessionId),
     getRuntimeParticipant(session.participantId).catch(() => null),
-    listMemoryRetrievalRuns(sessionId).catch(() => []),
-    listMemoryUsageLogs(sessionId).catch(() => []),
+    // Memory chunks and their retrieval log are clinician/server only (the
+    // store route refuses a patient), so a patient's own view gets none.
+    listMemoryChunkRetrievals(sessionId).catch(() => []),
+    listMemoryChunksBySession(sessionId).catch(() => []),
   ]);
+  const retrievedIds = new Set(memoryChunkRetrievals.flatMap((item) => item.selected.map((selected) => selected.chunkId)));
+  const retrievedMemoryChunks = retrievedIds.size
+    ? (await listMemoryChunks(session.participantId, { includeSuppressed: true }).catch(() => [])).filter((chunk) => retrievedIds.has(chunk.id))
+    : [];
   const sourceFidelity = getRuntimeReleaseSourceSnapshot(release);
   
   return {
@@ -274,8 +280,9 @@ export async function getRuntimeSession(sessionId: string): Promise<RuntimeSessi
     escalations,
     providerEvents,
     validationEvents,
-    memoryRetrievalRuns,
-    memoryUsageLogs,
+    memoryChunkRetrievals,
+    retrievedMemoryChunks,
+    sessionMemoryChunks,
   } satisfies RuntimeSessionView;
 }
 
@@ -306,7 +313,7 @@ export async function getRuntimeSessionForTurn(sessionId: string): Promise<Runti
     promptItems: sourceFidelity.promptItems,
     currentPromptItem: sourceFidelity.promptItems.find((item) => item.id === hydratedSession.currentPromptItemId),
     messages,
-    logs: [], checkpoints: [], escalations: [], providerEvents: [], validationEvents: [], memoryRetrievalRuns: [], memoryUsageLogs: [],
+    logs: [], checkpoints: [], escalations: [], providerEvents: [], validationEvents: [], memoryChunkRetrievals: [], retrievedMemoryChunks: [], sessionMemoryChunks: [],
   } satisfies RuntimeSessionView;
 }
 

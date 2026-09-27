@@ -16,6 +16,8 @@ import { useDevMode } from "@/shared/dev-mode/dev-mode";
 import { useAuth } from "@/shared/auth/auth-context";
 import { getOrCreateParticipantForUiLocale } from "@/shared/api/participant-api";
 import { applyPatientLocaleChange } from "@/patient/lib/api/patient-locale-sync";
+import { MemoryConsentDialog } from "@/patient/components/memory-consent-dialog";
+import { memoryConsentNeedsDecision } from "@/shared/memory/memory-consent";
 import { fadeUp } from "@/shared/motion/motion-variants";
 import { useReducedMotionPreference } from "@/shared/motion/use-reduced-motion-preference";
 
@@ -45,7 +47,7 @@ export function PatientShell({
   const router = useRouter();
   const pathname = usePathname();
   const reducedMotion = useReducedMotionPreference();
-  const { user, signOut } = useAuth();
+  const { user, role, signOut } = useAuth();
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const devMode = useDevMode();
   const queryClient = useQueryClient();
@@ -208,6 +210,13 @@ export function PatientShell({
         description={t("auth.logout") === "로그아웃" ? "진행 내용은 저장되며 로그인 화면으로 이동합니다." : "Your progress is saved and you will return to sign in."}
         confirmLabel={t("auth.logout")}
       />
+      {/* Every patient page sits in this shell, so a participant who has not
+          answered the memory-consent question meets it wherever they land
+          -- before any session can start. Never for a clinician viewing a
+          patient screen. */}
+      {role === "patient" && participantQuery.data && memoryConsentNeedsDecision(participantQuery.data) && (
+        <MemoryConsentDialog participant={participantQuery.data} open required />
+      )}
     </div>
   );
 }

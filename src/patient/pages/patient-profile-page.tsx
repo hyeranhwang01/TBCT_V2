@@ -7,7 +7,8 @@ import { PatientShell } from "@/patient/components/patient-shell";
 import { MfaSettings } from "@/shared/components/auth/mfa-settings";
 import { DataPrivacySection } from "@/patient/components/data-privacy-section";
 import { Button, Card, EmptyState, Field, PageSkeleton, inputClass } from "@/shared/components/ui/primitives";
-import { getOrCreateParticipantForUiLocale, updateParticipantProfile, updateParticipantConsent, updateNotificationPreferences } from "@/shared/api/participant-api";
+import { getOrCreateParticipantForUiLocale, updateParticipantProfile, updateNotificationPreferences } from "@/shared/api/participant-api";
+import { MemoryConsentSettings } from "@/patient/components/memory-consent-settings";
 import { getPatientProgressSeries } from "@/shared/worksheet/worksheet-projection";
 import { propagateLocaleToOpenSessions } from "@/patient/lib/api/patient-locale-sync";
 import { useT } from "@/shared/i18n/context";
@@ -29,9 +30,6 @@ export function PatientProfilePage() {
   const [alias, setAlias] = useState("");
   const [locale, setLocale] = useState("ko-KR");
   const [country, setCountry] = useState("KR");
-  const [memoryStorageAllowed, setMemoryStorageAllowed] = useState(true);
-  const [crossSessionUseAllowed, setCrossSessionUseAllowed] = useState(true);
-  const [sensitiveMemoryAllowed, setSensitiveMemoryAllowed] = useState(false);
   const [sessionRemindersEnabled, setSessionRemindersEnabled] = useState(true);
   const [homeworkRemindersEnabled, setHomeworkRemindersEnabled] = useState(true);
   const [newMessagesEnabled, setNewMessagesEnabled] = useState(true);
@@ -41,9 +39,6 @@ export function PatientProfilePage() {
     setAlias(participantQuery.data.alias);
     setLocale(participantQuery.data.locale);
     setCountry(participantQuery.data.country ?? "KR");
-    setMemoryStorageAllowed(participantQuery.data.consent.memoryStorageAllowed);
-    setCrossSessionUseAllowed(participantQuery.data.consent.crossSessionUseAllowed);
-    setSensitiveMemoryAllowed(participantQuery.data.consent.sensitiveMemoryAllowed);
     // Absent means enabled -- see RuntimeParticipant.notificationPreferences's doc comment.
     setSessionRemindersEnabled(participantQuery.data.notificationPreferences?.sessionReminders !== false);
     setHomeworkRemindersEnabled(participantQuery.data.notificationPreferences?.homeworkReminders !== false);
@@ -69,12 +64,6 @@ export function PatientProfilePage() {
         const mappedUiLocale = mapToUiLocale(locale);
         if (mappedUiLocale) setUiLocale(mappedUiLocale);
       }
-      await updateParticipantConsent(participantQuery.data.id, {
-        memoryStorageAllowed,
-        crossSessionUseAllowed,
-        sensitiveMemoryAllowed,
-        reason: "Patient profile settings updated",
-      });
       await updateNotificationPreferences(participantQuery.data.id, {
         sessionReminders: sessionRemindersEnabled,
         homeworkReminders: homeworkRemindersEnabled,
@@ -119,14 +108,7 @@ export function PatientProfilePage() {
               </Field>
               <Field label={t("patientProfile.edit.country")}><input className={inputClass} value={country} onChange={(event) => setCountry(event.target.value)} /></Field>
             </div>
-            <div>
-              <div className="mb-2 text-sm font-semibold text-text-primary">{t("patientProfile.edit.memory.title")}</div>
-              <div className="grid gap-3 rounded-panel border border-border bg-surface-subtle p-3 text-sm text-text-secondary">
-              <label className="flex items-center justify-between gap-3"><span>{t("patientProfile.edit.storeMemory")}</span><input type="checkbox" checked={memoryStorageAllowed} onChange={(event) => setMemoryStorageAllowed(event.target.checked)} /></label>
-              <label className="flex items-center justify-between gap-3"><span>{t("patientProfile.edit.reuseAcrossSessions")}</span><input type="checkbox" checked={crossSessionUseAllowed} onChange={(event) => setCrossSessionUseAllowed(event.target.checked)} /></label>
-              <label className="flex items-center justify-between gap-3"><span>{t("patientProfile.edit.allowSensitiveMemory")}</span><input type="checkbox" checked={sensitiveMemoryAllowed} onChange={(event) => setSensitiveMemoryAllowed(event.target.checked)} /></label>
-              </div>
-            </div>
+            <MemoryConsentSettings participant={participant} />
             <div>
               <div className="mb-2 text-xs font-semibold uppercase tracking-[0.06em] text-text-muted">{t("patientProfile.edit.notifications.title")}</div>
               <div className="grid gap-3 rounded-panel border border-border bg-surface-subtle p-3 text-sm text-text-secondary">

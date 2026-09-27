@@ -76,8 +76,43 @@ export interface RuntimeParticipant {
     sensitiveMemoryAllowed: boolean;
     updatedAt: string;
   };
+  /** The participant's own answer to the memory-consent popup
+   * (src/shared/memory/memory-consent.ts). Absent = not asked yet, which the
+   * runtime treats as declined. Written only through the recordMemoryConsent
+   * store op, which also appends a MemoryConsentEvent. */
+  memoryConsent?: MemoryConsentState;
   createdAt: string;
   updatedAt: string;
+}
+
+export type MemoryConsentDecision = "granted" | "declined";
+
+/** Where the decision was made. */
+export type MemoryConsentSource = "first_visit_dialog" | "profile" | "clinician";
+
+export interface MemoryConsentState {
+  decision: MemoryConsentDecision;
+  /** MEMORY_CONSENT_TEXT_VERSION of the wording the participant saw. */
+  textVersion: string;
+  source: MemoryConsentSource;
+  decidedAt: string;
+}
+
+/** One row of participant_consent_events (sql/025), append-only. */
+export interface MemoryConsentEvent {
+  id: string;
+  participantId: string;
+  consentKind: "memory";
+  decision: MemoryConsentDecision;
+  textVersion: string;
+  source: MemoryConsentSource;
+  /** UI locale the wording was shown in. */
+  locale: string;
+  decidedAt: string;
+  /** Set by the store route from the authenticated caller, never by the client. */
+  actorUserId?: string;
+  actorRole?: "patient" | "clinician" | "admin" | "server";
+  previousDecision?: MemoryConsentDecision;
 }
 
 export interface LongitudinalRecord {

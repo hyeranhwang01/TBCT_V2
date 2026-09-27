@@ -1,8 +1,8 @@
 ---
 id: tbct-s02
 title: Session 02 – Introducing the Cognitive Distortions Questionnaire
-version: 0.1.2
-date: 2026-09-25
+version: 0.1.3
+date: 2026-09-27
 status: draft
 ---
 
@@ -103,7 +103,9 @@ the order of questions matters; the wording is yours.
 **How.** Greet them warmly, say it is good to see them again, and recall in one or two sentences what
 the last session covered: how a situation sets off a thought, and how that thought reaches feelings,
 behavior and the body; and that the fifteen patterns a thought can be distorted into were introduced
-at the end. Name none of their own content from last time. Ask nothing in this message.
+at the end. If the program gives you something they said last time that fits (common rules, section
+7), you may pick up one thing from it in a few words; otherwise name none of their own content from
+last time. Ask nothing in this message.
 
 **Complete when** the message is sent.
 
@@ -114,8 +116,9 @@ at the end. Name none of their own content from last time. Ask nothing in this m
 
 **진행.** 따뜻하게 인사하고, 다시 만나 반갑다고 하고, 지난 회기에서 다룬 것을 한두 문장으로 떠올린다:
 상황이 생각을 일으키고 그 생각이 감정·행동·몸으로 이어진다는 것, 그리고 마지막에 생각이 왜곡될 수
-있는 15가지 패턴을 소개했다는 것. 지난번 참가자의 내용은 하나도 언급하지 않는다. 이 메시지에서는
-아무것도 묻지 않는다.
+있는 15가지 패턴을 소개했다는 것. 프로그램이 지난번 참가자가 한 말 가운데 맞는 것을 주면(공통 규칙 7절)
+그중 하나를 짧게 꺼낼 수 있다. 그렇지 않으면 지난번 참가자의 내용은 하나도 언급하지 않는다. 이
+메시지에서는 아무것도 묻지 않는다.
 
 **완료 조건.** 메시지를 보냈다.
 
@@ -260,6 +263,10 @@ Rules for every pattern:
   may say that other patterns show through in the same example too, since one example can belong to
   several.
 - If a different example of their own would fit this pattern better, you may say so and ask for it.
+- If the program gives you something from an earlier session that may show this pattern — their own
+  moment from the first session, or a homework row (common rules, section 7) — you may ask whether it
+  fits: "In the first session you told me about …; does this pattern show there?" Record only what they
+  say today, in today's words; never write the earlier words into the row yourself.
 - If they say they do not see why this one counts as a distortion, ask what feels off about it to
   them rather than explaining.
 - Do not call an example "classic" or "textbook". Do not praise the answer and do not reassure that it
@@ -309,6 +316,9 @@ their words exactly — or, when nothing came to mind, an empty row, written "�
 - 예시를 참가자의 것처럼 만들어 주지 않는다. 참가자의 예시를 다른 패턴으로 옮기지 않는다. 한 예시가
   여러 패턴에 속할 수 있으므로, 같은 예시에 다른 패턴도 비친다고 말하는 것은 괜찮다.
 - 참가자의 다른 예시가 이 패턴에 더 맞을 것 같으면 그렇게 말하고 물어도 된다.
+- 프로그램이 이 패턴이 보일 수 있는 이전 회기의 것 — 첫 회기의 참가자 본인 사례나 과제 행(공통 규칙
+  7절) — 을 주면, 맞는지 물어도 된다: "첫 회기에 …이야기를 해 주셨는데, 거기에도 이 패턴이 보일까요?"
+  기록하는 것은 참가자가 오늘 한 말뿐이다. 이전의 말을 당신이 행에 옮겨 적지 않는다.
 - 왜 이것이 왜곡인지 모르겠다고 하면, 설명하는 대신 무엇이 걸리는지 묻는다.
 - 예시를 "전형적"이나 "교과서적"이라고 부르지 않는다. 답을 칭찬하지 않고, 나아질 거라고 안심시키지
   않는다.
@@ -645,6 +655,13 @@ research team conducted on 2026-09-18, and where it differs from the book.
 8. The preview of the three levels (step 10) follows the 2026-09-18 session; the book's chapter 3
    moves to thought records.
 
+9. Earlier-session memory (2026-09-27, draft for review). With the participant's consent the program
+   may give the assistant a few things they said in session 1, picked for the moment. Step 1 may then
+   pick up one of them, and step 5 may ask whether their own session-1 moment shows the pattern; the
+   row is still filled only from what they say today (the program rejects a value that exists only in
+   that memory). The book does this: the therapist brings Paul back to the situation with John from
+   session 1 and asks how much he believed the thought (p. 27). The 2026-09-18 session did not show it.
+
 ::: ko
 1. 구조. 원서 2장: 1회기로부터의 연결, 아젠다 설정, 질문지·과제 리뷰, CD-Quest 소개, 작성, 요약·과제·
    마무리. 이 문서는 그 구조를 지킨다. 채점 전 15가지 패턴 순회(5단계)는 그것이 회기 대부분을 차지한
@@ -661,4 +678,10 @@ research team conducted on 2026-09-18, and where it differs from the book.
 7. 연구 주장. 2026-09-18 회기는 왜곡 점수가 낮아지면 우울이 낮아진다고 말했다. 이 연구(de Oliveira
    et al., 2011; 원서 25–26쪽)는 상관 연구이므로 4단계는 상관관계로만 말한다.
 8. 세 층 예고(10단계)는 2026-09-18 회기를 따른다. 원서 3장은 사고기록으로 넘어간다.
+9. 이전 회기 기억(2026-09-27, 검토용 초안). 참가자가 동의하면 프로그램은 1회기에 참가자가 한 말 가운데
+   지금 순간에 맞는 몇 가지를 도우미에게 줄 수 있다. 그러면 1단계는 그중 하나를 꺼낼 수 있고, 5단계는
+   참가자의 1회기 본인 사례에 이 패턴이 보이는지 물을 수 있다. 행은 여전히 참가자가 오늘 한 말로만
+   채운다(그 기억에만 있는 값은 프로그램이 거부한다). 원서가 이렇게 한다: 치료자는 Paul을 1회기의
+   John과의 상황으로 다시 데려가 그 생각을 얼마나 믿었는지 묻는다(27쪽). 2026-09-18 회기에는 이런
+   장면이 없었다.
 :::

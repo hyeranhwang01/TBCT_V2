@@ -3,6 +3,7 @@ import type {
   HomeworkTrackingRecord,
   LongitudinalMemory,
   MemoryCandidate,
+  MemoryConsentEvent,
   MemoryRetrievalResult,
   MemoryReviewDecision,
   MemoryUsageLog,
@@ -10,6 +11,7 @@ import type {
   RuntimeSessionSummary,
 } from "@/types/longitudinal-memory";
 import type { ParticipantStoreOp } from "@/shared/runtime/participant-store-ops";
+import type { MemoryChunk, MemoryChunkRetrieval } from "@/types/memory-chunks";
 
 // Minimal in-memory stand-in for src/shared/data/server/participant-store.ts, used
 // only so offline tests that touch the participant roster (e.g. session
@@ -28,6 +30,9 @@ const retrievalRuns = new Map<string, MemoryRetrievalResult>();
 const usageLogs = new Map<string, MemoryUsageLog>();
 const goalRecords = new Map<string, GoalTrackingRecord>();
 const homeworkRecords = new Map<string, HomeworkTrackingRecord>();
+const consentEvents: MemoryConsentEvent[] = [];
+const memoryChunks = new Map<string, MemoryChunk>();
+const chunkRetrievals: MemoryChunkRetrieval[] = [];
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value));
@@ -48,6 +53,9 @@ export function resetFakeParticipantStore() {
   usageLogs.clear();
   goalRecords.clear();
   homeworkRecords.clear();
+  consentEvents.length = 0;
+  memoryChunks.clear();
+  chunkRetrievals.length = 0;
 }
 
 export async function dispatchFakeParticipantStoreOp(op: ParticipantStoreOp): Promise<unknown> {
@@ -58,13 +66,68 @@ export async function dispatchFakeParticipantStoreOp(op: ParticipantStoreOp): Pr
       const match = [...participants.values()].find((participant) => participant.authUserId === op.authUserId);
       return match ? clone(match) : undefined;
     }
-    case "saveParticipant": participants.set(op.participant.id, clone(op.participant)); return op.participant;
+    case "saveParticipant": {
+      // Like the real store: an existing row keeps its memoryConsent.
+      const existing = participants.get(op.participant.id);
+      const { memoryConsent: _given, ...rest } = op.participant;
+      const next = existing ? { ...rest, ...(existing.memoryConsent ? { memoryConsent: existing.memoryConsent } : {}) } : op.participant;
+      participants.set(op.participant.id, clone(next));
+      return next;
+    }
     case "updateParticipant": {
       const current = participants.get(op.participantId);
       if (!current) throw new Error("Participant not found");
-      const next = { ...current, ...op.patch };
+      const { memoryConsent: _ignored, ...patch } = op.patch;
+      const next = { ...current, ...patch };
       participants.set(op.participantId, clone(next));
       return next;
+    }
+    case "recordMemoryConsent": {
+      const current = participants.get(op.participantId);
+      if (!current) throw new Error("Participant not found");
+      const now = new Date().toISOString();
+      consentEvents.push({ id: `CONS-${consentEvents.length + 1}`, participantId: op.participantId, consentKind: "memory", decision: op.decision, textVersion: op.textVersion, source: op.source, locale: op.locale, decidedAt: now, actorUserId: op.actor?.actorUserId, actorRole: op.actor?.actorRole ?? "server", previousDecision: current.memoryConsent?.decision });
+      const next = { ...current, memoryConsent: { decision: op.decision, textVersion: op.textVersion, source: op.source, decidedAt: now }, consent: { ...current.consent, crossSessionUseAllowed: op.decision === "granted", updatedAt: now }, updatedAt: now };
+      participants.set(op.participantId, clone(next));
+      return clone(next);
+    }
+    case "listMemoryConsentEvents": return consentEvents.filter((event) => event.participantId === op.participantId).map(clone);
+    case "saveMemoryChunks": {
+      let inserted = 0;
+      for (const chunk of op.chunks) {
+        if (memoryChunks.has(chunk.id)) continue;
+        memoryChunks.set(chunk.id, clone({ ...chunk, suppressed: false }));
+        inserted += 1;
+      }
+      return inserted;
+    }
+    case "listMemoryChunks":
+      return [...memoryChunks.values()]
+        .filter((chunk) => chunk.participantId === op.participantId && (op.beforeSessionIndex === undefined || chunk.sessionIndex < op.beforeSessionIndex) && (op.includeSuppressed || !chunk.suppressed))
+        .sort((left, right) => left.sessionIndex - right.sessionIndex || left.sourceCreatedAt.localeCompare(right.sourceCreatedAt) || left.id.localeCompare(right.id))
+        .map(clone);
+    case "listMemoryChunksBySession":
+      return [...memoryChunks.values()].filter((chunk) => chunk.runtimeSessionId === op.runtimeSessionId).sort((left, right) => left.sourceCreatedAt.localeCompare(right.sourceCreatedAt) || left.id.localeCompare(right.id)).map(clone);
+    case "saveMemoryChunkRetrieval":
+      if (!chunkRetrievals.some((item) => item.id === op.retrieval.id)) chunkRetrievals.push(clone(op.retrieval));
+      return op.retrieval;
+    case "listMemoryChunkRetrievals":
+      return chunkRetrievals.filter((item) => item.runtimeSessionId === op.runtimeSessionId).map(clone);
+    case "listUntaggedMemoryChunks":
+      return [...memoryChunks.values()].filter((chunk) => chunk.participantId === op.participantId && !chunk.taggedAt && !chunk.suppressed).sort((left, right) => left.sessionIndex - right.sessionIndex || left.sourceCreatedAt.localeCompare(right.sourceCreatedAt) || left.id.localeCompare(right.id)).map(clone);
+    case "setMemoryChunkTags": {
+      const chunk = memoryChunks.get(op.chunkId);
+      if (!chunk || chunk.taggedAt) return false;
+      memoryChunks.set(op.chunkId, clone({ ...chunk, tags: op.tags, taggedAt: new Date().toISOString(), tagModel: op.tagModel, tagPromptVersion: op.tagPromptVersion }));
+      return true;
+    }
+    case "suppressMemoryChunk": {
+      const chunk = memoryChunks.get(op.chunkId);
+      if (!chunk) throw new Error("Memory chunk not found");
+      if (!op.reason?.trim()) throw new Error("A reason is required to suppress a memory chunk");
+      const next = { ...chunk, suppressed: true, suppressedAt: new Date().toISOString(), suppressedBy: op.actorUserId, suppressedReason: op.reason.trim() };
+      memoryChunks.set(op.chunkId, clone(next));
+      return clone(next);
     }
     case "listMemories": return [...memories.values()].filter((memory) => memory.participantId === op.participantId).map(clone);
     case "getMemory": return memories.has(op.memoryId) ? clone(memories.get(op.memoryId)) : undefined;

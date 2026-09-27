@@ -1,8 +1,7 @@
 import { makeId } from "@/shared/id";
 import { recordMemoryAudit } from "@/shared/memory/memory-helpers";
-import { extractMemoryCandidatesFromSummary } from "@/shared/memory/memory-candidate-extractor";
 import { generateDeterministicSessionSummary } from "@/shared/memory/session-summary-generator";
-import { saveMemoryCandidate, saveGoalTrackingRecord, saveHomeworkTrackingRecord, updateMemoryCandidate } from "@/shared/data/repositories/longitudinal-memory-repository";
+import { saveGoalTrackingRecord, saveHomeworkTrackingRecord, updateMemoryCandidate } from "@/shared/data/repositories/longitudinal-memory-repository";
 import { getSessionSummary, getSessionSummaryBySession, saveSessionSummary, updateSessionSummary } from "@/shared/data/repositories/session-summary-repository";
 import { getRuntimeSession } from "@/shared/api/runtime-session-api";
 
@@ -47,14 +46,14 @@ export async function rejectSessionSummary(summaryId: string, reason: string) {
   return updateSessionSummary(summaryId, { summaryStatus: "rejected", reviewedBy: "Clinician", reviewedAt: new Date().toISOString(), unresolvedItems: [reason] });
 }
 
-export async function extractMemoryCandidates(summaryId: string) {
+/** Homework and goal tracking from a session summary. This used to also
+ * extract memory candidates for clinician review; that step is gone --
+ * cross-session memory is the participant's own words, chunked at
+ * completion and used with their consent (memory-indexer.ts,
+ * note2026_09_27_memory_rag_m3_m7). */
+export async function recordSummaryTracking(summaryId: string) {
   const summary = await getSessionSummary(summaryId);
   if (!summary) throw new Error("Session summary not found");
-  const existingCandidates = extractMemoryCandidatesFromSummary(summary);
-  for (const candidate of existingCandidates) {
-    await saveMemoryCandidate(candidate);
-  }
-  await updateSessionSummary(summaryId, { memoryCandidateIds: existingCandidates.map((candidate) => candidate.id) });
   await Promise.all(
     summary.homeworkAssigned.map((title) =>
       saveHomeworkTrackingRecord({
@@ -84,14 +83,6 @@ export async function extractMemoryCandidates(summaryId: string) {
       }),
     ),
   );
-  await recordMemoryAudit({
-    action: "Memory candidates extracted",
-    resource: `Session Summary ${summaryId}`,
-    version: summary.protocolVersion,
-    newValue: JSON.stringify(existingCandidates.map((candidate) => candidate.id)),
-    reason: "Deterministic memory extraction",
-  });
-  return existingCandidates;
 }
 
 export async function updateRuntimeMemoryCandidate(candidateId: string, patch: Parameters<typeof updateMemoryCandidate>[1]) {

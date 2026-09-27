@@ -1,9 +1,10 @@
 import { resolveLongitudinalMemoryPolicy } from "@/shared/memory/memory-policy";
-import { appendParticipantSession, getLongitudinalRecord, getParticipant, getParticipantByAuthUserId, listParticipantConsentEvents, listParticipants, saveLongitudinalRecord, saveParticipant, saveParticipantConsentEvent, updateParticipant } from "@/shared/data/repositories/participant-repository";
+import { appendParticipantSession, getLongitudinalRecord, getParticipant, getParticipantByAuthUserId, listMemoryConsentEvents, listParticipants, recordMemoryConsent, saveLongitudinalRecord, saveParticipant, updateParticipant } from "@/shared/data/repositories/participant-repository";
+import { MEMORY_CONSENT_TEXT_VERSION } from "@/shared/memory/memory-consent";
 import { createMemoryAuditEntry } from "@/shared/memory/memory-helpers";
 import { getLocalDb } from "@/shared/data/db/tbct-local-db";
 import { UI_LOCALE_TO_SESSION_LOCALE, type UiLocale } from "@/shared/i18n/locales";
-import type { ParticipantConsentEvent, RuntimeParticipant } from "@/types/longitudinal-memory";
+import type { MemoryConsentDecision, MemoryConsentSource, RuntimeParticipant } from "@/types/longitudinal-memory";
 
 function makeId(prefix: string) {
   const webCrypto = typeof globalThis !== "undefined" ? globalThis.crypto : undefined;
@@ -114,38 +115,11 @@ export async function attachSessionToParticipant(participantId: string, runtimeS
   await appendParticipantSession(participantId, runtimeSessionId);
 }
 
-export async function updateParticipantConsent(
-  participantId: string,
-  patch: Pick<ParticipantConsentEvent, "memoryStorageAllowed" | "crossSessionUseAllowed" | "sensitiveMemoryAllowed"> & { reason?: string },
-) {
-  const participant = await getParticipant(participantId);
-  if (!participant) throw new Error("Participant not found");
-  const event: ParticipantConsentEvent = {
-    id: makeId("CONS"),
-    participantId,
-    ...patch,
-    effectiveAt: new Date().toISOString(),
-  };
-  const next = await updateParticipant(participantId, {
-    consent: {
-      memoryStorageAllowed: patch.memoryStorageAllowed,
-      crossSessionUseAllowed: patch.crossSessionUseAllowed,
-      sensitiveMemoryAllowed: patch.sensitiveMemoryAllowed,
-      updatedAt: event.effectiveAt,
-    },
-  });
-  await saveParticipantConsentEvent(event);
-  await getLocalDb().auditEntries.put(
-    createMemoryAuditEntry({
-      action: "Participant consent updated",
-      resource: `Participant ${participantId}`,
-      version: "stage3",
-      previousValue: JSON.stringify(participant.consent),
-      newValue: JSON.stringify(next.consent),
-      reason: patch.reason ?? "Consent changed",
-    }),
-  );
-  return next;
+/** The participant's answer to the memory-consent popup, or a change made
+ * later in their profile. Recorded against the wording they were shown
+ * (MEMORY_CONSENT_TEXT_VERSION); see src/shared/memory/memory-consent.ts. */
+export async function recordParticipantMemoryConsent(participantId: string, input: { decision: MemoryConsentDecision; source: MemoryConsentSource; locale: string }) {
+  return recordMemoryConsent({ participantId, textVersion: MEMORY_CONSENT_TEXT_VERSION, ...input });
 }
 
 export async function updateParticipantProfile(
@@ -220,7 +194,7 @@ export async function assignClinicianToParticipant(participantId: string, clinic
 }
 
 export async function getParticipantConsentHistory(participantId: string) {
-  return listParticipantConsentEvents(participantId);
+  return listMemoryConsentEvents(participantId);
 }
 
 export async function getParticipantRecord(participantId: string) {

@@ -26,6 +26,7 @@ import {
 } from "@/shared/components/ui/primitives";
 import { useT } from "@/shared/i18n/context";
 import { assignClinicianToParticipant, getRuntimeParticipant, resolveClinicianEmail } from "@/shared/api/participant-api";
+import { MemoryConsentPanel } from "@/clinician/pages/monitoring/memory-consent-panel";
 import { useAuth } from "@/shared/auth/auth-context";
 import { getRuntimeSession, listCanonicalTestSessions, listRuntimeSessions } from "@/shared/api/runtime-session-api";
 import { pauseRuntimeSession, resumeRuntimeSession, terminateRuntimeSession } from "@/shared/api/runtime-execution-api";
@@ -737,6 +738,7 @@ export function PatientMonitoringDetailPage() {
                 <SummaryRow label={t("patientDetail.profile.preferredLanguage")} value={participant.locale} />
                 <SummaryRow label={t("patientDetail.profile.currentSession")} value={findSessionTitle(session?.sessionDefinitionId, locale) ?? t("common.unknown")} />
                 <SummaryRow label={t("patientDetail.profile.completedSessions")} value={String(summary.completedSessionCount)} />
+                <MemoryConsentPanel participant={participant} />
               </div>
               <SectionHeader title={t("patientDetail.profile.sessionsHeading")} />
               <div className="space-y-2 p-4">
