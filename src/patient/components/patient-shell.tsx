@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { ClipboardList, HelpCircle, History, ListChecks, MessageCircle, Settings, UserRound, Wrench } from "lucide-react";
+import { CalendarCheck, ClipboardList, HelpCircle, History, ListChecks, MessageCircle, Settings, UserRound, Wrench } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -98,6 +98,7 @@ export function PatientShell({
           <PatientNavLink href="/projects/demo/patient" active={pathname === "/projects/demo/patient"} icon={<ListChecks className="h-5 w-5" />} label={t("patientShell.home")} />
           <PatientNavLink href="/projects/demo/patient/history" active={pathname.includes("/patient/history")} icon={<History className="h-5 w-5" />} label={t("patientShell.history")} />
           <PatientNavLink href="/projects/demo/patient/homework" active={pathname.includes("/homework")} icon={<ClipboardList className="h-5 w-5" />} label={t("homeworkList.navLabel")} />
+          <PatientNavLink href="/projects/demo/patient/study" active={pathname.includes("/patient/study")} icon={<CalendarCheck className="h-5 w-5" />} label={t("patientStudy.navLabel")} />
           <PatientNavLink href="/projects/demo/patient/profile" active={pathname.includes("/profile")} icon={<UserRound className="h-5 w-5" />} label={t("patientPortal.profile")} />
           <PatientNavLink href="/projects/demo/patient/messages" active={pathname.includes("/messages")} icon={<MessageCircle className="h-5 w-5" />} label={t("messages.title")} />
           <div className="my-5 border-t border-border" />

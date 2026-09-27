@@ -46,7 +46,7 @@ export type ParticipantStoreOp =
   // Memory chunks (sql/027). Written and read by the server; clinicians read
   // and suppress. Never reachable by a patient caller (route.ts).
   | { op: "saveMemoryChunks"; chunks: MemoryChunk[] }
-  | { op: "listMemoryChunks"; participantId: string; beforeSessionIndex?: number; includeSuppressed?: boolean }
+  | { op: "listMemoryChunks"; participantId: string; beforeSessionIndex?: number; includeSuppressed?: boolean; officialAttemptsOnly?: boolean }
   | { op: "listMemoryChunksBySession"; runtimeSessionId: string }
   | { op: "suppressMemoryChunk"; chunkId: string; reason: string; actorUserId?: string }
   | { op: "listUntaggedMemoryChunks"; participantId: string }

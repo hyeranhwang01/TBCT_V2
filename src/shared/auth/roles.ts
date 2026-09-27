@@ -16,13 +16,22 @@
 // Isomorphic: read by the browser (auth-context.tsx) and the server
 // (server.ts, admin.ts).
 
-export type AppRole = "clinician" | "patient" | "admin";
+// assessor: blinded outcome assessor (Protocol V9 p.9) -- enters and reads
+// outcome assessments, never allocations, arms or conversations.
+// coordinator: screening, consent, enrolment, scheduling.
+export type AppRole = "clinician" | "patient" | "admin" | "assessor" | "coordinator";
+export const APP_ROLES: readonly AppRole[] = ["clinician", "patient", "admin", "assessor", "coordinator"];
+
+/** Roles the pre-trial API routes understand. Those routes restrict "patient"
+ * and give every other role full access, so a role they do not know must not
+ * reach them at all (getAuthenticatedCaller returns null for it). */
+export const LEGACY_ROUTE_ROLES: readonly AppRole[] = ["clinician", "patient", "admin"];
 export type RequestableRole = "clinician" | "patient";
 
 type UserLike = { app_metadata?: Record<string, unknown> | null; user_metadata?: Record<string, unknown> | null } | null | undefined;
 
 function asRole(value: unknown): AppRole | null {
-  return value === "clinician" || value === "patient" || value === "admin" ? value : null;
+  return APP_ROLES.includes(value as AppRole) ? (value as AppRole) : null;
 }
 
 /** The role the server granted -- the only one to authorize with. */

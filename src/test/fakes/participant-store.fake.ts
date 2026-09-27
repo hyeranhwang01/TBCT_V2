@@ -12,6 +12,7 @@ import type {
 } from "@/types/longitudinal-memory";
 import type { ParticipantStoreOp } from "@/shared/runtime/participant-store-ops";
 import type { MemoryChunk, MemoryChunkRetrieval } from "@/types/memory-chunks";
+import { fakeIsSupersededAttempt } from "@/test/fakes/runtime-session-store.fake";
 
 // Minimal in-memory stand-in for src/shared/data/server/participant-store.ts, used
 // only so offline tests that touch the participant roster (e.g. session
@@ -104,6 +105,7 @@ export async function dispatchFakeParticipantStoreOp(op: ParticipantStoreOp): Pr
     case "listMemoryChunks":
       return [...memoryChunks.values()]
         .filter((chunk) => chunk.participantId === op.participantId && (op.beforeSessionIndex === undefined || chunk.sessionIndex < op.beforeSessionIndex) && (op.includeSuppressed || !chunk.suppressed))
+        .filter((chunk) => !op.officialAttemptsOnly || chunk.chunkKind === "homework" || chunk.chunkKind === "clinician_note" || !fakeIsSupersededAttempt(chunk.runtimeSessionId))
         .sort((left, right) => left.sessionIndex - right.sessionIndex || left.sourceCreatedAt.localeCompare(right.sourceCreatedAt) || left.id.localeCompare(right.id))
         .map(clone);
     case "listMemoryChunksBySession":

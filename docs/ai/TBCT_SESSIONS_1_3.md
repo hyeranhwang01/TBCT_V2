@@ -39,6 +39,12 @@ Session 1 and Session 2
 - Evaluation: `src/shared/memory/eval/` (gold set + regression floors), `scripts/eval-memory-retrieval.ts` (`--live` tags with the real model).
 - Tests: `src/shared/api/prompt-session-api.test.ts` (scripted model via `src/test/fakes/prompt-session.fake.ts`), `src/shared/protocol/session-prompts.test.ts`, `s02/cdquest-grid.test.ts`. The node-engine audit (`runSessions01To08Audit`) now covers S03-S08 only.
 
+**2026-09-28 — trial records around S01/S02 (.claude/TASK_SCOPE.json `note2026_09_28_rct_backend`).**
+- Steps: each session's "Step by Step" is also a table in `s01/steps.ts` / `s02/steps.ts` (step number, name, the fields that show it was done). The model reports `currentStep` every turn (Common rules §5, v0.1.5); it is stored on the message as `metadata.step`. Fidelity (`src/shared/trial/step-progress.ts`) counts a step with evidence fields as done only when those fields are filled; skipped steps become a `STEP_SKIPPED` event. Keep `steps.ts` in step with the manuscript when steps change.
+- Every ended attempt is sealed (`session_records`); the first completed attempt of a session is official, and memory retrieval uses only the official attempt's chunks (homework and clinician notes always).
+- The trial session gate is checked before the first message and before each participant message; a refusal ends the call with `SessionUnavailableError`. With no active study the gate is open.
+- Tests: `src/shared/api/trial-runtime-flow.test.ts`.
+
 Session 1
 
 **2026-09-12 redesign (branch `feat/s01-redesign`, .claude/TASK_SCOPE.json `note2026_09_12_s01_redesign`).** S01 now follows the real first counseling session recorded 2026-09-11, and the manual where the researcher chose it. Where the older notes further down conflict with this block, this block is current.

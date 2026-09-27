@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { grantedRole, pendingRole, requestedRole } from "@/shared/auth/roles";
+import { LEGACY_ROUTE_ROLES, grantedRole, pendingRole, requestedRole } from "@/shared/auth/roles";
 
 // Server-only Supabase client (Route Handlers, middleware) -- reads the
 // session from the request's cookies so a route handler can learn which
@@ -45,6 +45,14 @@ export async function createSupabaseServerClient() {
  * authorization -- see runtime-execution-api.ts's callers. getUser() reads the
  * user from Supabase Auth, so a newly granted role counts at once. */
 export async function getAuthenticatedCaller() {
+  const user = await getSignedInUser();
+  if (!user?.role || !LEGACY_ROUTE_ROLES.includes(user.role)) return null;
+  return { userId: user.userId, email: user.email, role: user.role as "clinician" | "patient" | "admin" };
+}
+
+/** Any signed-in user with a granted role, including assessor and
+ * coordinator -- for routes written for those roles (the trial store). */
+export async function getStaffCaller() {
   const user = await getSignedInUser();
   if (!user?.role) return null;
   return { userId: user.userId, email: user.email, role: user.role };

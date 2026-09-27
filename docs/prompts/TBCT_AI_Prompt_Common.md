@@ -1,8 +1,8 @@
 ---
 id: common
 title: Common rules for every session
-version: 0.1.4
-date: 2026-09-27
+version: 0.1.5
+date: 2026-09-28
 status: draft
 ---
 
@@ -172,6 +172,10 @@ the worksheet from it.
   gives: areas of life, people, feelings, core-belief categories and the fifteen patterns. The program
   uses it to find what may matter from earlier sessions; the participant never sees it. Leave a list
   empty when nothing in it applies. Do not guess.
+- **currentStep** — the number of the step in this session's "Session Protocol — Step by Step" that
+  this message belongs to (Step 1, Step 2, ...). The research team uses it to see how closely the
+  session followed its steps; the participant never sees it. It follows the conversation, not a
+  plan: when you go back to an earlier step, give that step's number.
 
 ::: ko
 매 턴 메시지만이 아니라 구조화된 결과를 돌려준다. 프로그램이 이를 저장하고 워크시트를 채운다.
@@ -191,6 +195,9 @@ the worksheet from it.
 - **currentThemes** — 지금 대화가 무엇에 관한 것인지. 도구가 주는 목록(생활 영역, 인물, 감정, 핵심
   믿음 범주, 15가지 패턴)에서만 고른다. 프로그램은 이것으로 이전 회기에서 지금 필요할 수 있는 것을
   찾는다. 참가자에게는 보이지 않는다. 해당하는 것이 없으면 그 목록은 비워 둔다. 추측하지 않는다.
+- **currentStep** — 이 메시지가 속한, 이 회기 "Session Protocol — Step by Step"의 단계 번호(Step 1,
+  Step 2, ...). 연구팀이 회기가 단계를 얼마나 따랐는지 보는 데 쓴다. 참가자에게는 보이지 않는다. 계획이
+  아니라 실제 대화를 따른다: 앞 단계로 돌아가면 그 단계의 번호를 준다.
 :::
 
 A recorded value is the participant's own words, exactly as they gave them: the same words, the same

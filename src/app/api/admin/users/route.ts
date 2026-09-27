@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { grantUserRole, listAllUsers, setUserBanned } from "@/shared/supabase/admin";
 import { getAuthenticatedCaller } from "@/shared/supabase/server";
+import { APP_ROLES, type AppRole } from "@/shared/auth/roles";
 
 export const runtime = "nodejs";
 
@@ -37,10 +38,10 @@ export async function POST(request: Request) {
     // role is given -- e.g. approving a pending clinician signup.
     if ("role" in body) {
       const role = body.role;
-      if (role !== null && role !== "clinician" && role !== "patient" && role !== "admin") {
-        return NextResponse.json({ ok: false, error: "role must be clinician, patient, admin or null." }, { status: 400 });
+      if (role !== null && !APP_ROLES.includes(role as AppRole)) {
+        return NextResponse.json({ ok: false, error: `role must be one of ${APP_ROLES.join(", ")} or null.` }, { status: 400 });
       }
-      await grantUserRole(userId, role);
+      await grantUserRole(userId, role as AppRole | null);
       return NextResponse.json({ ok: true });
     }
     if (typeof banned !== "boolean") {

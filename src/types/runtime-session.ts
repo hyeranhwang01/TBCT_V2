@@ -142,6 +142,13 @@ export interface RuntimeSession {
   pausedAt?: string;
   resumedAt?: string;
   completedAt?: string;
+  /** From runtime_sessions columns (sql/033): AI module 1-8, protocol
+   * session 1-12 once linked to a study visit, attempt 1.., official = first
+   * completed attempt of the module. Read-only for the app. */
+  moduleNumber?: number | null;
+  sessionNumber?: number | null;
+  attemptNumber?: number | null;
+  isOfficial?: boolean;
   terminatedAt?: string;
   patientAlias: string;
   locale: string;

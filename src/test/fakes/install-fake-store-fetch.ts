@@ -4,12 +4,14 @@ import { SAFETY_STORE_ENDPOINT } from "@/shared/runtime/safety-store-ops";
 import { PROTOCOL_STUDIO_STORE_ENDPOINT } from "@/shared/runtime/protocol-studio-store-ops";
 import { WORKSHEET_STORE_ENDPOINT } from "@/shared/runtime/worksheet-store-ops";
 import { HOMEWORK_STORE_ENDPOINT } from "@/shared/runtime/homework-store-ops";
+import { TRIAL_STORE_ENDPOINT } from "@/shared/trial/trial-store-ops";
 import { dispatchFakeRuntimeStoreOp, resetFakeRuntimeStore } from "@/test/fakes/runtime-session-store.fake";
 import { dispatchFakeParticipantStoreOp, resetFakeParticipantStore } from "@/test/fakes/participant-store.fake";
 import { dispatchFakeSafetyStoreOp, resetFakeSafetyStore } from "@/test/fakes/safety-store.fake";
 import { dispatchFakeProtocolStudioStoreOp, resetFakeProtocolStudioStore } from "@/test/fakes/protocol-studio-store.fake";
 import { dispatchFakeWorksheetStoreOp, resetFakeWorksheetStore } from "@/test/fakes/worksheet-store.fake";
 import { dispatchFakeHomeworkStoreOp, resetFakeHomeworkStore } from "@/test/fakes/homework-store.fake";
+import { dispatchFakeTrialStoreOp, resetFakeTrialStore } from "@/test/fakes/trial-store.fake";
 import { dispatchFakeAnswerRelevance, dispatchFakeDialogueAgent, dispatchFakeSummaryFidelity } from "@/test/fakes/dialogue-agent.fake";
 import { dialogueContractSchema } from "@/shared/dialogue-agent/dialogue-agent-contract";
 import { answerRelevanceRequestSchema } from "@/shared/dialogue-agent/answer-relevance";
@@ -39,6 +41,7 @@ const FAKE_STORES: Array<{ endpoint: string; dispatch: (op: unknown) => Promise<
   { endpoint: PROTOCOL_STUDIO_STORE_ENDPOINT, dispatch: dispatchFakeProtocolStudioStoreOp as (op: unknown) => Promise<unknown> },
   { endpoint: WORKSHEET_STORE_ENDPOINT, dispatch: dispatchFakeWorksheetStoreOp as (op: unknown) => Promise<unknown> },
   { endpoint: HOMEWORK_STORE_ENDPOINT, dispatch: dispatchFakeHomeworkStoreOp as (op: unknown) => Promise<unknown> },
+  { endpoint: TRIAL_STORE_ENDPOINT, dispatch: dispatchFakeTrialStoreOp as (op: unknown) => Promise<unknown> },
 ];
 
 // /api/dialogue-agent has a different body shape ({contract, context}, not
@@ -159,4 +162,5 @@ export function resetAllFakeStores() {
   resetFakeProtocolStudioStore();
   resetFakeWorksheetStore();
   resetFakeHomeworkStore();
+  resetFakeTrialStore();
 }

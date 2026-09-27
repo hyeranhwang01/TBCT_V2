@@ -3,10 +3,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/clinician/components/app-shell";
-import { Badge, Button, Card, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
+import { Badge, Button, Card, PageHeader, PageSkeleton, inputClass } from "@/shared/components/ui/primitives";
 import { listAdminUsers, setAdminUserBanned, setAdminUserRole, type AdminUserSummary } from "@/clinician/lib/api/admin-api";
 import { useAuth } from "@/shared/auth/auth-context";
 import { useT } from "@/shared/i18n/context";
+
+const STAFF_ROLES = ["clinician", "coordinator", "assessor", "admin"] as const;
 
 function formatTimestamp(value: string) {
   return new Date(value).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" });
@@ -71,6 +73,21 @@ export function AdminUsersPage() {
                 <Button variant="secondary" size="sm" loading={roleMutation.isPending} onClick={() => roleMutation.mutate({ userId: row.id, role: "clinician" })}>
                   {t("adminUsers.approveClinician")}
                 </Button>
+              )}
+              {/* Staff roles for the trial (note2026_09_28_rct_backend):
+                  coordinator and the blinded assessor. Never for a patient
+                  account -- a participant is not made staff. */}
+              {row.id !== user?.id && row.role !== "patient" && (
+                <select
+                  aria-label={t("adminUsers.setRole")}
+                  className={`${inputClass} h-8 w-auto text-xs`}
+                  value=""
+                  disabled={roleMutation.isPending}
+                  onChange={(event) => event.target.value && roleMutation.mutate({ userId: row.id, role: event.target.value as AdminUserSummary["role"] })}
+                >
+                  <option value="">{t("adminUsers.setRole")}</option>
+                  {STAFF_ROLES.filter((option) => option !== row.role).map((option) => <option key={option} value={option}>{t(`adminUsers.role.${option}`)}</option>)}
+                </select>
               )}
               {row.id !== user?.id && row.role && row.role !== "patient" && (
                 <Button variant="ghost" size="sm" loading={roleMutation.isPending} onClick={() => roleMutation.mutate({ userId: row.id, role: null })}>

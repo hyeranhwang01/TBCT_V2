@@ -356,3 +356,15 @@ npx vite-node -c vitest.config.ts scripts/migrate-roles-to-app-metadata.ts --app
 ```
 
 Then apply `sql/031_roles_from_app_metadata.sql` (row-level security reads the same role).
+
+## RCT backend deployment (2026-09-28)
+
+One codebase, one Supabase project per country (KR, BR, FR), each with its own Vercel environment (`DATABASE_URL`, Supabase keys). For each country, in this order:
+
+1. Migrations: `DATABASE_URL=... node scripts/migrate-neon.mjs` (applies only new files; exits 2 if an applied file was changed since).
+2. Existing ended sessions: `DATABASE_URL=... npx vite-node -c vitest.config.ts scripts/backfill-session-records.ts` (list), then `--apply`.
+3. Study setup: `DATABASE_URL=... npx vite-node -c vitest.config.ts scripts/seed-trial.ts --country KR --apply` (draft study). Then on `/trial/monitoring` as admin: add therapists, create and freeze the AI release (model snapshot id), upload the statistician's randomization list.
+4. Staff roles on the admin account page: coordinator, assessor (blinded), clinician.
+5. Activate the study (`seed-trial.ts --country KR --activate --apply`). From then on AI sessions run only for allocated participants in AI arms with consent, on their frozen release.
+
+Analysis extract (per country, then concatenate the same-named files): `scripts/export-deidentified.ts --out ./extract-KR`. Retention: `scripts/purge-retention.ts` lists studies whose lock is older than the retention period; `--apply --confirm <study code>` erases their AI data.

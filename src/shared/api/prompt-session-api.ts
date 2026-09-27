@@ -19,6 +19,11 @@
 //  - pacing: a message that asks nothing is followed straight away by the next
 //    one (up to a few, within a time budget); completion and "not today" end or
 //    pause the session.
+//  - trial (note2026_09_28_rct_backend): the session gate is checked before a
+//    session starts and before each participant message (fails closed), the
+//    participant's frozen release picks the model, each message keeps the
+//    step the model says it is on, and model calls, rejected values, blocked
+//    memory copies, safety clarifications and failures go to runtime_events.
 //
 // Sessions 3-8 do not come through here.
 
@@ -41,6 +46,9 @@ import { PROMPT_FOCUS_FIELD, PROMPT_INPUT_HINT, PROMPT_THEMES_FIELD, checkFieldU
 import type { ClinicalStageNode, PromptItem } from "@/shared/protocol/source-fidelity-types";
 import type { RuntimePromptItem } from "@/types/protocol-runtime";
 import type { PatientInput, RuntimeCycleResult, RuntimeMessage, RuntimeSession, RuntimeSessionStatus, RuntimeSessionView, SessionExecutionLog } from "@/types/runtime-session";
+import { SESSION_PROMPTS } from "@/shared/protocol/session-prompts.generated";
+import { SessionUnavailableError, checkSessionGate, recordRuntimeEvent } from "@/shared/trial/runtime-trial";
+import type { SessionGate } from "@/types/trial";
 
 /** Messages in a row that ask nothing, before the program stops and waits. */
 const MAX_CHAINED_MESSAGES = 4;
@@ -208,6 +216,7 @@ async function deliverSafetyClarification(view: RuntimeSessionView, anchor: Anch
   });
   logRetrieval(retrieval, message.id);
   void saveRuntimeLog(makeLog(session.id, "safety_check", "completed", "Ambiguous safety language requires neutral clarification", { nodeId: anchor.node.id, output: { reason } })).catch(() => {});
+  void recordRuntimeEvent({ participantId: session.participantId, runtimeSessionId: session.id, messageId: message.id, category: "safety", severity: "warn", code: "SAFETY_CLARIFICATION", detail: { reason } });
   void createRuntimeCheckpoint(session.id).catch(() => {});
   return { sessionId: session.id, currentNodeId: anchor.node.id, currentPromptItemId: anchor.promptItem.id, safetyResult: NO_SAFETY, generatedMessage: message, turnOutcome: "clarification", fallbackUsed: false, sessionStatus: "waiting_for_input", logIds: [] };
 }
@@ -236,6 +245,7 @@ async function retrieveMemoryFor(view: RuntimeSessionView): Promise<TurnRetrieva
     const message = error instanceof Error ? error.message : String(error);
     console.error("[prompt-session-api] memory retrieval failed", { sessionId: session.id, error: message });
     void saveRuntimeLog(makeLog(session.id, "node_resolution", "failed", "Memory retrieval failed", { error: message })).catch(() => {});
+    void recordRuntimeEvent({ participantId: session.participantId, runtimeSessionId: session.id, category: "memory", severity: "warn", code: "MEMORY_RETRIEVAL_FAILED", detail: { error: message.slice(0, 500) } });
     return null;
   }
 }
@@ -253,7 +263,7 @@ function logRetrieval(retrieval: TurnRetrieval | null | undefined, messageId: st
   });
 }
 
-async function callModel(view: RuntimeSessionView, facts: string[], notes: string[], continueWithoutParticipant: boolean, memoryLines: string[]): Promise<PromptSessionResult> {
+async function callModel(view: RuntimeSessionView, facts: string[], notes: string[], continueWithoutParticipant: boolean, memoryLines: string[], model: string | undefined): Promise<PromptSessionResult> {
   const session = view.session;
   const request = {
     sessionDefinitionId: session.sessionDefinitionId,
@@ -261,19 +271,57 @@ async function callModel(view: RuntimeSessionView, facts: string[], notes: strin
     history: historyOf(view.messages),
     programBlock: programBlock(session, facts, notes, memoryLines),
     continueWithoutParticipant,
+    ...(model ? { model } : {}),
   };
   const context = { sessionId: session.id, turnId: makeId("TURN") };
+  const event = { participantId: session.participantId, runtimeSessionId: session.id, turnId: context.turnId };
   const first = await generatePromptSessionTurn(request, context);
-  if (first.ok || first.notConfigured) return first;
+  if (first.ok || first.notConfigured) {
+    recordModelCall(event, first, false);
+    return first;
+  }
+  void recordRuntimeEvent({ ...event, category: "model_call", severity: "warn", code: "MODEL_CALL_RETRIED", model: first.model ?? model ?? null, latencyMs: first.latencyMs ?? null, detail: { error: first.error.slice(0, 500) } });
   // One more try with the reason, then the fixed line.
-  return generatePromptSessionTurn({ ...request, correction: `Your last answer could not be used (${first.error.slice(0, 200)}). Answer again through the tool.` }, context);
+  const second = await generatePromptSessionTurn({ ...request, correction: `Your last answer could not be used (${first.error.slice(0, 200)}). Answer again through the tool.` }, context);
+  recordModelCall(event, second, true);
+  return second;
+}
+
+function recordModelCall(event: { participantId: string; runtimeSessionId: string; turnId: string }, result: PromptSessionResult, retried: boolean) {
+  if (result.ok) {
+    void recordRuntimeEvent({
+      ...event, category: "model_call", severity: "info", code: "MODEL_CALL", model: result.model, promptVersion: result.promptVersion, latencyMs: result.latencyMs,
+      inputTokens: result.inputTokens ?? null, outputTokens: result.outputTokens ?? null, detail: { step: result.turn.currentStep ?? null, retried },
+    });
+  } else {
+    void recordRuntimeEvent({ ...event, category: "model_call", severity: "error", code: result.notConfigured ? "MODEL_NOT_CONFIGURED" : "MODEL_CALL_FAILED", model: result.model ?? null, latencyMs: result.latencyMs ?? null, detail: { error: result.error.slice(0, 500), retried } });
+  }
+}
+
+/** Prompt versions as deployed, compared with the frozen release by the gate. */
+function deployedPromptVersions() {
+  return Object.fromEntries(Object.values(SESSION_PROMPTS).map((document) => [document.id, { version: document.version, sha256: document.sha256 }]));
+}
+
+/**
+ * The trial session gate (participants-store getSessionGate). Throws
+ * SessionUnavailableError when refused. Returns the frozen release's model
+ * when the gate is enforced; nothing when no study is active.
+ */
+async function gateFor(session: RuntimeSession, starting: boolean): Promise<string | undefined> {
+  const gate: SessionGate = await checkSessionGate({ participantId: session.participantId, sessionDefinitionId: session.sessionDefinitionId, runtimeSessionId: session.id, promptVersions: deployedPromptVersions(), recordEvent: starting });
+  if (!gate.allowed) {
+    if (!starting) void recordRuntimeEvent({ participantId: session.participantId, runtimeSessionId: session.id, category: "trial", severity: "warn", code: "SESSION_GATE_DENIED", detail: { reason: gate.reason } });
+    throw new SessionUnavailableError(gate.reason);
+  }
+  return gate.enforced ? gate.modelId : undefined;
 }
 
 /**
  * Asks the model for the next message and records it; keeps going while the
  * message asks nothing. `notes` go to the first call only.
  */
-async function runChain(sessionId: string, options: { notes: string[]; participantSpoke: boolean }): Promise<RuntimeCycleResult> {
+async function runChain(sessionId: string, options: { notes: string[]; participantSpoke: boolean; model?: string }): Promise<RuntimeCycleResult> {
   const started = Date.now();
   let notes = options.notes;
   let continueWithoutParticipant = !options.participantSpoke;
@@ -285,7 +333,7 @@ async function runChain(sessionId: string, options: { notes: string[]; participa
     const anchor = anchorFor(view);
     const current = derivePromptSessionFields(session.sessionDefinitionId, session.runtimeContext.fields, session.locale);
     const retrieval = await retrieveMemoryFor(view);
-    const result = await callModel(view, current.facts, notes, continueWithoutParticipant, retrievalProgramLines(retrieval?.selected ?? []));
+    const result = await callModel(view, current.facts, notes, continueWithoutParticipant, retrievalProgramLines(retrieval?.selected ?? []), options.model);
     notes = [];
     continueWithoutParticipant = true;
 
@@ -304,10 +352,15 @@ async function runChain(sessionId: string, options: { notes: string[]; participa
     // memory the model was shown rather than from the participant.
     const participantTexts = view.messages.filter((item) => item.role === "patient").map((item) => item.content);
     const shownFromBefore = [...(retrieval?.earlierTexts ?? []), ...bridgeTexts(session.runtimeContext.fields)];
-    for (const violation of authorshipViolations(accepted, shownFromBefore, participantTexts)) {
+    const fieldRejections = rejected.length;
+    const blocked = authorshipViolations(accepted, shownFromBefore, participantTexts);
+    for (const violation of blocked) {
       delete accepted[violation.name];
       rejected.push(violation);
     }
+    // Names and reasons only: the values are the participant's words.
+    if (fieldRejections) void recordRuntimeEvent({ participantId: session.participantId, runtimeSessionId: session.id, category: "validation", severity: "warn", code: "FIELD_REJECTED", detail: { fields: rejected.slice(0, fieldRejections).map((item) => ({ name: item.name, reason: item.reason })) } });
+    if (blocked.length) void recordRuntimeEvent({ participantId: session.participantId, runtimeSessionId: session.id, category: "authorship", severity: "warn", code: "AUTHORSHIP_BLOCKED", detail: { fields: blocked.map((item) => item.name) } });
     const worked = derivePromptSessionFields(session.sessionDefinitionId, { ...session.runtimeContext.fields, ...accepted }, session.locale).fields;
     const themes = turn.currentThemes ? sanitizeTags(turn.currentThemes) : session.runtimeContext.fields[PROMPT_THEMES_FIELD];
     const fields: Record<string, unknown> = { ...worked, [PROMPT_FOCUS_FIELD]: turn.focusField ?? undefined, [PROMPT_INPUT_HINT]: turn.inputHint, [PROMPT_THEMES_FIELD]: themes };
@@ -333,6 +386,7 @@ async function runChain(sessionId: string, options: { notes: string[]; participa
       promptSessionSha256: result.promptSha256,
       inputHint: turn.inputHint,
       focusField: turn.focusField ?? null,
+      step: turn.currentStep ?? null,
       ...(rejected.length ? { rejectedFieldUpdates: rejected } : {}),
       ...memoryMetadata(retrieval),
     });
@@ -399,6 +453,7 @@ export async function continuePromptSession(sessionId: string): Promise<RuntimeC
   const view = await getRuntimeSessionForTurn(sessionId);
   if (!view) throw new Error("Runtime session not found");
   const messages = view.messages;
+  const model = await gateFor(view.session, !messages.some((message) => message.role === "assistant"));
   const lastAssistant = [...messages].reverse().find((message) => message.role === "assistant");
   const notes: string[] = [];
   if (!messages.some((message) => message.role === "assistant")) {
@@ -412,7 +467,7 @@ export async function continuePromptSession(sessionId: string): Promise<RuntimeC
   if (!["active", "processing", "waiting_for_input"].includes(view.session.status)) {
     await updateRuntimeSessionRecord(sessionId, { status: "active" });
   }
-  return runChain(sessionId, { notes, participantSpoke: false });
+  return runChain(sessionId, { notes, participantSpoke: false, model });
 }
 
 /** A participant message in a prompt-driven session. Called in place of the
@@ -425,6 +480,7 @@ export async function submitPromptSessionInput(sessionId: string, patientInput: 
     return { sessionId, currentNodeId: initialSession.currentNodeId ?? "unknown", currentPromptItemId: initialSession.currentPromptItemId, safetyResult: NO_SAFETY, turnOutcome: "rejected_duplicate", fallbackUsed: false, sessionStatus: initialSession.status, logIds: [] };
   }
   if (initialSession.status !== "waiting_for_input") throw new Error("Session is not waiting for input");
+  const model = await gateFor(initialSession, false);
   const anchor = anchorFor(initialView);
   const clientTurnId = options.clientTurnId ?? makeId("TURN");
   const patientMessage: RuntimeMessage = {
@@ -485,7 +541,7 @@ export async function submitPromptSessionInput(sessionId: string, patientInput: 
   const notes = risk.clarificationAnswer === "denied"
     ? ["The program just asked its fixed safety question, and the participant said it was not about harming themselves. Acknowledge that briefly and warmly, then carry on with the step where it was."]
     : [];
-  return runChain(sessionId, { notes, participantSpoke: true });
+  return runChain(sessionId, { notes, participantSpoke: true, model });
 }
 
 export type { PromptInputHint };

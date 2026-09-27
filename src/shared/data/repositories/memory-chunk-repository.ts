@@ -23,7 +23,7 @@ export async function saveMemoryChunks(chunks: MemoryChunk[]) {
   return callStore<number>({ op: "saveMemoryChunks", chunks });
 }
 
-export async function listMemoryChunks(participantId: string, options: { beforeSessionIndex?: number; includeSuppressed?: boolean } = {}) {
+export async function listMemoryChunks(participantId: string, options: { beforeSessionIndex?: number; includeSuppressed?: boolean; officialAttemptsOnly?: boolean } = {}) {
   return callStore<MemoryChunk[]>({ op: "listMemoryChunks", participantId, ...options });
 }
 

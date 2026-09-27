@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  Activity,
   Bell,
   BookOpen,
   Boxes,
@@ -10,6 +11,7 @@ import {
   ChevronLeft,
   ClipboardCheck,
   FileStack,
+  FlaskConical,
   Globe,
   HelpCircle,
   Menu,
@@ -39,7 +41,9 @@ import { useOnboardingTour } from "@/shared/onboarding/use-onboarding-tour";
 import { cn } from "@/shared/utils";
 import { useStudioStore } from "@/shared/stores/studio-store";
 
-type Audience = "clinician" | "internal" | "admin";
+// trial: clinician, coordinator, admin; trialClinical: clinician, admin;
+// assessor: the blinded assessor and admin (note2026_09_28_rct_backend).
+type Audience = "clinician" | "internal" | "admin" | "trial" | "trialClinical" | "assessor";
 
 interface NavItem {
   labelKey: string;
@@ -53,6 +57,10 @@ const NAV_ITEMS: NavItem[] = [
   { labelKey: "nav.protocolEditor", href: "/projects/demo/protocols/tbct-br-001/canvas", icon: Boxes, audience: "clinician" },
   { labelKey: "nav.manualReflection", href: "/projects/demo/protocols/tbct-br-001/manual-reflection", icon: BookOpen, audience: "clinician" },
   { labelKey: "nav.patientMonitoring", href: "/patients", icon: Users, audience: "clinician" },
+  { labelKey: "nav.trialParticipants", href: "/trial/participants", icon: FlaskConical, audience: "trial" },
+  { labelKey: "nav.trialSafety", href: "/trial/safety", icon: ShieldCheck, audience: "trialClinical" },
+  { labelKey: "nav.trialMonitoring", href: "/trial/monitoring", icon: Activity, audience: "trial" },
+  { labelKey: "nav.assessorWorklist", href: "/trial/assessments", icon: ClipboardCheck, audience: "assessor" },
   // Admin-only -- filtered by the real logged-in user's auth role
   // (see visibleNavItems below), independent of the legacy
   // isClinicianAudience/showFullNav toggle above, which is about the old
@@ -153,12 +161,20 @@ export function AppShell({ children }: { children: ReactNode }) {
     () =>
       NAV_ITEMS.filter((item) => {
         if (item.audience === "admin") return role === "admin";
+        if (item.audience === "trial") return role === "clinician" || role === "coordinator" || role === "admin";
+        if (item.audience === "trialClinical") return role === "clinician" || role === "admin";
+        if (item.audience === "assessor") return role === "assessor" || role === "admin";
+        // Coordinators and assessors have no clinician pages.
+        if (item.audience === "clinician" && (role === "coordinator" || role === "assessor")) return false;
         return showFullNav || item.audience === "clinician";
       }),
     [showFullNav, role],
   );
   const navLabel = (item: NavItem) => (item.labelKey.startsWith("nav.") ? t(item.labelKey) : item.labelKey);
-  const clinicianNavItems = useMemo(() => NAV_ITEMS.filter((item) => item.audience === "clinician"), []);
+  const clinicianNavItems = useMemo(() => {
+    const primary = visibleNavItems.filter((item) => item.audience === "clinician");
+    return primary.length ? primary : visibleNavItems.filter((item) => item.audience === "trial" || item.audience === "assessor");
+  }, [visibleNavItems]);
 
   return (
     <div className="clinician-app h-dvh overflow-hidden bg-background">

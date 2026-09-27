@@ -1,4 +1,5 @@
-import { claimRuntimePatientTurn, claimRuntimeSessionStart, commitRuntimeAssistantTurn, saveRuntimeEscalation, saveRuntimeLog, updateRuntimeSessionRecord } from "@/shared/data/repositories/runtime-session-repository";
+import { claimRuntimePatientTurn, claimRuntimeSessionStart, commitRuntimeAssistantTurn, getRuntimeSessionRecord, saveRuntimeEscalation, saveRuntimeLog, updateRuntimeSessionRecord } from "@/shared/data/repositories/runtime-session-repository";
+import { recordRuntimeEvent, requireSessionGate, sealSessionRecord } from "@/shared/trial/runtime-trial";
 import { cleanupExpiredTriggerSuppressions, findActiveTriggerSuppression, updateTriggerSuppression } from "@/shared/data/repositories/safety-event-repository";
 import { createRuntimeCheckpoint, getRuntimeSession, getRuntimeSessionForTurn, setRuntimeSessionStatus } from "@/shared/api/runtime-session-api";
 import { generateSessionSummary, recordSummaryTracking } from "@/shared/api/session-summary-api";
@@ -1444,6 +1445,14 @@ export async function startRuntimeSession(sessionId: string) {
   // the caller that actually wins the claim proceeds; every other
   // concurrent caller returns early with the current, already-in-progress
   // view instead of re-running the chain.
+  // Trial session gate (note2026_09_28_rct_backend). Sessions 1-2 are gated
+  // on the server when their first message is written (prompt-session-api);
+  // the others here, before the start is claimed so a refusal leaves the
+  // session untouched.
+  const gated = await getRuntimeSessionRecord(sessionId);
+  if (gated && !isPromptDrivenSession(gated.sessionDefinitionId) && gated.status === "created") {
+    await requireSessionGate({ participantId: gated.participantId, sessionDefinitionId: gated.sessionDefinitionId, runtimeSessionId: sessionId, recordEvent: true });
+  }
   const claim = await claimRuntimeSessionStart(sessionId);
   if (!claim.claimed) return null;
   const view = await getRuntimeSession(sessionId);
@@ -1522,7 +1531,9 @@ export async function terminateRuntimeSession(sessionId: string, reason: string)
   assertRuntimeTransition(view.session.status, "terminated");
   await updateRuntimeSessionRecord(sessionId, { status: "terminated", terminatedAt: new Date().toISOString() });
   void saveRuntimeLog(makeLog(sessionId, "session", "completed", `Session terminated: ${reason}`)).catch(() => {});
-  return createRuntimeCheckpoint(sessionId);
+  const checkpoint = await createRuntimeCheckpoint(sessionId);
+  await sealSessionRecord(sessionId, view.session.participantId);
+  return checkpoint;
 }
 
 export async function completeRuntimeSession(sessionId: string) {
@@ -1542,6 +1553,7 @@ export async function completeRuntimeSession(sessionId: string) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[runtime-execution-api] session summary failed", { sessionId, error: message });
     void saveRuntimeLog(makeLog(sessionId, "completion", "failed", "Session summary failed", { error: message })).catch(() => {});
+    void recordRuntimeEvent({ runtimeSessionId: sessionId, category: "storage", severity: "error", code: "SUMMARY_FAILED", detail: { error: message.slice(0, 500) } });
   }
   // Memory chunks (memory-indexer.ts): this session, and homework written
   // since the last one. Same rule as above -- a failure is logged, never
@@ -1559,7 +1571,11 @@ export async function completeRuntimeSession(sessionId: string) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[runtime-execution-api] memory chunking failed", { sessionId, error: message });
     void saveRuntimeLog(makeLog(sessionId, "completion", "failed", "Memory chunking failed", { error: message })).catch(() => {});
+    void recordRuntimeEvent({ runtimeSessionId: sessionId, category: "memory", severity: "error", code: "MEMORY_INDEX_FAILED", detail: { error: message.slice(0, 500) } });
   }
+  // The sealed record (note2026_09_28_rct_backend), last, so it holds the
+  // summary and this session's memory chunks. Never throws.
+  await sealSessionRecord(sessionId);
   return checkpoint;
 }
 

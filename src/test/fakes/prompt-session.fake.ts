@@ -32,6 +32,7 @@ export function installScriptedPromptSession(script: PromptSessionScript): Scrip
         pauseSession: answer.pauseSession ?? false,
         safetyConcern: answer.safetyConcern ?? false,
         currentThemes: answer.currentThemes ?? undefined,
+        currentStep: answer.currentStep ?? null,
       },
     };
   });

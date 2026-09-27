@@ -34,13 +34,17 @@ export const promptSessionTurnSchema = z.object({
    * (memory-tags.ts). Read by the next call's memory retrieval; never shown
    * to the participant. Optional: a turn without it is still valid. */
   currentThemes: z.object({ domains: themeList, persons: themeList, emotions: themeList, beliefs: themeList, distortions: themeList }).nullable().optional(),
+  /** The manuscript step this message belongs to (Common rules section 5).
+   * Stored on the message for step fidelity (src/shared/trial/step-progress.ts);
+   * never shown. A missing or odd value is dropped, never fails the turn. */
+  currentStep: z.number().int().min(1).max(30).nullable().optional().catch(null),
 });
 export type PromptSessionTurn = z.infer<typeof promptSessionTurnSchema>;
 
 const TOOL_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["reply", "fieldUpdates", "focusField", "inputHint", "sessionComplete", "pauseSession", "safetyConcern"],
+  required: ["reply", "fieldUpdates", "focusField", "inputHint", "sessionComplete", "pauseSession", "safetyConcern", "currentStep"],
   properties: {
     reply: { type: "string", description: "The message the participant reads. Nothing else." },
     fieldUpdates: { type: "object", description: "Values this turn established, by the field names listed in the system prompt. Lists are sent whole. Empty object when nothing new.", additionalProperties: true },
@@ -50,6 +54,7 @@ const TOOL_SCHEMA = {
     pauseSession: { type: "boolean" },
     safetyConcern: { type: "boolean" },
     currentThemes: { ...tagSetJsonSchema(), description: "What the conversation is about right now, from these lists only. Empty lists when nothing applies." },
+    currentStep: { type: ["integer", "null"], description: "The number of the session protocol step this message belongs to (Step 1, Step 2, ...)." },
   },
 } as const;
 
@@ -67,11 +72,14 @@ export type PromptSessionRequest = {
   continueWithoutParticipant: boolean;
   /** Set on the retry after a malformed answer. */
   correction?: string;
+  /** The model of the participant's frozen trial release (session gate),
+   * in place of ANTHROPIC_MODEL. */
+  model?: string;
 };
 
 export type PromptSessionResult =
-  | { ok: true; turn: PromptSessionTurn; model: string; latencyMs: number; promptVersion: string; promptSha256: string }
-  | { ok: false; error: string; notConfigured?: boolean };
+  | { ok: true; turn: PromptSessionTurn; model: string; latencyMs: number; promptVersion: string; promptSha256: string; inputTokens?: number | null; outputTokens?: number | null }
+  | { ok: false; error: string; notConfigured?: boolean; model?: string; latencyMs?: number };
 
 type Generator = (request: PromptSessionRequest, context: { sessionId: string; turnId: string }) => Promise<PromptSessionResult>;
 let generatorForTests: Generator | undefined;
@@ -118,7 +126,7 @@ async function callAnthropic(request: PromptSessionRequest, context: { sessionId
   if ((process.env.AI_PROVIDER ?? "").trim().toLowerCase() === "mock") return { ok: false, error: "Model calls disabled (AI_PROVIDER=mock)", notConfigured: true };
   const apiKey = process.env.ANTHROPIC_API_KEY ?? "";
   if (!apiKey) return { ok: false, error: "Missing ANTHROPIC_API_KEY", notConfigured: true };
-  const model = process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL;
+  const model = request.model ?? process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL;
   const maxTokens = Math.min(2000, Math.max(600, Number(process.env.ANTHROPIC_SESSION_MAX_TOKENS ?? 1500)));
   const timeoutMs = Math.min(30000, Math.max(15000, Number(process.env.ANTHROPIC_TIMEOUT_MS ?? 25000)));
   const controller = new AbortController();
@@ -155,11 +163,12 @@ async function callAnthropic(request: PromptSessionRequest, context: { sessionId
     if (!parsed.success) throw new Error(`Session turn failed validation: ${parsed.error.message.replace(/\s+/g, " ").slice(0, 300)}`);
     const latencyMs = Math.round(performance.now() - started);
     recordModelUsage({ ...usageBase, inputTokens: json.usage?.input_tokens ?? null, outputTokens: json.usage?.output_tokens ?? null, totalTokens: json.usage?.input_tokens !== undefined && json.usage.output_tokens !== undefined ? json.usage.input_tokens + json.usage.output_tokens : null, latencyMs, cacheStatus: (json.usage?.cache_read_input_tokens ?? 0) > 0 ? "hit" : "miss", success: true });
-    return { ok: true, turn: parsed.data, model, latencyMs, promptVersion: document.version, promptSha256: document.sha256 };
+    return { ok: true, turn: parsed.data, model, latencyMs, promptVersion: document.version, promptSha256: document.sha256, inputTokens: json.usage?.input_tokens ?? null, outputTokens: json.usage?.output_tokens ?? null };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Session turn failed";
-    recordModelUsage({ ...usageBase, inputTokens: null, outputTokens: null, totalTokens: null, latencyMs: Math.round(performance.now() - started), cacheStatus: "none", success: false, failureReason: message });
-    return { ok: false, error: message };
+    const latencyMs = Math.round(performance.now() - started);
+    recordModelUsage({ ...usageBase, inputTokens: null, outputTokens: null, totalTokens: null, latencyMs, cacheStatus: "none", success: false, failureReason: message });
+    return { ok: false, error: message, model, latencyMs };
   } finally {
     clearTimeout(timeout);
   }

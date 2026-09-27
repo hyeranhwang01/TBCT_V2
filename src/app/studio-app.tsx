@@ -65,9 +65,17 @@ const RuntimePilotOutcomesPage = dynamic(() => import("@/clinician/pages/pilot/o
 const RuntimePilotDataQualityPage = dynamic(() => import("@/clinician/pages/pilot/data-quality-page").then((mod) => mod.RuntimePilotDataQualityPage), { ssr: false });
 const RuntimePilotExportsPage = dynamic(() => import("@/clinician/pages/pilot/exports-page").then((mod) => mod.RuntimePilotExportsPage), { ssr: false });
 const RuntimePilotReportsPage = dynamic(() => import("@/clinician/pages/pilot/reports-page").then((mod) => mod.RuntimePilotReportsPage), { ssr: false });
+const TrialParticipantsPage = dynamic(() => import("@/clinician/pages/trial/participants-page").then((mod) => mod.TrialParticipantsPage), { ssr: false });
+const TrialParticipantDetailPage = dynamic(() => import("@/clinician/pages/trial/participant-detail-page").then((mod) => mod.TrialParticipantDetailPage), { ssr: false });
+const AssessorWorklistPage = dynamic(() => import("@/clinician/pages/trial/assessor-page").then((mod) => mod.AssessorWorklistPage), { ssr: false });
+const TrialSafetyPage = dynamic(() => import("@/clinician/pages/trial/safety-page").then((mod) => mod.TrialSafetyPage), { ssr: false });
+const TrialMonitoringPage = dynamic(() => import("@/clinician/pages/trial/monitoring-page").then((mod) => mod.TrialMonitoringPage), { ssr: false });
+const PatientStudyPage = dynamic(() => import("@/patient/pages/patient-study-page").then((mod) => mod.PatientStudyPage), { ssr: false });
 const RuntimePilotReportDetailPage = dynamic(() => import("@/clinician/pages/pilot/report-detail-page").then((mod) => mod.RuntimePilotReportDetailPage), { ssr: false });
 
-type Audience = "clinician" | "patient" | "admin" | "public";
+// "trial": the study team (clinician, coordinator, admin); "assessor": the
+// blinded outcome assessor (and admin). note2026_09_28_rct_backend.
+type Audience = "clinician" | "patient" | "admin" | "public" | "trial" | "assessor";
 
 type StudioRoute = {
   matches: (pathname: string) => boolean;
@@ -106,6 +114,7 @@ const studioRoutes: StudioRoute[] = [
   { matches: (pathname) => pathname === "/data-dashboard" || pathname === "/data-dashboard/", Page: DataDashboardPage },
   { matches: (pathname) => pathname === "/patients" || pathname === "/patients/", Page: PatientMonitoringListPage },
   { matches: (pathname) => pathname.includes("/patient/profile"), Page: PatientProfilePage, audience: "patient" },
+  { matches: (pathname) => pathname.includes("/patient/study"), Page: PatientStudyPage, audience: "patient" },
   { matches: (pathname) => pathname.includes("/patient/checkin"), Page: PatientCheckinPage, audience: "patient" },
   { matches: (pathname) => pathname.includes("/patient/messages"), Page: PatientMessagesPage, audience: "patient" },
   { matches: (pathname) => pathname.includes("/patient/history"), Page: PatientSessionHistoryPage, audience: "patient" },
@@ -117,21 +126,28 @@ const studioRoutes: StudioRoute[] = [
   { matches: (pathname) => pathname.includes("/patient/sessions/") && pathname.endsWith("/complete"), Page: PatientSessionCompletePage, audience: "patient" },
   { matches: (pathname) => pathname.includes("/patient/sessions/"), Page: PatientSessionPage, audience: "patient" },
   { matches: (pathname) => pathname.includes("/patient"), Page: PatientListPage, audience: "patient" },
-  { matches: (pathname) => pathname.includes("/runtime/pilot/participants/"), Page: RuntimePilotParticipantDetailPage },
-  { matches: (pathname) => pathname.includes("/runtime/pilot/reports/"), Page: RuntimePilotReportDetailPage },
-  { matches: (pathname) => pathname.includes("/runtime/pilot/configuration"), Page: RuntimePilotConfigurationPage },
-  { matches: (pathname) => pathname.includes("/runtime/pilot/sites"), Page: RuntimePilotSitesPage },
-  { matches: (pathname) => pathname.includes("/runtime/pilot/participants"), Page: RuntimePilotParticipantsPage },
-  { matches: (pathname) => pathname.includes("/runtime/pilot/screening"), Page: RuntimePilotScreeningPage },
-  { matches: (pathname) => pathname.includes("/runtime/pilot/enrollment"), Page: RuntimePilotEnrollmentPage },
-  { matches: (pathname) => pathname.includes("/runtime/pilot/allocation"), Page: RuntimePilotAllocationPage },
-  { matches: (pathname) => pathname.includes("/runtime/pilot/sessions"), Page: RuntimePilotSessionsPage },
-  { matches: (pathname) => pathname.includes("/runtime/pilot/deviations"), Page: RuntimePilotDeviationsPage },
-  { matches: (pathname) => pathname.includes("/runtime/pilot/outcomes"), Page: RuntimePilotOutcomesPage },
-  { matches: (pathname) => pathname.includes("/runtime/pilot/data-quality"), Page: RuntimePilotDataQualityPage },
-  { matches: (pathname) => pathname.includes("/runtime/pilot/exports"), Page: RuntimePilotExportsPage },
-  { matches: (pathname) => pathname.includes("/runtime/pilot/reports"), Page: RuntimePilotReportsPage },
-  { matches: (pathname) => pathname.includes("/runtime/pilot"), Page: RuntimePilotDashboardPage },
+  // The trial (Postgres, /api/trial/store). The /runtime/pilot pages below
+  // are the old browser-only demo and are left to admins for reference.
+  { matches: (pathname) => pathname.startsWith("/trial/participants/"), Page: TrialParticipantDetailPage, audience: "trial" },
+  { matches: (pathname) => pathname.startsWith("/trial/participants"), Page: TrialParticipantsPage, audience: "trial" },
+  { matches: (pathname) => pathname.startsWith("/trial/assessments"), Page: AssessorWorklistPage, audience: "assessor" },
+  { matches: (pathname) => pathname.startsWith("/trial/safety"), Page: TrialSafetyPage },
+  { matches: (pathname) => pathname.startsWith("/trial"), Page: TrialMonitoringPage, audience: "trial" },
+  { matches: (pathname) => pathname.includes("/runtime/pilot/participants/"), Page: RuntimePilotParticipantDetailPage, audience: "admin" },
+  { matches: (pathname) => pathname.includes("/runtime/pilot/reports/"), Page: RuntimePilotReportDetailPage, audience: "admin" },
+  { matches: (pathname) => pathname.includes("/runtime/pilot/configuration"), Page: RuntimePilotConfigurationPage, audience: "admin" },
+  { matches: (pathname) => pathname.includes("/runtime/pilot/sites"), Page: RuntimePilotSitesPage, audience: "admin" },
+  { matches: (pathname) => pathname.includes("/runtime/pilot/participants"), Page: RuntimePilotParticipantsPage, audience: "admin" },
+  { matches: (pathname) => pathname.includes("/runtime/pilot/screening"), Page: RuntimePilotScreeningPage, audience: "admin" },
+  { matches: (pathname) => pathname.includes("/runtime/pilot/enrollment"), Page: RuntimePilotEnrollmentPage, audience: "admin" },
+  { matches: (pathname) => pathname.includes("/runtime/pilot/allocation"), Page: RuntimePilotAllocationPage, audience: "admin" },
+  { matches: (pathname) => pathname.includes("/runtime/pilot/sessions"), Page: RuntimePilotSessionsPage, audience: "admin" },
+  { matches: (pathname) => pathname.includes("/runtime/pilot/deviations"), Page: RuntimePilotDeviationsPage, audience: "admin" },
+  { matches: (pathname) => pathname.includes("/runtime/pilot/outcomes"), Page: RuntimePilotOutcomesPage, audience: "admin" },
+  { matches: (pathname) => pathname.includes("/runtime/pilot/data-quality"), Page: RuntimePilotDataQualityPage, audience: "admin" },
+  { matches: (pathname) => pathname.includes("/runtime/pilot/exports"), Page: RuntimePilotExportsPage, audience: "admin" },
+  { matches: (pathname) => pathname.includes("/runtime/pilot/reports"), Page: RuntimePilotReportsPage, audience: "admin" },
+  { matches: (pathname) => pathname.includes("/runtime/pilot"), Page: RuntimePilotDashboardPage, audience: "admin" },
   { matches: (pathname) => pathname.includes("/runtime/safety/events/"), Page: RuntimeSafetyEventDetailPage },
   { matches: (pathname) => pathname.includes("/runtime/safety/reports/"), Page: RuntimeSafetyReportDetailPage },
   { matches: (pathname) => pathname.includes("/runtime/safety/events"), Page: RuntimeSafetyEventsPage },
@@ -185,7 +201,9 @@ export function StudioApp() {
     audience === "public" ||
     (audience === "patient" && role === "patient") ||
     (audience === "clinician" && (role === "clinician" || role === "admin")) ||
-    (audience === "admin" && role === "admin");
+    (audience === "admin" && role === "admin") ||
+    (audience === "trial" && (role === "clinician" || role === "coordinator" || role === "admin")) ||
+    (audience === "assessor" && (role === "assessor" || role === "admin"));
 
   // Signed in but no granted role (a clinician signup awaiting approval):
   // a notice, not a redirect -- sending them to the login page they just
@@ -194,8 +212,12 @@ export function StudioApp() {
 
   useEffect(() => {
     if (loading || audience === "public" || authorized || signedInWithoutRole) return;
+    // Coordinators and assessors have no clinician pages: they land on
+    // their own instead of being sent back to the login they came from.
+    if (role === "coordinator") return router.replace("/trial/participants");
+    if (role === "assessor") return router.replace("/trial/assessments");
     router.replace(audience === "patient" ? "/patient/login" : "/login");
-  }, [loading, audience, authorized, signedInWithoutRole, router]);
+  }, [loading, audience, authorized, signedInWithoutRole, role, router]);
 
   if (audience !== "public" && signedInWithoutRole) return <AccessPending />;
   if (audience !== "public" && (loading || !authorized)) return <FullPageSpinner />;

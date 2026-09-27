@@ -254,11 +254,19 @@ export async function saveMemoryChunks(chunks: MemoryChunk[]): Promise<number> {
 }
 
 export async function listMemoryChunks(op: Extract<ParticipantStoreOp, { op: "listMemoryChunks" }>): Promise<MemoryChunk[]> {
+  // officialAttemptsOnly (note2026_09_28_rct_backend): a session's worksheet
+  // and conversation chunks come from its official attempt (sql/033) once
+  // there is one; a repeat of a module that already has one is left out.
+  // Homework and clinician notes are not attempts and always count.
   const { rows } = await getPgPool().query<MemoryChunkRow>(
-    `SELECT * FROM participant_memory_chunks
-     WHERE participant_id = $1 AND ($2::int IS NULL OR session_index < $2) AND ($3::boolean OR NOT suppressed)
-     ORDER BY session_index ASC, source_created_at ASC, id ASC`,
-    [op.participantId, op.beforeSessionIndex ?? null, op.includeSuppressed ?? false],
+    `SELECT c.* FROM participant_memory_chunks c
+     WHERE c.participant_id = $1 AND ($2::int IS NULL OR c.session_index < $2) AND ($3::boolean OR NOT c.suppressed)
+       AND (NOT $4::boolean OR c.chunk_kind IN ('homework', 'clinician_note') OR NOT EXISTS (
+         SELECT 1 FROM runtime_sessions s
+         WHERE s.id = c.runtime_session_id AND NOT s.is_official AND EXISTS (
+           SELECT 1 FROM runtime_sessions o WHERE o.participant_id = s.participant_id AND o.module_number = s.module_number AND o.is_official)))
+     ORDER BY c.session_index ASC, c.source_created_at ASC, c.id ASC`,
+    [op.participantId, op.beforeSessionIndex ?? null, op.includeSuppressed ?? false, op.officialAttemptsOnly ?? false],
   );
   return rows.map(chunkFromRow);
 }

@@ -46,6 +46,12 @@ async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>): Promi
   }
 }
 
+// Sessions are read with their numbering columns (sql/033) merged into the
+// record: moduleNumber, sessionNumber, attemptNumber, isOfficial. The columns
+// are the source of truth; a later write of `data` that carries them back
+// changes nothing, since no write sets the columns from `data`.
+const SESSION_DATA = "data || jsonb_strip_nulls(jsonb_build_object('moduleNumber', module_number, 'sessionNumber', session_number, 'attemptNumber', attempt_number, 'isOfficial', is_official))";
+
 export async function createRuntimeSessionRecord(session: RuntimeSession) {
   const pool = getPgPool();
   await pool.query(
@@ -61,7 +67,7 @@ export async function createRuntimeSessionRecord(session: RuntimeSession) {
 
 export async function updateRuntimeSessionRecord(sessionId: string, patch: Partial<RuntimeSession>) {
   const pool = getPgPool();
-  const { rows } = await pool.query<{ data: RuntimeSession }>("SELECT data FROM runtime_sessions WHERE id = $1", [sessionId]);
+  const { rows } = await pool.query<{ data: RuntimeSession }>(`SELECT ${SESSION_DATA} AS data FROM runtime_sessions WHERE id = $1`, [sessionId]);
   const current = rows[0]?.data;
   if (!current) throw new Error("Runtime session not found");
   const next: RuntimeSession = { ...current, ...patch, updatedAt: new Date().toISOString() };
@@ -81,7 +87,7 @@ export async function claimRuntimePatientTurn(input: {
 }): Promise<RuntimePatientTurnClaim> {
   return withTransaction(async (client) => {
     const { rows } = await client.query<{ data: RuntimeSession }>(
-      "SELECT data FROM runtime_sessions WHERE id = $1 FOR UPDATE",
+      `SELECT ${SESSION_DATA} AS data FROM runtime_sessions WHERE id = $1 FOR UPDATE`,
       [input.sessionId],
     );
     const current = rows[0]?.data;
@@ -137,7 +143,7 @@ export async function claimRuntimePatientTurn(input: {
 export async function claimRuntimeSessionStart(sessionId: string): Promise<RuntimeSessionStartClaim> {
   return withTransaction(async (client) => {
     const { rows } = await client.query<{ data: RuntimeSession }>(
-      "SELECT data FROM runtime_sessions WHERE id = $1 FOR UPDATE",
+      `SELECT ${SESSION_DATA} AS data FROM runtime_sessions WHERE id = $1 FOR UPDATE`,
       [sessionId],
     );
     const current = rows[0]?.data;
@@ -154,12 +160,12 @@ export async function claimRuntimeSessionStart(sessionId: string): Promise<Runti
 }
 
 export async function getRuntimeSessionRecord(sessionId: string): Promise<RuntimeSession | undefined> {
-  const { rows } = await getPgPool().query<{ data: RuntimeSession }>("SELECT data FROM runtime_sessions WHERE id = $1", [sessionId]);
+  const { rows } = await getPgPool().query<{ data: RuntimeSession }>(`SELECT ${SESSION_DATA} AS data FROM runtime_sessions WHERE id = $1`, [sessionId]);
   return rows[0]?.data;
 }
 
 export async function listRuntimeSessionRecords(): Promise<RuntimeSession[]> {
-  const { rows } = await getPgPool().query<{ data: RuntimeSession }>("SELECT data FROM runtime_sessions ORDER BY updated_at DESC");
+  const { rows } = await getPgPool().query<{ data: RuntimeSession }>(`SELECT ${SESSION_DATA} AS data FROM runtime_sessions ORDER BY updated_at DESC`);
   return rows.map((row) => row.data);
 }
 
@@ -170,7 +176,7 @@ export async function listRuntimeSessionRecords(): Promise<RuntimeSession[]> {
  * sessions. */
 export async function listRuntimeSessionRecordsByParticipant(participantId: string): Promise<RuntimeSession[]> {
   const { rows } = await getPgPool().query<{ data: RuntimeSession }>(
-    "SELECT data FROM runtime_sessions WHERE participant_id = $1 ORDER BY updated_at DESC",
+    `SELECT ${SESSION_DATA} AS data FROM runtime_sessions WHERE participant_id = $1 ORDER BY updated_at DESC`,
     [participantId],
   );
   return rows.map((row) => row.data);
@@ -199,7 +205,7 @@ export async function saveRuntimeMessage(message: RuntimeMessage) {
       [message.id, message.runtimeSessionId, message.role, message.createdAt, message.deliveredAt ?? null, JSON.stringify(message)],
     );
     const { rows } = await client.query<{ data: RuntimeSession }>(
-      "SELECT data FROM runtime_sessions WHERE id = $1 FOR UPDATE",
+      `SELECT ${SESSION_DATA} AS data FROM runtime_sessions WHERE id = $1 FOR UPDATE`,
       [message.runtimeSessionId],
     );
     const session = rows[0]?.data;
@@ -239,7 +245,7 @@ export async function saveRuntimeLog(log: SessionExecutionLog) {
       [log.id, log.runtimeSessionId, log.stage, log.status, log.timestamp, JSON.stringify(log)],
     );
     const { rows } = await client.query<{ data: RuntimeSession }>(
-      "SELECT data FROM runtime_sessions WHERE id = $1 FOR UPDATE",
+      `SELECT ${SESSION_DATA} AS data FROM runtime_sessions WHERE id = $1 FOR UPDATE`,
       [log.runtimeSessionId],
     );
     const session = rows[0]?.data;
@@ -295,7 +301,7 @@ export async function saveRuntimeEscalation(event: ClinicianEscalationEvent) {
       [event.id, event.runtimeSessionId, event.protocolId, event.status, event.createdAt, JSON.stringify(event)],
     );
     const { rows } = await client.query<{ data: RuntimeSession }>(
-      "SELECT data FROM runtime_sessions WHERE id = $1 FOR UPDATE",
+      `SELECT ${SESSION_DATA} AS data FROM runtime_sessions WHERE id = $1 FOR UPDATE`,
       [event.runtimeSessionId],
     );
     const session = rows[0]?.data;
@@ -387,7 +393,7 @@ export async function listRuntimeExecutionTraces(runtimeSessionId: string): Prom
 export async function commitRuntimeAssistantTurn(input: CommitRuntimeAssistantTurnInput): Promise<CommitRuntimeAssistantTurnResult> {
   return withTransaction(async (client) => {
     const { rows } = await client.query<{ data: RuntimeSession }>(
-      "SELECT data FROM runtime_sessions WHERE id = $1 FOR UPDATE",
+      `SELECT ${SESSION_DATA} AS data FROM runtime_sessions WHERE id = $1 FOR UPDATE`,
       [input.sessionId],
     );
     const current = rows[0]?.data;

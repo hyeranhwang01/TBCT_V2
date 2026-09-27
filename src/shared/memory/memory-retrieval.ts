@@ -68,7 +68,8 @@ export async function retrieveForTurn(input: {
   const currentSessionIndex = sessionIndexOf(input.sessionDefinitionId);
   // Only the current cut: after an index-version bump the old chunks stay on
   // record but are not candidates beside the new ones.
-  const candidates = (await listMemoryChunks(input.participantId, { beforeSessionIndex: currentSessionIndex })).filter((chunk) => chunk.indexVersion === MEMORY_INDEX_VERSION);
+  // Of a repeated session, only the official attempt (listMemoryChunks).
+  const candidates = (await listMemoryChunks(input.participantId, { beforeSessionIndex: currentSessionIndex, officialAttemptsOnly: true })).filter((chunk) => chunk.indexVersion === MEMORY_INDEX_VERSION);
   const selected = selectChunks(scoreChunks(candidates, { ...query, currentSessionIndex }, retrievalAffinityFor(input.sessionDefinitionId)));
   return {
     record: { ...base, candidateCount: candidates.length, selected: selected.map((item) => ({ chunkId: item.chunk.id, score: item.score, parts: item.parts })) },

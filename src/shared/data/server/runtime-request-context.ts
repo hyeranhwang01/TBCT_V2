@@ -11,6 +11,8 @@ import { WORKSHEET_STORE_ENDPOINT } from "@/shared/runtime/worksheet-store-ops";
 import { SAFETY_STORE_ENDPOINT } from "@/shared/runtime/safety-store-ops";
 import { PARTICIPANT_STORE_ENDPOINT } from "@/shared/runtime/participant-store-ops";
 import { HOMEWORK_STORE_ENDPOINT } from "@/shared/runtime/homework-store-ops";
+import { TRIAL_STORE_ENDPOINT } from "@/shared/trial/trial-store-ops";
+import { dispatchTrialStoreOp } from "@/shared/data/server/trial-store";
 
 type RequestContext = { cookie: string; origin: string };
 type InternalFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
@@ -55,6 +57,9 @@ const IN_PROCESS_STORES = new Map<string, (op: never) => Promise<unknown>>([
   // recordMemoryAudit). Same auth reasoning as the five above -- reached
   // only from inside the already-authenticated turn.
   [PROTOCOL_STUDIO_STORE_ENDPOINT, dispatchProtocolStudioStoreOp as (op: never) => Promise<unknown>],
+  // Trial store (note2026_09_28_rct_backend): in process the actor is the
+  // server; the route sets the real caller for browser requests.
+  [TRIAL_STORE_ENDPOINT, dispatchTrialStoreOp as (op: never) => Promise<unknown>],
 ]);
 
 const authenticatedFetch: InternalFetch = async (input, init = {}) => {

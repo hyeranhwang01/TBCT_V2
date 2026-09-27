@@ -4,15 +4,15 @@
     {
       "id": "common",
       "title": "Common rules for every session",
-      "version": "0.1.4",
-      "date": "2026-09-27",
+      "version": "0.1.5",
+      "date": "2026-09-28",
       "manuscript": "docs/prompts/TBCT_AI_Prompt_Common.md",
-      "manuscriptSha256": "00fe2e1ea3a07fb97eb487f6e5f6394d512b2ae8a8fb8ae2b1e167077979d02f",
-      "pdf": "docs/prompts/pdf/TBCT_AI_Prompt_Common_prompt_v0.1.4.pdf",
+      "manuscriptSha256": "d5eb0fc2ade8abe8c0d5c0cdbe4dad5becb84596009a0384dbf3670c3831bf70",
+      "pdf": "docs/prompts/pdf/TBCT_AI_Prompt_Common_prompt_v0.1.5.pdf",
       "text": "artifacts/prompts/common.txt",
-      "textSha256": "8f8199ca31b118b02c0ae3fadc1d6312c436bbc3cf6a675771c6ff690fca762f",
-      "textLineCount": 138,
-      "wordCount": 1795
+      "textSha256": "04147b95b6edf5556a313468b66bdf1f07d24c1b92f2ee2addadbcdac6bd2657",
+      "textLineCount": 140,
+      "wordCount": 1860
     },
     {
       "id": "tbct-s01",
