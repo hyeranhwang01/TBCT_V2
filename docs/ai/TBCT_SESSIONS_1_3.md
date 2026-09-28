@@ -27,8 +27,23 @@ Session 1 and Session 2
 - Fields: `s0N/prompt-fields.ts` lists what the model may record (the existing worksheet/continuity names; anything else is rejected and logged). S02's CD-Quest scores and total are worked out by the program (`s02/cdquest-score.ts`), never by the model. Worksheet projection, homework, the clinician progress panel and the S01→S02 `previousS01*` bridge read the same field names as before.
 - `s01/spec.ts` and `s02/spec.ts` are three-node shells (opening → conversation (orientation) → closing): safety events need a node/prompt id and clinician resume needs an orientation node. The S02 safety-pause node and crisisSignal edges are gone (they were unreachable).
 - Retired: S01/S02 turn-rules, task-intents, dialogue-guidance, messages (fixed + Korean text), S01 scene generation (`/api/s01-generation`) and distortion candidates (`/api/distortion-candidates`). Left as dead code, unreachable for S01/S02: the S02 collection gate in runtime-input-assessment.ts, S01 branches in long-answer.ts / field-correction.ts / runtime-context.ts, the legacy key in runtime-release-loader.ts.
-- Memory: retrieved once at session start (same policy and consent gate) and given to the model as a background note.
+- Memory (superseded 2026-09-27, see below): retrieved once at session start (same policy and consent gate) and given to the model as a background note.
+
+**2026-09-27 — cross-session memory is per-turn retrieval of the participant's own words, with their consent (.claude/TASK_SCOPE.json `note2026_09_27_memory_rag_m1_consent`, `_m2_chunks`, `_m3_m7`).**
+- Consent: a popup (`src/patient/components/memory-consent-dialog.tsx`, mounted in PatientShell) until the participant answers; changeable in the profile. `participant.memoryConsent` + append-only `participant_consent_events` (sql/025). Every use of earlier-session memory goes through `memoryUseAllowed` (`src/shared/memory/memory-consent.ts`); undecided = not agreed. The basic bridge (`previous*` fields) is used for everyone and the popup says so.
+- Storage (everyone, internal): at every completion the session is cut into `participant_memory_chunks` (sql/027, append-only; only tags-once and suppression may change) by `src/shared/memory/chunk-builder.ts`; S01/S02 cut their worksheet in `s0N/memory-chunks.ts`. Homework is chunked at the next session's start. Safety turns and any text with a risk signal are never stored.
+- Tagging (consent only): one Claude call per batch from the closed list in `memory-tags.ts` (`chunk-tagger.ts`), in the background.
+- Retrieval (consent only, prompt-driven sessions): before every model call, `memory-retrieval.ts` + `chunk-scorer.ts` (step affinity from `s0N/memory-chunks.ts`, tags vs the model's `currentThemes`, Korean bigram overlap; deterministic, `retrieval-v1`) put at most three chunks in the `<program>` block; each call is logged in `memory_chunk_retrievals` (sql/029) and on the message (`memoryRetrieval`).
+- Authorship guard: a recorded value found in the retrieved memory but in nothing the participant said this session is rejected (Patient Authorship Invariant).
+- Removed: the old candidate → clinician-approval → retrieval pipeline (both engines), the review queue (the same route now shows the chunks, with suppression). Clinician notes are also `clinician_note` chunks.
+- Evaluation: `src/shared/memory/eval/` (gold set + regression floors), `scripts/eval-memory-retrieval.ts` (`--live` tags with the real model).
 - Tests: `src/shared/api/prompt-session-api.test.ts` (scripted model via `src/test/fakes/prompt-session.fake.ts`), `src/shared/protocol/session-prompts.test.ts`, `s02/cdquest-grid.test.ts`. The node-engine audit (`runSessions01To08Audit`) now covers S03-S08 only.
+
+**2026-09-28 — trial records around S01/S02 (.claude/TASK_SCOPE.json `note2026_09_28_rct_backend`).**
+- Steps: each session's "Step by Step" is also a table in `s01/steps.ts` / `s02/steps.ts` (step number, name, the fields that show it was done). The model reports `currentStep` every turn (Common rules §5, v0.1.5); it is stored on the message as `metadata.step`. Fidelity (`src/shared/trial/step-progress.ts`) counts a step with evidence fields as done only when those fields are filled; skipped steps become a `STEP_SKIPPED` event. Keep `steps.ts` in step with the manuscript when steps change.
+- Every ended attempt is sealed (`session_records`); the first completed attempt of a session is official, and memory retrieval uses only the official attempt's chunks (homework and clinician notes always).
+- The trial session gate is checked before the first message and before each participant message; a refusal ends the call with `SessionUnavailableError`. With no active study the gate is open.
+- Tests: `src/shared/api/trial-runtime-flow.test.ts`.
 
 Session 1
 

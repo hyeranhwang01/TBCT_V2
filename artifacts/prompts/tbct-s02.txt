@@ -36,7 +36,7 @@ Follow the steps in order. Do not start a step before the one before it is compl
 
 Purpose. Reconnect with the first session.
 
-How. Greet them warmly, say it is good to see them again, and recall in one or two sentences what the last session covered: how a situation sets off a thought, and how that thought reaches feelings, behavior and the body; and that the fifteen patterns a thought can be distorted into were introduced at the end. Name none of their own content from last time. Ask nothing in this message.
+How. Greet them warmly, say it is good to see them again, and recall in one or two sentences what the last session covered: how a situation sets off a thought, and how that thought reaches feelings, behavior and the body; and that the fifteen patterns a thought can be distorted into were introduced at the end. If the program gives you something they said last time that fits (common rules, section 7), you may pick up one thing from it in a few words; otherwise name none of their own content from last time. Ask nothing in this message.
 
 Complete when the message is sent.
 
@@ -103,6 +103,8 @@ Rules for every pattern:
 • Never supply an example as if it were theirs. Never move their example to a different pattern; you may say that other patterns show through in the same example too, since one example can belong to several.
 
 • If a different example of their own would fit this pattern better, you may say so and ask for it.
+
+• If the program gives you something from an earlier session that may show this pattern — their own moment from the first session, or a homework row (common rules, section 7) — you may ask whether it fits: "In the first session you told me about …; does this pattern show there?" Record only what they say today, in today's words; never write the earlier words into the row yourself.
 
 • If they say they do not see why this one counts as a distortion, ask what feels off about it to them rather than explaining.
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { ArrowLeft, BookOpenCheck, Home, LifeBuoy, MessageCircle, NotebookTabs, UserRound, Wrench } from "lucide-react";
+import { ArrowLeft, BookOpenCheck, CalendarCheck, Home, LifeBuoy, MessageCircle, NotebookTabs, UserRound, Wrench } from "lucide-react";
 import { motion } from "framer-motion";
 import { useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -14,6 +14,8 @@ import { useDevMode } from "@/shared/dev-mode/dev-mode";
 import { useAuth } from "@/shared/auth/auth-context";
 import { getOrCreateParticipantForUiLocale } from "@/shared/api/participant-api";
 import { applyPatientLocaleChange } from "@/patient/lib/api/patient-locale-sync";
+import { MemoryConsentDialog } from "@/patient/components/memory-consent-dialog";
+import { memoryConsentNeedsDecision } from "@/shared/memory/memory-consent";
 import { fadeUp } from "@/shared/motion/motion-variants";
 import { useReducedMotionPreference } from "@/shared/motion/use-reduced-motion-preference";
 import { BrandMark, PageHero, ProgressBar, StatusPill } from "@/patient/components/ui/kit";
@@ -36,6 +38,7 @@ function useNavItems(): NavItem[] {
     { href: BASE, label: t("patientUi.nav.home"), icon: <Home />, match: (p) => p === BASE || p === `${BASE}/` },
     { href: `${BASE}/history`, label: t("patientUi.nav.sessions"), icon: <BookOpenCheck />, match: (p) => p.includes("/patient/history") || p.includes("/patient/sessions/") },
     { href: `${BASE}/homework`, label: t("patientUi.nav.homework"), icon: <NotebookTabs />, match: (p) => p.includes("/patient/homework") },
+    { href: `${BASE}/study`, label: t("patientStudy.navLabel"), icon: <CalendarCheck />, match: (p) => p.includes("/patient/study") },
     { href: `${BASE}/messages`, label: t("patientUi.nav.messages"), icon: <MessageCircle />, match: (p) => p.includes("/patient/messages"), tourId: "messages-link" },
     { href: `${BASE}/profile`, label: t("patientUi.nav.me"), icon: <UserRound />, match: (p) => p.includes("/patient/profile") || p.includes("/patient/checkin"), tourId: "profile-link", desktopAside: true },
   ];
@@ -102,7 +105,7 @@ export function PatientShell({
   const pathname = usePathname();
   const textScale = useTextScale();
   const reducedMotion = useReducedMotionPreference();
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const devMode = useDevMode();
   const queryClient = useQueryClient();
   const navItems = useNavItems();
@@ -309,7 +312,7 @@ export function PatientShell({
           aria-label={t("patientUi.nav.label")}
           className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
         >
-          <div className="mx-auto grid h-16 max-w-lg grid-cols-5">
+          <div className="mx-auto grid h-16 max-w-xl grid-cols-6">
             {navItems.map((item) => {
               const active = item.match(pathname);
               return (
@@ -330,6 +333,13 @@ export function PatientShell({
             })}
           </div>
         </nav>
+      )}
+      {/* Every patient page sits in this shell, so a participant who has not
+          answered the memory-consent question meets it wherever they land
+          -- before any session can start. Never for a clinician viewing a
+          patient screen. */}
+      {role === "patient" && participantQuery.data && memoryConsentNeedsDecision(participantQuery.data) && (
+        <MemoryConsentDialog participant={participantQuery.data} open required />
       )}
     </div>
   );

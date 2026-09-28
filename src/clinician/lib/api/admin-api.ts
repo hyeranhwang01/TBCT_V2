@@ -24,3 +24,15 @@ export async function setAdminUserBanned(userId: string, banned: boolean): Promi
   const body = await response.json();
   if (!response.ok || !body.ok) throw new Error(body?.error ?? "Failed to update user.");
 }
+
+/** Grants a role (e.g. approving a pending clinician signup) or, with null,
+ * removes it. */
+export async function setAdminUserRole(userId: string, role: AdminUserSummary["role"]): Promise<void> {
+  const response = await fetch(resolveStoreUrl(ADMIN_USERS_ENDPOINT), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ userId, role }),
+  });
+  const body = await response.json();
+  if (!response.ok || !body.ok) throw new Error(body?.error ?? "Failed to update user.");
+}

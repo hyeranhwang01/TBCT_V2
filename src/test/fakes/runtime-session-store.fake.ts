@@ -41,17 +41,67 @@ export function resetFakeRuntimeStore() {
   executionTraces.clear();
 }
 
+// Numbering as sql/033 does it: module from the definition id, attempt =
+// next per participant and module, assigned only when the session is new;
+// the columns are never taken from a later write.
+const NUMBERING_KEYS = ["moduleNumber", "sessionNumber", "attemptNumber", "isOfficial"] as const;
+
+function moduleNumberOf(definitionId: string | undefined) {
+  const match = /^tbct-s0*(\d+)$/.exec(definitionId ?? "");
+  return match ? Number(match[1]) : null;
+}
+
+function keepNumbering(next: RuntimeSession, current: RuntimeSession | undefined): RuntimeSession {
+  const kept: Record<string, unknown> = { ...next };
+  for (const key of NUMBERING_KEYS) {
+    if (current && current[key] !== undefined) kept[key] = current[key];
+    else delete kept[key];
+  }
+  return kept as unknown as RuntimeSession;
+}
+
 function createSession(session: RuntimeSession) {
-  sessions.set(session.id, clone(session));
-  return session;
+  const existing = sessions.get(session.id);
+  if (existing) {
+    sessions.set(session.id, clone(keepNumbering(session, existing)));
+    return sessions.get(session.id)!;
+  }
+  const moduleNumber = moduleNumberOf(session.sessionDefinitionId);
+  const attempts = [...sessions.values()].filter((other) => other.participantId === session.participantId && other.moduleNumber === moduleNumber && moduleNumber !== null);
+  const numbered: RuntimeSession = { ...keepNumbering(session, undefined), moduleNumber, attemptNumber: moduleNumber === null ? null : Math.max(0, ...attempts.map((other) => other.attemptNumber ?? 0)) + 1, isOfficial: false };
+  sessions.set(session.id, clone(numbered));
+  return clone(numbered);
 }
 
 function updateSession(sessionId: string, patch: Partial<RuntimeSession>) {
   const current = sessions.get(sessionId);
   if (!current) throw new Error("Runtime session not found");
-  const next: RuntimeSession = { ...current, ...patch, updatedAt: new Date().toISOString() };
+  const next: RuntimeSession = keepNumbering({ ...current, ...patch, updatedAt: new Date().toISOString() }, current);
   sessions.set(sessionId, clone(next));
   return next;
+}
+
+/** finalize_session_record's official marking and visit link, for the trial
+ * store fake (src/test/fakes/trial-store.fake.ts). */
+/** A non-official attempt of a module that has an official one (the memory
+ * store's officialAttemptsOnly rule). */
+export function fakeIsSupersededAttempt(sessionId: string) {
+  const session = sessions.get(sessionId);
+  if (!session || session.isOfficial || session.moduleNumber == null) return false;
+  return [...sessions.values()].some((other) => other.participantId === session.participantId && other.moduleNumber === session.moduleNumber && other.isOfficial);
+}
+
+export function fakeMarkSessionEnded(sessionId: string, link?: { sessionNumber: number | null }) {
+  const current = sessions.get(sessionId);
+  if (!current) throw new Error("Runtime session not found");
+  let isOfficial = current.isOfficial ?? false;
+  if (current.status === "completed" && !isOfficial && current.moduleNumber != null) {
+    const taken = [...sessions.values()].some((other) => other.participantId === current.participantId && other.moduleNumber === current.moduleNumber && other.isOfficial);
+    if (!taken) isOfficial = true;
+  }
+  const next = { ...current, isOfficial, ...(link && link.sessionNumber !== null ? { sessionNumber: link.sessionNumber } : {}) };
+  sessions.set(sessionId, clone(next));
+  return clone(next);
 }
 
 function claimPatientTurn(input: {

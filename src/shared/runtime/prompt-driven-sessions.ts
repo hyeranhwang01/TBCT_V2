@@ -43,6 +43,8 @@ export function promptSessionFieldSet(sessionDefinitionId: string): PromptSessio
 /** Runtime fields the program writes for the patient view (never the model). */
 export const PROMPT_FOCUS_FIELD = "promptFocusField";
 export const PROMPT_INPUT_HINT = "promptInputHint";
+/** The model's currentThemes from its last turn, for the next retrieval. */
+export const PROMPT_THEMES_FIELD = "promptCurrentThemes";
 
 export const PROMPT_INPUT_HINTS = ["text", "yes_no", "rating_0_100", "score_0_5", "none"] as const;
 export type PromptInputHint = (typeof PROMPT_INPUT_HINTS)[number];

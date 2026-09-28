@@ -25,7 +25,6 @@
 //
 // Usage: NEXT_PUBLIC_TBCT_PATIENT_MOCK=1 npm run dev
 
-import { installFakeStoreFetch, resetAllFakeStores } from "@/test/fakes/install-fake-store-fetch";
 import { getOrCreateParticipantForUiLocale } from "@/shared/api/participant-api";
 import { createCanonicalTestRuntimeSession } from "@/shared/api/runtime-session-api";
 import { startRuntimeSession } from "@/shared/api/runtime-execution-api";
@@ -124,11 +123,16 @@ let installPromise: Promise<void> | null = null;
  * once per page load. */
 export function installPatientDevMock(): Promise<void> {
   if (!isPatientMockModeEnabled()) return Promise.resolve();
-  if (!installPromise) installPromise = seed();
+  // A failed seed must be visible: it would otherwise leave a half-built
+  // mock (e.g. one session stuck at "not started") with no clue why.
+  if (!installPromise) installPromise = seed().catch((error) => console.error("[patient-dev-mock] seed failed", error));
   return installPromise;
 }
 
 async function seed() {
+  // Loaded here, not at the top: the fake stores are test code, so a normal
+  // visitor's browser never downloads them -- only a mock-mode page load does.
+  const { installFakeStoreFetch, resetAllFakeStores } = await import("@/test/fakes/install-fake-store-fetch");
   installFakeStoreFetch({ interceptDialogueAgent: true });
   resetAllFakeStores();
 

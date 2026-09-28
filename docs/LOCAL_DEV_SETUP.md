@@ -344,3 +344,29 @@ rm -rf .next node_modules/.cache && pnpm dev
 - `git add -A` / `git add .` — 항상 **경로를 명시**해서 add
 - `git commit --no-verify` / `git push --no-verify` — 가드를 무력화한다
 - 빌드가 깨진다는 이유로 6개 파일 밖 파일을 **임의로** 추가 커밋 → 반드시 먼저 질문
+## Roles (2026-09-27)
+
+Roles are read only from Supabase `app_metadata` (see `src/shared/auth/roles.ts`); `user_metadata.role` is only what a signup asked for, because users can edit it themselves. Patients get their role automatically (`/api/auth/claim-role`); a clinician signup waits until an admin approves it on the account page. An account without a granted role is refused by every API route.
+
+Before deploying this change to an environment with existing accounts, move their roles (otherwise existing clinicians and admins are locked out and safety alerts find no clinician to email):
+
+```
+npx vite-node -c vitest.config.ts scripts/migrate-roles-to-app-metadata.ts                         # list; review the clinician/admin accounts
+npx vite-node -c vitest.config.ts scripts/migrate-roles-to-app-metadata.ts --apply --grant-staff   # after review
+```
+
+Then apply `sql/031_roles_from_app_metadata.sql` (row-level security reads the same role).
+
+## RCT backend deployment (2026-09-28)
+
+One codebase, one Supabase project per country (KR, BR, FR), each with its own Vercel environment (`DATABASE_URL`, Supabase keys). For each country, in this order:
+
+1. Migrations: `DATABASE_URL=... node scripts/migrate-neon.mjs` (applies only new files; exits 2 if an applied file was changed since).
+2. Existing ended sessions: `DATABASE_URL=... npx vite-node -c vitest.config.ts scripts/backfill-session-records.ts` (list), then `--apply`.
+3. Study setup: `DATABASE_URL=... npx vite-node -c vitest.config.ts scripts/seed-trial.ts --country KR --apply` (draft study). Then on `/trial/monitoring` as admin: add therapists, create and freeze the AI release (model snapshot id), upload the statistician's randomization list.
+4. Staff roles on the admin account page: coordinator, assessor (blinded), clinician.
+5. Activate the study (`seed-trial.ts --country KR --activate --apply`). From then on AI sessions run only for allocated participants in AI arms with consent, on their frozen release.
+
+Analysis extract (per country, then concatenate the same-named files): `scripts/export-deidentified.ts --out ./extract-KR`. Retention: `scripts/purge-retention.ts` lists studies whose lock is older than the retention period; `--apply --confirm <study code>` erases their AI data.
+
+Unused tables are dropped by `sql/042_drop_unused_tables.sql`. A database that holds only test data can be emptied first with `scripts/reset-test-data.ts` (lists row counts; `--apply --confirm <host> --backup <dir>` saves every table to JSON, then empties all app tables; login accounts are not touched).

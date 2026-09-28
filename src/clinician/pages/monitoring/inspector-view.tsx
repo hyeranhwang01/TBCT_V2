@@ -43,7 +43,8 @@ function groupMessagesByNode(messages: RuntimeMessage[], nodeTitleFor: (nodeId?:
  * instead of fetching it again). */
 export function RuntimeInspectorView({ view }: { view: RuntimeSessionView }) {
   const { t } = useT();
-  const { session, messages, logs, escalations, providerEvents, validationEvents, nodes, edges, memoryRetrievalRuns, memoryUsageLogs } = view;
+  const { session, messages, logs, escalations, providerEvents, validationEvents, nodes, edges, memoryChunkRetrievals, retrievedMemoryChunks, sessionMemoryChunks } = view;
+  const chunkById = new Map((retrievedMemoryChunks ?? []).map((chunk) => [chunk.id, chunk]));
   const STEP_LABEL: Record<StepStatus, string> = {
     completed: t("runtimeInspector.step.completed"),
     current: t("runtimeInspector.step.current"),
@@ -187,29 +188,49 @@ export function RuntimeInspectorView({ view }: { view: RuntimeSessionView }) {
         <Card className="p-4">
           <SectionHeader title={t("runtimeInspector.memory.title")} description={t("runtimeInspector.memory.description")} />
           <div className="mt-4 space-y-3">
-            {(memoryRetrievalRuns ?? []).map((run) => (
-              <div key={run.id} className="rounded-panel border border-border p-3">
-                <div className="text-xs font-semibold text-text-muted">{t("runtimeInspector.memory.run", { id: run.id })}</div>
-                <div className="mt-1 text-sm text-text-primary">{t("runtimeInspector.memory.selected", { selected: run.selectedMemoryIds.length, evaluated: run.candidatesEvaluated })}</div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {run.selectedMemoryIds.map((memoryId) => <Badge key={memoryId} tone="primary">{memoryId}</Badge>)}
+            {(memoryChunkRetrievals ?? []).map((retrieval) => (
+              <div key={retrieval.id} className="rounded-panel border border-border p-3">
+                <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-text-muted">
+                  <span>{t("runtimeInspector.memory.call", { time: new Date(retrieval.createdAt).toLocaleTimeString(), candidates: retrieval.candidateCount, focus: retrieval.query.focusField ?? "—" })}</span>
+                  <Badge tone={retrieval.consentState === "granted" ? "success" : "neutral"}>{t(`runtimeInspector.memory.consent.${retrieval.consentState}`)}</Badge>
                 </div>
-                <div className="mt-2 text-xs text-text-secondary">{run.excluded.slice(0, 3).map((item) => `${item.memoryId}: ${item.reason}`).join(" · ") || t("runtimeInspector.memory.noExclusions")}</div>
+                {retrieval.selected.length ? (
+                  <ul className="mt-2 space-y-2">
+                    {retrieval.selected.map((selected) => {
+                      const chunk = chunkById.get(selected.chunkId);
+                      return (
+                        <li key={selected.chunkId} className="text-sm text-text-primary">
+                          <div className="whitespace-pre-line">{chunk?.content ?? selected.chunkId}</div>
+                          <div className="mt-1 text-xs text-text-secondary">
+                            {chunk ? `S${chunk.sessionIndex} · ${chunk.elementKind} · ` : ""}
+                            {t("runtimeInspector.memory.score", { score: selected.score, affinity: selected.parts.affinity, tags: selected.parts.tags, text: selected.parts.text, recency: selected.parts.recency })}
+                            {chunk?.suppressed ? ` · ${t("runtimeInspector.memory.suppressed")}` : ""}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <div className="mt-1 text-xs text-text-secondary">{t("runtimeInspector.memory.nothingSent")}</div>
+                )}
               </div>
             ))}
-            {!memoryRetrievalRuns?.length && <div className="text-xs text-text-secondary">{t("runtimeInspector.memory.none")}</div>}
+            {!memoryChunkRetrievals?.length && <div className="text-xs text-text-secondary">{t("runtimeInspector.memory.none")}</div>}
           </div>
         </Card>
         <Card className="p-4">
           <SectionHeader title={t("runtimeInspector.memoryUsage.title")} description={t("runtimeInspector.memoryUsage.description")} />
           <div className="mt-4 space-y-2">
-            {(memoryUsageLogs ?? []).map((item) => (
-              <div key={item.id} className="rounded-panel border border-border p-3">
-                <div className="text-xs font-semibold text-text-muted">{item.usageType}</div>
-                <div className="mt-1 text-sm text-text-primary">{item.reason}</div>
+            {(sessionMemoryChunks ?? []).map((chunk) => (
+              <div key={chunk.id} className="rounded-panel border border-border p-3">
+                <div className="text-xs font-semibold text-text-muted">{chunk.chunkKind} · {chunk.elementKind}{chunk.suppressed ? ` · ${t("runtimeInspector.memory.suppressed")}` : ""}</div>
+                <div className="mt-1 whitespace-pre-line text-sm text-text-primary">{chunk.content}</div>
+                <div className="mt-1 text-xs text-text-secondary">
+                  {t("runtimeInspector.memoryUsage.tags")}: {chunk.tags ? Object.values(chunk.tags).flat().join(", ") || "—" : t("runtimeInspector.memoryUsage.untagged")}
+                </div>
               </div>
             ))}
-            {!memoryUsageLogs?.length && <div className="text-xs text-text-secondary">{t("runtimeInspector.memoryUsage.none")}</div>}
+            {!sessionMemoryChunks?.length && <div className="text-xs text-text-secondary">{t("runtimeInspector.memoryUsage.none")}</div>}
           </div>
         </Card>
       </div>

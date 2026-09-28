@@ -11,9 +11,19 @@
 //  - storage: the model's fieldUpdates are checked against the session's field
 //    list, merged, worked out (CD-Quest scores and totals) and projected to the
 //    worksheet; each message is committed with its own turn id.
+//  - memory: before each model call, the participant's earlier-session chunks
+//    that fit this moment are retrieved (memory-retrieval.ts), only if they
+//    agreed; what was sent is logged against the message. A value the model
+//    records that only exists in earlier-session content (that memory or the
+//    basic bridge) is rejected (authorship guard).
 //  - pacing: a message that asks nothing is followed straight away by the next
 //    one (up to a few, within a time budget); completion and "not today" end or
 //    pause the session.
+//  - trial (note2026_09_28_rct_backend): the session gate is checked before a
+//    session starts and before each participant message (fails closed), the
+//    participant's frozen release picks the model, each message keeps the
+//    step the model says it is on, and model calls, rejected values, blocked
+//    memory copies, safety clarifications and failures go to runtime_events.
 //
 // Sessions 3-8 do not come through here.
 
@@ -27,14 +37,18 @@ import { loadRuntimeRelease, normalizeRuntimeSessionState } from "@/shared/runti
 import { describePatientInputForDisplay } from "@/shared/runtime/patient-input-display";
 import { safetyClarificationText } from "@/shared/runtime/safety-clarification";
 import { projectRuntimeFieldsToWorksheet } from "@/shared/worksheet/worksheet-projection";
-import { runMemoryRetrieval } from "@/shared/api/longitudinal-memory-api";
-import { injectLongitudinalMemory } from "@/shared/memory/memory-context-injector";
-import { resolveLongitudinalMemoryPolicy } from "@/shared/memory/memory-policy";
+import { indexParticipantHomework, tagInBackground } from "@/shared/memory/memory-indexer";
+import { authorshipViolations, bridgeTexts, retrievalProgramLines, retrieveForTurn, type TurnRetrieval } from "@/shared/memory/memory-retrieval";
+import { saveMemoryChunkRetrieval } from "@/shared/data/repositories/memory-chunk-repository";
+import { sanitizeTags } from "@/shared/memory/memory-tags";
 import { generatePromptSessionTurn, type PromptHistoryMessage, type PromptSessionResult, type PromptSessionTurn } from "@/shared/dialogue-agent/prompt-session-agent";
-import { PROMPT_FOCUS_FIELD, PROMPT_INPUT_HINT, checkFieldUpdates, derivePromptSessionFields, promptSessionFieldValues, type PromptInputHint } from "@/shared/runtime/prompt-driven-sessions";
+import { PROMPT_FOCUS_FIELD, PROMPT_INPUT_HINT, PROMPT_THEMES_FIELD, checkFieldUpdates, derivePromptSessionFields, promptSessionFieldValues, type PromptInputHint } from "@/shared/runtime/prompt-driven-sessions";
 import type { ClinicalStageNode, PromptItem } from "@/shared/protocol/source-fidelity-types";
 import type { RuntimePromptItem } from "@/types/protocol-runtime";
 import type { PatientInput, RuntimeCycleResult, RuntimeMessage, RuntimeSession, RuntimeSessionStatus, RuntimeSessionView, SessionExecutionLog } from "@/types/runtime-session";
+import { SESSION_PROMPTS } from "@/shared/protocol/session-prompts.generated";
+import { SessionUnavailableError, checkSessionGate, recordRuntimeEvent } from "@/shared/trial/runtime-trial";
+import type { SessionGate } from "@/types/trial";
 
 /** Messages in a row that ask nothing, before the program stops and waits. */
 const MAX_CHAINED_MESSAGES = 4;
@@ -103,15 +117,16 @@ function historyOf(messages: RuntimeMessage[]): PromptHistoryMessage[] {
 }
 
 /** What the program tells the model on this call, besides the conversation. */
-function programBlock(session: RuntimeSession, facts: string[], notes: string[]) {
+function programBlock(session: RuntimeSession, facts: string[], notes: string[], memoryLines: string[]) {
   const fields = session.runtimeContext.fields;
+  // The basic bridge (session-continuity.ts): used for everyone, whatever
+  // their memory consent -- the popup says so.
   const earlier = Object.fromEntries(Object.entries(fields).filter(([key]) => key.startsWith("previous")));
-  const memory = session.runtimeContext.longitudinalMemory?.items ?? [];
   const lines = [
     `Worksheet now: ${JSON.stringify(promptSessionFieldValues(session.sessionDefinitionId, fields))}`,
     ...facts,
     ...(Object.keys(earlier).length ? [`From earlier sessions (program note): ${JSON.stringify(earlier)}`] : []),
-    ...(memory.length ? [`Notes kept from earlier sessions (background only, never the participant's words from today): ${memory.map((item) => `[${item.type}] ${item.content}`).join(" | ")}`] : []),
+    ...memoryLines,
     ...notes,
   ];
   return lines.join("\n");
@@ -184,9 +199,9 @@ async function commit(input: {
 }
 
 /** The fixed safety clarification, sent instead of a model message. */
-async function deliverSafetyClarification(view: RuntimeSessionView, anchor: Anchor, fields: Record<string, unknown>, reason: string): Promise<RuntimeCycleResult> {
+async function deliverSafetyClarification(view: RuntimeSessionView, anchor: Anchor, fields: Record<string, unknown>, reason: string, retrieval?: TurnRetrieval | null): Promise<RuntimeCycleResult> {
   const session = view.session;
-  const message = assistantMessage(session, anchor, safetyClarificationText(session.locale), { turnOutcome: "clarification", clarificationReason: "safety_clarification", promptSessionSafetyReason: reason });
+  const message = assistantMessage(session, anchor, safetyClarificationText(session.locale), { turnOutcome: "clarification", clarificationReason: "safety_clarification", promptSessionSafetyReason: reason, ...memoryMetadata(retrieval) });
   await commit({
     view,
     anchor,
@@ -199,32 +214,114 @@ async function deliverSafetyClarification(view: RuntimeSessionView, anchor: Anch
     contextPatch: { lastClarificationReason: "safety_clarification" },
     status: "waiting_for_input",
   });
+  logRetrieval(retrieval, message.id);
   void saveRuntimeLog(makeLog(session.id, "safety_check", "completed", "Ambiguous safety language requires neutral clarification", { nodeId: anchor.node.id, output: { reason } })).catch(() => {});
+  void recordRuntimeEvent({ participantId: session.participantId, runtimeSessionId: session.id, messageId: message.id, category: "safety", severity: "warn", code: "SAFETY_CLARIFICATION", detail: { reason } });
   void createRuntimeCheckpoint(session.id).catch(() => {});
   return { sessionId: session.id, currentNodeId: anchor.node.id, currentPromptItemId: anchor.promptItem.id, safetyResult: NO_SAFETY, generatedMessage: message, turnOutcome: "clarification", fallbackUsed: false, sessionStatus: "waiting_for_input", logIds: [] };
 }
 
-async function callModel(view: RuntimeSessionView, facts: string[], notes: string[], continueWithoutParticipant: boolean): Promise<PromptSessionResult> {
+/**
+ * Earlier-session memory for this call (memory-retrieval.ts). Consent is
+ * checked there; a participant who has not agreed gets nothing, and that is
+ * recorded too. Never blocks the turn.
+ */
+async function retrieveMemoryFor(view: RuntimeSessionView): Promise<TurnRetrieval | null> {
+  const session = view.session;
+  if (!session.participantId) return null;
+  const fields = session.runtimeContext.fields;
+  const lastParticipant = [...view.messages].reverse().find((item) => item.role === "patient" && item.content.trim());
+  try {
+    return await retrieveForTurn({
+      participantId: session.participantId,
+      runtimeSessionId: session.id,
+      sessionDefinitionId: session.sessionDefinitionId,
+      queryText: lastParticipant?.content ?? "",
+      focusField: typeof fields[PROMPT_FOCUS_FIELD] === "string" ? (fields[PROMPT_FOCUS_FIELD] as string) : undefined,
+      themes: fields[PROMPT_THEMES_FIELD],
+      opening: !lastParticipant,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[prompt-session-api] memory retrieval failed", { sessionId: session.id, error: message });
+    void saveRuntimeLog(makeLog(session.id, "node_resolution", "failed", "Memory retrieval failed", { error: message })).catch(() => {});
+    void recordRuntimeEvent({ participantId: session.participantId, runtimeSessionId: session.id, category: "memory", severity: "warn", code: "MEMORY_RETRIEVAL_FAILED", detail: { error: message.slice(0, 500) } });
+    return null;
+  }
+}
+
+function memoryMetadata(retrieval: TurnRetrieval | null | undefined) {
+  if (!retrieval) return {};
+  const { consentState, algorithmVersion, indexVersion, selected } = retrieval.record;
+  return { memoryRetrieval: { consentState, algorithmVersion, indexVersion, chunkIds: selected.map((item) => item.chunkId), scores: selected.map((item) => item.score) } };
+}
+
+function logRetrieval(retrieval: TurnRetrieval | null | undefined, messageId: string) {
+  if (!retrieval) return;
+  void saveMemoryChunkRetrieval({ ...retrieval.record, id: makeId("MCR"), messageId, createdAt: new Date().toISOString() }).catch((error: unknown) => {
+    console.error("[prompt-session-api] memory retrieval log failed", { messageId, error });
+  });
+}
+
+async function callModel(view: RuntimeSessionView, facts: string[], notes: string[], continueWithoutParticipant: boolean, memoryLines: string[], model: string | undefined): Promise<PromptSessionResult> {
   const session = view.session;
   const request = {
     sessionDefinitionId: session.sessionDefinitionId,
     locale: session.locale ?? "en-US",
     history: historyOf(view.messages),
-    programBlock: programBlock(session, facts, notes),
+    programBlock: programBlock(session, facts, notes, memoryLines),
     continueWithoutParticipant,
+    ...(model ? { model } : {}),
   };
   const context = { sessionId: session.id, turnId: makeId("TURN") };
+  const event = { participantId: session.participantId, runtimeSessionId: session.id, turnId: context.turnId };
   const first = await generatePromptSessionTurn(request, context);
-  if (first.ok || first.notConfigured) return first;
+  if (first.ok || first.notConfigured) {
+    recordModelCall(event, first, false);
+    return first;
+  }
+  void recordRuntimeEvent({ ...event, category: "model_call", severity: "warn", code: "MODEL_CALL_RETRIED", model: first.model ?? model ?? null, latencyMs: first.latencyMs ?? null, detail: { error: first.error.slice(0, 500) } });
   // One more try with the reason, then the fixed line.
-  return generatePromptSessionTurn({ ...request, correction: `Your last answer could not be used (${first.error.slice(0, 200)}). Answer again through the tool.` }, context);
+  const second = await generatePromptSessionTurn({ ...request, correction: `Your last answer could not be used (${first.error.slice(0, 200)}). Answer again through the tool.` }, context);
+  recordModelCall(event, second, true);
+  return second;
+}
+
+function recordModelCall(event: { participantId: string; runtimeSessionId: string; turnId: string }, result: PromptSessionResult, retried: boolean) {
+  if (result.ok) {
+    void recordRuntimeEvent({
+      ...event, category: "model_call", severity: "info", code: "MODEL_CALL", model: result.model, promptVersion: result.promptVersion, latencyMs: result.latencyMs,
+      inputTokens: result.inputTokens ?? null, outputTokens: result.outputTokens ?? null, detail: { step: result.turn.currentStep ?? null, retried },
+    });
+  } else {
+    void recordRuntimeEvent({ ...event, category: "model_call", severity: "error", code: result.notConfigured ? "MODEL_NOT_CONFIGURED" : "MODEL_CALL_FAILED", model: result.model ?? null, latencyMs: result.latencyMs ?? null, detail: { error: result.error.slice(0, 500), retried } });
+  }
+}
+
+/** Prompt versions as deployed, compared with the frozen release by the gate. */
+function deployedPromptVersions() {
+  return Object.fromEntries(Object.values(SESSION_PROMPTS).map((document) => [document.id, { version: document.version, sha256: document.sha256 }]));
+}
+
+/**
+ * The trial session gate (participants-store getSessionGate). Throws
+ * SessionUnavailableError when refused. Returns the frozen release's model
+ * when the gate is enforced; nothing when no study is active.
+ */
+async function gateFor(session: RuntimeSession, starting: boolean): Promise<string | undefined> {
+  const gate: SessionGate = await checkSessionGate({ participantId: session.participantId, sessionDefinitionId: session.sessionDefinitionId, runtimeSessionId: session.id, promptVersions: deployedPromptVersions(), recordEvent: starting });
+  if (!gate.allowed) {
+    if (!starting) void recordRuntimeEvent({ participantId: session.participantId, runtimeSessionId: session.id, category: "trial", severity: "warn", code: "SESSION_GATE_DENIED", detail: { reason: gate.reason } });
+    throw new SessionUnavailableError(gate.reason);
+  }
+  return gate.enforced ? gate.modelId : undefined;
 }
 
 /**
  * Asks the model for the next message and records it; keeps going while the
  * message asks nothing. `notes` go to the first call only.
  */
-async function runChain(sessionId: string, options: { notes: string[]; participantSpoke: boolean }): Promise<RuntimeCycleResult> {
+async function runChain(sessionId: string, options: { notes: string[]; participantSpoke: boolean; model?: string }): Promise<RuntimeCycleResult> {
   const started = Date.now();
   let notes = options.notes;
   let continueWithoutParticipant = !options.participantSpoke;
@@ -235,25 +332,44 @@ async function runChain(sessionId: string, options: { notes: string[]; participa
     const session = view.session;
     const anchor = anchorFor(view);
     const current = derivePromptSessionFields(session.sessionDefinitionId, session.runtimeContext.fields, session.locale);
-    const result = await callModel(view, current.facts, notes, continueWithoutParticipant);
+    const retrieval = await retrieveMemoryFor(view);
+    const result = await callModel(view, current.facts, notes, continueWithoutParticipant, retrievalProgramLines(retrieval?.selected ?? []), options.model);
     notes = [];
     continueWithoutParticipant = true;
 
     if (!result.ok) {
       const text = participantSpoke && chained === 0 ? FAILURE_TEXT : FAILURE_BEFORE_PARTICIPANT_TEXT;
-      const message = assistantMessage(session, anchor, isKorean(session.locale) ? text.ko : text.en, { turnOutcome: "fallback", promptSessionError: result.error });
+      const message = assistantMessage(session, anchor, isKorean(session.locale) ? text.ko : text.en, { turnOutcome: "fallback", promptSessionError: result.error, ...memoryMetadata(retrieval) });
       await commit({ view, anchor, message, provider: "deterministic", model: "prompt-session-fallback", contractHash: `prompt_session:${session.id}:failure`, transition: "fallback", fields: { ...session.runtimeContext.fields, [PROMPT_INPUT_HINT]: "text" }, status: "waiting_for_input", fallbackUsed: true });
+      logRetrieval(retrieval, message.id);
       void saveRuntimeLog(makeLog(session.id, "language_generation", "failed", "Prompt session model call failed", { nodeId: anchor.node.id, error: result.error })).catch(() => {});
       return { sessionId, currentNodeId: anchor.node.id, currentPromptItemId: anchor.promptItem.id, safetyResult: NO_SAFETY, generatedMessage: message, turnOutcome: "fallback", fallbackUsed: true, sessionStatus: "waiting_for_input", logIds: [] };
     }
 
     const turn: PromptSessionTurn = result.turn;
     const { accepted, rejected } = checkFieldUpdates(session.sessionDefinitionId, turn.fieldUpdates);
+    // Patient Authorship Invariant: nothing recorded today may come from the
+    // memory the model was shown rather than from the participant.
+    const participantTexts = view.messages.filter((item) => item.role === "patient").map((item) => item.content);
+    const shownFromBefore = [...(retrieval?.earlierTexts ?? []), ...bridgeTexts(session.runtimeContext.fields)];
+    const fieldRejections = rejected.length;
+    const blocked = authorshipViolations(accepted, shownFromBefore, participantTexts);
+    for (const violation of blocked) {
+      delete accepted[violation.name];
+      rejected.push(violation);
+    }
+    // Names and reasons only: the values are the participant's words.
+    if (fieldRejections) void recordRuntimeEvent({ participantId: session.participantId, runtimeSessionId: session.id, category: "validation", severity: "warn", code: "FIELD_REJECTED", detail: { fields: rejected.slice(0, fieldRejections).map((item) => ({ name: item.name, reason: item.reason })) } });
+    if (blocked.length) void recordRuntimeEvent({ participantId: session.participantId, runtimeSessionId: session.id, category: "authorship", severity: "warn", code: "AUTHORSHIP_BLOCKED", detail: { fields: blocked.map((item) => item.name) } });
     const worked = derivePromptSessionFields(session.sessionDefinitionId, { ...session.runtimeContext.fields, ...accepted }, session.locale).fields;
-    const fields: Record<string, unknown> = { ...worked, [PROMPT_FOCUS_FIELD]: turn.focusField ?? undefined, [PROMPT_INPUT_HINT]: turn.inputHint };
+    const themes = turn.currentThemes ? sanitizeTags(turn.currentThemes) : session.runtimeContext.fields[PROMPT_THEMES_FIELD];
+    const fields: Record<string, unknown> = { ...worked, [PROMPT_FOCUS_FIELD]: turn.focusField ?? undefined, [PROMPT_INPUT_HINT]: turn.inputHint, [PROMPT_THEMES_FIELD]: themes };
     if (rejected.length) void saveRuntimeLog(makeLog(session.id, "state_extraction", "failed", "Prompt session field updates rejected", { nodeId: anchor.node.id, output: { rejected } })).catch(() => {});
 
-    if (turn.safetyConcern) return deliverSafetyClarification(view, anchor, fields, "model_safety_concern");
+    // A turn the model flagged for safety records nothing: its values would
+    // otherwise be kept -- and later chunked into memory -- from exactly the
+    // moment the program stops to ask about safety.
+    if (turn.safetyConcern) return deliverSafetyClarification(view, anchor, session.runtimeContext.fields, "model_safety_concern", retrieval);
 
     try {
       await projectRuntimeFieldsToWorksheet({ runtimeSessionId: session.id, sessionDefinitionId: session.sessionDefinitionId, fields, sourceTurnId: makeId("TURN") });
@@ -270,7 +386,9 @@ async function runChain(sessionId: string, options: { notes: string[]; participa
       promptSessionSha256: result.promptSha256,
       inputHint: turn.inputHint,
       focusField: turn.focusField ?? null,
+      step: turn.currentStep ?? null,
       ...(rejected.length ? { rejectedFieldUpdates: rejected } : {}),
+      ...memoryMetadata(retrieval),
     });
     await commit({
       view,
@@ -288,6 +406,7 @@ async function runChain(sessionId: string, options: { notes: string[]; participa
       contextPatch: { lastClarificationReason: "", clarificationAttemptCount: 0 },
       status,
     });
+    logRetrieval(retrieval, message.id);
 
     if (turn.sessionComplete) {
       await completeRuntimeSession(sessionId);
@@ -307,34 +426,22 @@ async function runChain(sessionId: string, options: { notes: string[]; participa
 }
 
 /**
- * Cross-session memory, retrieved once when the session starts -- the same
- * retrieval, policy and consent gate executeCurrentNode runs for every node of
- * Sessions 3-8. Never blocks the session: a failure or missing consent is
- * logged and the session goes on without it.
+ * Homework is written between sessions, after the session that assigned it
+ * was chunked; chunk it now so this session can draw on it (memory-indexer.ts).
+ * Never blocks the session.
  */
-async function retrieveMemory(view: RuntimeSessionView, node: ClinicalStageNode) {
+async function indexHomeworkAtStart(view: RuntimeSessionView) {
   const session = view.session;
-  const policy = resolveLongitudinalMemoryPolicy();
-  const retrieval = await runMemoryRetrieval({
-    participantId: session.participantId,
-    runtimeSessionId: session.id,
-    protocolId: session.protocolId,
-    protocolVersion: session.protocolVersion,
-    sessionDefinitionId: session.sessionDefinitionId,
-    currentNodeId: node.id,
-    currentNodeType: node.type as import("@/types/protocol-runtime").ProtocolNodeType,
-    currentClinicalIntent: node.clinicalPurpose ?? node.title,
-    requestedMemoryTypes: policy.allowedMemoryTypes,
-    maxItems: policy.maxItemsPerNode,
-  }).catch((error: unknown) => {
+  if (!session.participantId) return;
+  try {
+    const homework = await indexParticipantHomework(session.participantId, session.locale ?? "ko-KR");
+    if (homework.inserted) void saveRuntimeLog(makeLog(session.id, "session", "completed", "Homework memory chunks stored", { output: homework })).catch(() => {});
+    tagInBackground(session.participantId);
+  } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const consentDisabled = message.includes("Cross-session retrieval is disabled");
-    if (!consentDisabled) console.error("[prompt-session-api] memory retrieval failed", { sessionId: session.id, error: message });
-    void saveRuntimeLog(makeLog(session.id, "node_resolution", consentDisabled ? "skipped" : "failed", consentDisabled ? "Memory retrieval skipped: cross-session use not consented" : "Memory retrieval failed", { nodeId: node.id, error: consentDisabled ? undefined : message })).catch(() => {});
-    return null;
-  });
-  if (!retrieval) return;
-  await updateRuntimeSessionRecord(session.id, { runtimeContext: injectLongitudinalMemory(session.runtimeContext, retrieval.selected) });
+    console.error("[prompt-session-api] homework chunking failed", { sessionId: session.id, error: message });
+    void saveRuntimeLog(makeLog(session.id, "session", "failed", "Homework memory chunking failed", { error: message })).catch(() => {});
+  }
 }
 
 /**
@@ -346,11 +453,12 @@ export async function continuePromptSession(sessionId: string): Promise<RuntimeC
   const view = await getRuntimeSessionForTurn(sessionId);
   if (!view) throw new Error("Runtime session not found");
   const messages = view.messages;
+  const model = await gateFor(view.session, !messages.some((message) => message.role === "assistant"));
   const lastAssistant = [...messages].reverse().find((message) => message.role === "assistant");
   const notes: string[] = [];
   if (!messages.some((message) => message.role === "assistant")) {
     notes.push("This is the first message of the session.");
-    await retrieveMemory(view, anchorFor(view).node);
+    await indexHomeworkAtStart(view);
   } else if (lastAssistant?.metadata?.turnOutcome === "safety_override") {
     notes.push("The session was paused for safety and a clinician has now resumed it. Greet the participant gently, do not bring up what caused the pause, and pick the step up where it stopped.");
   } else if (view.session.pausedAt || view.session.resumedAt) {
@@ -359,7 +467,7 @@ export async function continuePromptSession(sessionId: string): Promise<RuntimeC
   if (!["active", "processing", "waiting_for_input"].includes(view.session.status)) {
     await updateRuntimeSessionRecord(sessionId, { status: "active" });
   }
-  return runChain(sessionId, { notes, participantSpoke: false });
+  return runChain(sessionId, { notes, participantSpoke: false, model });
 }
 
 /** A participant message in a prompt-driven session. Called in place of the
@@ -372,6 +480,7 @@ export async function submitPromptSessionInput(sessionId: string, patientInput: 
     return { sessionId, currentNodeId: initialSession.currentNodeId ?? "unknown", currentPromptItemId: initialSession.currentPromptItemId, safetyResult: NO_SAFETY, turnOutcome: "rejected_duplicate", fallbackUsed: false, sessionStatus: initialSession.status, logIds: [] };
   }
   if (initialSession.status !== "waiting_for_input") throw new Error("Session is not waiting for input");
+  const model = await gateFor(initialSession, false);
   const anchor = anchorFor(initialView);
   const clientTurnId = options.clientTurnId ?? makeId("TURN");
   const patientMessage: RuntimeMessage = {
@@ -432,7 +541,7 @@ export async function submitPromptSessionInput(sessionId: string, patientInput: 
   const notes = risk.clarificationAnswer === "denied"
     ? ["The program just asked its fixed safety question, and the participant said it was not about harming themselves. Acknowledge that briefly and warmly, then carry on with the step where it was."]
     : [];
-  return runChain(sessionId, { notes, participantSpoke: true });
+  return runChain(sessionId, { notes, participantSpoke: true, model });
 }
 
 export type { PromptInputHint };

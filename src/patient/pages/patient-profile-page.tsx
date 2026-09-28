@@ -12,7 +12,8 @@ import { DataPrivacySection } from "@/patient/components/data-privacy-section";
 import { ToggleSwitch } from "@/patient/components/toggle-switch";
 import { ThemeToggle } from "@/shared/components/ui/theme-toggle";
 import { BOARD_BACKGROUND, EmptyBlock, ListGroup, ListRow, PtButton, PtCard, PtField, PtSkeleton, ptInputClass } from "@/patient/components/ui/kit";
-import { getOrCreateParticipantForUiLocale, updateParticipantProfile, updateParticipantConsent, updateNotificationPreferences } from "@/shared/api/participant-api";
+import { getOrCreateParticipantForUiLocale, updateParticipantProfile, updateNotificationPreferences } from "@/shared/api/participant-api";
+import { MemoryConsentSettings } from "@/patient/components/memory-consent-settings";
 import { propagateLocaleToOpenSessions } from "@/patient/lib/api/patient-locale-sync";
 import { useT } from "@/shared/i18n/context";
 import { mapToUiLocale } from "@/shared/i18n/locales";
@@ -36,9 +37,6 @@ export function PatientProfilePage() {
   const [alias, setAlias] = useState("");
   const [locale, setLocale] = useState("ko-KR");
   const [country, setCountry] = useState("KR");
-  const [memoryStorageAllowed, setMemoryStorageAllowed] = useState(true);
-  const [crossSessionUseAllowed, setCrossSessionUseAllowed] = useState(true);
-  const [sensitiveMemoryAllowed, setSensitiveMemoryAllowed] = useState(false);
   const [sessionRemindersEnabled, setSessionRemindersEnabled] = useState(true);
   const [homeworkRemindersEnabled, setHomeworkRemindersEnabled] = useState(true);
   const [newMessagesEnabled, setNewMessagesEnabled] = useState(true);
@@ -48,9 +46,6 @@ export function PatientProfilePage() {
     setAlias(participantQuery.data.alias);
     setLocale(participantQuery.data.locale);
     setCountry(participantQuery.data.country ?? "KR");
-    setMemoryStorageAllowed(participantQuery.data.consent.memoryStorageAllowed);
-    setCrossSessionUseAllowed(participantQuery.data.consent.crossSessionUseAllowed);
-    setSensitiveMemoryAllowed(participantQuery.data.consent.sensitiveMemoryAllowed);
     // Absent means enabled -- see RuntimeParticipant.notificationPreferences's doc comment.
     setSessionRemindersEnabled(participantQuery.data.notificationPreferences?.sessionReminders !== false);
     setHomeworkRemindersEnabled(participantQuery.data.notificationPreferences?.homeworkReminders !== false);
@@ -76,12 +71,6 @@ export function PatientProfilePage() {
         const mappedUiLocale = mapToUiLocale(locale);
         if (mappedUiLocale) setUiLocale(mappedUiLocale);
       }
-      await updateParticipantConsent(participantQuery.data.id, {
-        memoryStorageAllowed,
-        crossSessionUseAllowed,
-        sensitiveMemoryAllowed,
-        reason: "Patient profile settings updated",
-      });
       await updateNotificationPreferences(participantQuery.data.id, {
         sessionReminders: sessionRemindersEnabled,
         homeworkReminders: homeworkRemindersEnabled,
@@ -134,11 +123,12 @@ export function PatientProfilePage() {
           </PtCard>
         </section>
 
-        <ListGroup title={t("patientProfile.edit.memory.title")}>
-          <ToggleSwitch icon={<ShieldCheck />} label={t("patientProfile.edit.storeMemory")} checked={memoryStorageAllowed} onChange={setMemoryStorageAllowed} />
-          <ToggleSwitch icon={<Users />} label={t("patientProfile.edit.reuseAcrossSessions")} checked={crossSessionUseAllowed} onChange={setCrossSessionUseAllowed} />
-          <ToggleSwitch icon={<Lock />} label={t("patientProfile.edit.allowSensitiveMemory")} checked={sensitiveMemoryAllowed} onChange={setSensitiveMemoryAllowed} />
-        </ListGroup>
+        {/* Memory consent is its own recorded decision (main, 2026-09-27): the
+            current answer and the popup to change it, not saved with the
+            profile form. */}
+        <PtCard className="p-5">
+          <MemoryConsentSettings participant={participant} />
+        </PtCard>
 
         <ListGroup title={t("patientProfile.edit.notifications.title")}>
           <ToggleSwitch icon={<CalendarClock />} label={t("patientProfile.edit.notifications.sessionReminders")} checked={sessionRemindersEnabled} onChange={setSessionRemindersEnabled} />

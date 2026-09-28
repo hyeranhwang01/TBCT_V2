@@ -1,5 +1,6 @@
 import type { RuntimeAction, ProtocolReleaseVersion } from "@/types/protocol-runtime";
-import type { RuntimeParticipant, MemoryRetrievalResult, MemoryUsageLog } from "@/types/longitudinal-memory";
+import type { RuntimeParticipant } from "@/types/longitudinal-memory";
+import type { MemoryChunk, MemoryChunkRetrieval } from "@/types/memory-chunks";
 import type { ClinicalStageNode, PromptItem, SessionDefinition, SourceFidelityEdge } from "@/shared/protocol/source-fidelity-types";
 
 export type RuntimeSessionStatus =
@@ -141,6 +142,13 @@ export interface RuntimeSession {
   pausedAt?: string;
   resumedAt?: string;
   completedAt?: string;
+  /** From runtime_sessions columns (sql/033): AI module 1-8, protocol
+   * session 1-12 once linked to a study visit, attempt 1.., official = first
+   * completed attempt of the module. Read-only for the app. */
+  moduleNumber?: number | null;
+  sessionNumber?: number | null;
+  attemptNumber?: number | null;
+  isOfficial?: boolean;
   terminatedAt?: string;
   patientAlias: string;
   locale: string;
@@ -415,8 +423,13 @@ export interface RuntimeSessionView {
   escalations: ClinicianEscalationEvent[];
   providerEvents: RuntimeProviderEvent[];
   validationEvents: RuntimeValidationEvent[];
-  memoryRetrievalRuns?: MemoryRetrievalResult[];
-  memoryUsageLogs?: MemoryUsageLog[];
+  /** Per model call: which earlier-session chunks were put in front of the
+   * model (sql/029). Clinician/server only. */
+  memoryChunkRetrievals?: MemoryChunkRetrieval[];
+  /** The chunks those retrievals selected. */
+  retrievedMemoryChunks?: MemoryChunk[];
+  /** What this session left in memory (sql/027). */
+  sessionMemoryChunks?: MemoryChunk[];
 }
 
 export type PatientRuntimeSession = Pick<RuntimeSession, "id" | "patientAlias" | "sessionDefinitionId" | "status" | "currentNodeId" | "currentPromptItemId" | "updatedAt" | "version" | "locale"> & {

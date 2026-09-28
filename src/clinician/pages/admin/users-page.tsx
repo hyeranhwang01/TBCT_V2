@@ -3,10 +3,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/clinician/components/app-shell";
-import { Badge, Button, Card, PageHeader, PageSkeleton } from "@/shared/components/ui/primitives";
-import { listAdminUsers, setAdminUserBanned } from "@/clinician/lib/api/admin-api";
+import { Badge, Button, Card, PageHeader, PageSkeleton, inputClass } from "@/shared/components/ui/primitives";
+import { listAdminUsers, setAdminUserBanned, setAdminUserRole, type AdminUserSummary } from "@/clinician/lib/api/admin-api";
 import { useAuth } from "@/shared/auth/auth-context";
 import { useT } from "@/shared/i18n/context";
+
+const STAFF_ROLES = ["clinician", "coordinator", "assessor", "admin"] as const;
 
 function formatTimestamp(value: string) {
   return new Date(value).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" });
@@ -24,6 +26,20 @@ export function AdminUsersPage() {
 
   const banMutation = useMutation({
     mutationFn: ({ userId, banned }: { userId: string; banned: boolean }) => setAdminUserBanned(userId, banned),
+    onSuccess: async () => {
+      toast.success(t("adminUsers.updated"));
+      await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    },
+    onError: (error: unknown) => {
+      toast.error(error instanceof Error ? error.message : t("adminUsers.updateFailed"));
+    },
+  });
+
+  // Roles are granted only here (src/shared/auth/roles.ts): approving a
+  // clinician signup, or removing a role from an account that should not
+  // have it.
+  const roleMutation = useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: AdminUserSummary["role"] }) => setAdminUserRole(userId, role),
     onSuccess: async () => {
       toast.success(t("adminUsers.updated"));
       await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
@@ -51,7 +67,33 @@ export function AdminUsersPage() {
               <Badge tone={row.role === "admin" ? "primary" : row.role === "clinician" ? "success" : row.role === "patient" ? "neutral" : "warning"}>
                 {row.role ? t(`adminUsers.role.${row.role}`) : t("adminUsers.role.none")}
               </Badge>
+              {row.pendingRole && <Badge tone="warning">{t("adminUsers.pending")}</Badge>}
               {row.banned && <Badge tone="critical">{t("adminUsers.banned")}</Badge>}
+              {row.id !== user?.id && row.pendingRole && (
+                <Button variant="secondary" size="sm" loading={roleMutation.isPending} onClick={() => roleMutation.mutate({ userId: row.id, role: "clinician" })}>
+                  {t("adminUsers.approveClinician")}
+                </Button>
+              )}
+              {/* Staff roles for the trial (note2026_09_28_rct_backend):
+                  coordinator and the blinded assessor. Never for a patient
+                  account -- a participant is not made staff. */}
+              {row.id !== user?.id && row.role !== "patient" && (
+                <select
+                  aria-label={t("adminUsers.setRole")}
+                  className={`${inputClass} h-8 w-auto text-xs`}
+                  value=""
+                  disabled={roleMutation.isPending}
+                  onChange={(event) => event.target.value && roleMutation.mutate({ userId: row.id, role: event.target.value as AdminUserSummary["role"] })}
+                >
+                  <option value="">{t("adminUsers.setRole")}</option>
+                  {STAFF_ROLES.filter((option) => option !== row.role).map((option) => <option key={option} value={option}>{t(`adminUsers.role.${option}`)}</option>)}
+                </select>
+              )}
+              {row.id !== user?.id && row.role && row.role !== "patient" && (
+                <Button variant="ghost" size="sm" loading={roleMutation.isPending} onClick={() => roleMutation.mutate({ userId: row.id, role: null })}>
+                  {t("adminUsers.revokeRole")}
+                </Button>
+              )}
               {row.id !== user?.id && (
                 <Button
                   variant="secondary"

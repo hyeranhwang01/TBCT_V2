@@ -1,24 +1,18 @@
 import { makeId } from "@/shared/id";
 import { defaultPolicyIdForType, recordMemoryAudit } from "@/shared/memory/memory-helpers";
-import { retrieveSelectiveMemory } from "@/shared/memory/memory-retrieval-engine";
+import { clinicianNoteChunk, clinicianNoteChunkId } from "@/shared/memory/chunk-builder";
+import { listMemoryChunks, saveMemoryChunks, suppressMemoryChunk } from "@/shared/data/repositories/memory-chunk-repository";
+import { getParticipant } from "@/shared/data/repositories/participant-repository";
 import {
-  deleteMemoryCandidate,
   getLongitudinalMemory,
-  getMemoryCandidate,
-  listAllMemoryUsageLogs,
   listExpiredApprovedMemories,
   listGoalTrackingRecords,
   listHomeworkTrackingRecords,
   listLongitudinalMemories,
-  listMemoryCandidates,
-  listMemoryRetrievalRuns,
-  listMemoryUsageLogs,
   saveLongitudinalMemory,
   updateLongitudinalMemory,
-  updateMemoryCandidate,
 } from "@/shared/data/repositories/longitudinal-memory-repository";
-import { getParticipant } from "@/shared/data/repositories/participant-repository";
-import type { LongitudinalMemory, MemoryRetrievalRequest } from "@/types/longitudinal-memory";
+import type { LongitudinalMemory } from "@/types/longitudinal-memory";
 
 // No browser IndexedDB access here any more: every record this file touches lives in Neon
 // (see longitudinal-memory-repository.ts), and the audit entries go through
@@ -26,48 +20,6 @@ import type { LongitudinalMemory, MemoryRetrievalRequest } from "@/types/longitu
 
 export async function getParticipantMemories(participantId: string) {
   return listLongitudinalMemories(participantId);
-}
-
-export async function getPendingMemoryCandidates(participantId?: string) {
-  const candidates = await listMemoryCandidates(participantId);
-  return candidates.filter((candidate) => ["candidate", "pending_review"].includes(candidate.status));
-}
-
-export async function approveMemoryCandidate(candidateId: string, approvedBy = "Clinician") {
-  const candidate = await getMemoryCandidate(candidateId);
-  if (!candidate) throw new Error("Memory candidate not found");
-  const approved: LongitudinalMemory = {
-    ...candidate,
-    status: "approved",
-    approvedBy,
-    approvedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-  await saveLongitudinalMemory(approved);
-  await deleteMemoryCandidate(candidateId);
-  await recordMemoryAudit({
-    action: "Memory approved",
-    resource: `Memory ${candidateId}`,
-    version: "stage3",
-    previousValue: JSON.stringify(candidate),
-    newValue: JSON.stringify(approved),
-    reason: "Approved for longitudinal use",
-  });
-  return approved;
-}
-
-export async function rejectMemoryCandidate(candidateId: string, reason: string) {
-  const candidate = await getMemoryCandidate(candidateId);
-  if (!candidate) throw new Error("Memory candidate not found");
-  await updateMemoryCandidate(candidateId, { status: "rejected", rejectionReason: reason });
-  await recordMemoryAudit({
-    action: "Memory rejected",
-    resource: `Memory ${candidateId}`,
-    version: "stage3",
-    previousValue: JSON.stringify(candidate),
-    newValue: JSON.stringify({ status: "rejected", reason }),
-    reason,
-  });
 }
 
 export async function supersedeMemory(memoryId: string, replacementMemoryId: string, reason: string) {
@@ -101,21 +53,6 @@ export async function deleteMemory(memoryId: string, reason: string) {
   return updateLongitudinalMemory(memoryId, { status: "deleted", rejectionReason: reason });
 }
 
-export async function runMemoryRetrieval(request: MemoryRetrievalRequest) {
-  const participant = await getParticipant(request.participantId);
-  if (!participant) throw new Error("Participant not found");
-  if (!participant.consent.crossSessionUseAllowed) throw new Error("Cross-session retrieval is disabled for this participant");
-  return retrieveSelectiveMemory(request);
-}
-
-export async function getRuntimeMemoryRuns(runtimeSessionId: string) {
-  return listMemoryRetrievalRuns(runtimeSessionId);
-}
-
-export async function getRuntimeMemoryUsage(runtimeSessionId: string) {
-  return listMemoryUsageLogs(runtimeSessionId);
-}
-
 /** Clinician-only notes are modeled as "clinician_note" longitudinal memories — no separate notes table. */
 export async function getClinicianNotes(participantId: string) {
   const memories = await listLongitudinalMemories(participantId);
@@ -133,6 +70,8 @@ export async function deleteClinicianNote(memoryId: string, deletedBy = "Clinici
   const existing = await getLongitudinalMemory(memoryId);
   if (!existing) throw new Error("Clinical note not found");
   const deleted = await updateLongitudinalMemory(memoryId, { status: "deleted" });
+  // Its chunk stays (append-only) but is kept out of retrieval.
+  await suppressMemoryChunk(clinicianNoteChunkId(memoryId), `Clinical note deleted by ${deletedBy}`).catch(() => undefined);
   await recordMemoryAudit({
     action: "Clinical note deleted",
     resource: `Participant ${existing.participantId}`,
@@ -175,6 +114,10 @@ export async function addClinicianNote(input: {
     createdBy: input.createdBy ?? "Clinician",
   };
   await saveLongitudinalMemory(note);
+  // The note is also a memory chunk, so later sessions can draw on it
+  // (memory-retrieval.ts) -- for participants who agreed to memory use.
+  const chunk = clinicianNoteChunk(note);
+  if (chunk) await saveMemoryChunks([chunk]);
   await recordMemoryAudit({
     action: "Clinical note added",
     resource: `Participant ${input.participantId}`,
@@ -187,13 +130,12 @@ export async function addClinicianNote(input: {
 }
 
 export async function getParticipantLongitudinalDashboard(participantId: string) {
-  const [participant, memories, homework, goals, usage] = await Promise.all([
+  const [participant, chunks, homework, goals] = await Promise.all([
     getParticipant(participantId),
-    listLongitudinalMemories(participantId),
+    listMemoryChunks(participantId, { includeSuppressed: true }),
     listHomeworkTrackingRecords(participantId),
     listGoalTrackingRecords(participantId),
-    listAllMemoryUsageLogs(participantId),
   ]);
   if (!participant) throw new Error("Participant not found");
-  return { participant, memories, homework, goals, usage };
+  return { participant, chunks, homework, goals };
 }

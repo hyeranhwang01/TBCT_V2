@@ -427,6 +427,7 @@ export function Modal({
   description,
   children,
   width = "max-w-xl",
+  dismissible = true,
 }: {
   open: boolean;
   onClose: () => void;
@@ -434,6 +435,9 @@ export function Modal({
   description?: string;
   children: ReactNode;
   width?: string;
+  /** false: no close button and no close on backdrop click -- for a choice
+   * the person has to make (the memory-consent popup). */
+  dismissible?: boolean;
 }) {
   const reducedMotion = useReducedMotionPreference();
   return (
@@ -441,7 +445,7 @@ export function Modal({
       {open ? (
         <motion.div
           className="fixed inset-0 z-[80] flex items-center justify-center bg-[#132A4A]/28 p-4"
-          onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+          onMouseDown={(e) => dismissible && e.target === e.currentTarget && onClose()}
           variants={reducedMotion ? undefined : modalBackdrop}
           initial={reducedMotion ? false : "initial"}
           animate={reducedMotion ? undefined : "animate"}
@@ -461,9 +465,11 @@ export function Modal({
                 <h2 className="text-base font-semibold text-text-primary">{title}</h2>
                 {description && <p className="mt-1 text-sm text-text-secondary">{description}</p>}
               </div>
-              <Button variant="ghost" size="icon" aria-label="Close" onClick={onClose}>
-                <X className="h-4 w-4" />
-              </Button>
+              {dismissible && (
+                <Button variant="ghost" size="icon" aria-label="Close" onClick={onClose}>
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
             </div>
             <div className="max-h-[calc(92vh-78px)] overflow-auto">{children}</div>
           </motion.div>

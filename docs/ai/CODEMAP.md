@@ -49,6 +49,7 @@ src/
   - `src/shared/worksheet/composed-worksheet-registry.ts`
   - `src/shared/worksheet/worksheet-binding-registry.ts`
   - `src/shared/runtime/prompt-driven-sessions.ts` (S01/S02 field lists, 2026-09-25)
+  - `src/shared/memory/chunk-configs.ts` (S01/S02 memory-chunk cuts, 2026-09-27)
 
 **Why no `clinician/sessions/`.** Clinician UI is session-agnostic; nothing session-specific exists on that side. Create it with the same rule if that changes.
 
@@ -101,6 +102,23 @@ Called from [src/patient/pages/patient-session-page.tsx:77](../../src/patient/pa
 ## 3b. Prompt-driven sessions (S01, S02 — 2026-09-25)
 
 S01 and S02 do not use the node engine below. One system prompt per session (`src/shared/protocol/session-prompts.generated.ts`, built from `docs/prompts/*.md` by `npm run prompts:build`) runs the conversation through `src/shared/api/prompt-session-api.ts`; safety (`assessTurnRisk` → `handleTriggeredSafetyTurn` / fixed clarification), storage and arithmetic stay in code. Routed from `executeCurrentNode` / `submitPatientInput` by `isPromptDrivenSession`. Details: [TBCT_SESSIONS_1_3.md](TBCT_SESSIONS_1_3.md) §"Session 1 and Session 2".
+
+### 3c. Cross-session memory (2026-09-27)
+
+Consent (`src/shared/memory/memory-consent.ts`, popup in PatientShell) → chunks at completion (`memory-indexer.ts` → `chunk-builder.ts`, per-session cut in `s0N/memory-chunks.ts`, table sql/027) → tags (`chunk-tagger.ts`, closed list `memory-tags.ts`) → per-call retrieval in `prompt-session-api.ts` (`memory-retrieval.ts`, `chunk-scorer.ts`, log sql/029). Clinician side: `/runtime/memory-review` (`memory-chunks-page.tsx`), inspector cards. Evaluation: `src/shared/memory/eval/`, `scripts/eval-memory-retrieval.ts`. Details: [TBCT_SESSIONS_1_3.md](TBCT_SESSIONS_1_3.md).
+
+### 3d. RCT backend (2026-09-28)
+
+Plan: `.claude/TASK_SCOPE.json` note2026_09_28_rct_backend. One Postgres per country (a Supabase project each), migrations applied by `scripts/migrate-neon.mjs` (tracked in `schema_migrations`, runner `scripts/lib/apply-migrations.mjs`).
+
+- **Session records** (sql/033-034): `runtime_sessions` gains `module_number` (AI module 1-8), `session_number` (protocol session 1-12, set when the session completes a study visit), `attempt_number`, `is_official` (first completed attempt). `runtime_messages` is append-only. Each ended session is sealed into `session_records` (snapshot + sha256, `src/shared/trial/session-snapshot.ts`) by `sealSessionRecord` (`src/shared/trial/runtime-trial.ts`) from `completeRuntimeSession` / `terminateRuntimeSession` / `terminateSessionForSafety`. Step fidelity: `s01|s02/steps.ts` + `currentStep` in the model's turn → `src/shared/trial/step-progress.ts`. Downloads: `/api/session-records/export` (logged in `session_record_downloads`).
+- **Events** (sql/032): `runtime_events` (model calls, rejected fields, blocked memory copies, safety clarifications, gate refusals, failures) and `access_log` (staff reads).
+- **Trial operations** (sql/035-041): studies/arms/sites/therapists, study_participants, screenings, eligibility, consents, withdrawals, deviations, `ai_releases` (frozen), `randomization_lists` (unreadable) + `allocations` via `allocate_participant()`, `study_visits`, `homework_logs`, instruments/timepoints/tasks/responses, adverse events, review tasks, `study_locks`, monitoring views. History of every mutable table in `trial_history`.
+- **Code**: server stores `src/shared/data/server/trial/*`, dispatcher `src/shared/data/server/trial-store.ts`, route `/api/trial/store` (role → op table; patients only on their own data; assessors blinded), client `src/shared/data/repositories/trial-repository.ts`. Defaults: `src/shared/trial/default-study-config.ts`; scoring: `src/shared/trial/instruments.ts`.
+- **Session gate**: `getSessionGate` — open when no study is active; otherwise allocated + AI arm + consents + frozen release (+ prompt hash) before an AI session starts or takes a message; the release's model is used.
+- **Screens**: `/trial/participants(/id)`, `/trial/safety`, `/trial/monitoring` (`src/clinician/pages/trial/`), `/trial/assessments` (blinded assessor), patient `/patient/study`. The old `/runtime/pilot/*` pages are the browser-only demo, admin-only.
+- **Scripts**: `seed-trial.ts`, `backfill-session-records.ts`, `export-deidentified.ts`, `purge-retention.ts` (logic in `scripts/lib/trial-extract.ts`).
+- **Tests on real Postgres**: `src/test/pglite/` (PGlite, node environment).
 
 ## 4. Runtime execution engine (session-agnostic; drives Sessions 3-8)
 

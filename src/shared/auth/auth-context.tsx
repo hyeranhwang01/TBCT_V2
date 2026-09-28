@@ -1,37 +1,37 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/shared/supabase/client";
+import { grantedRole, pendingRole, type AppRole } from "@/shared/auth/roles";
 import { installPatientDevMock, isPatientMockModeEnabled, PATIENT_MOCK_EMAIL, PATIENT_MOCK_USER_ID } from "@/shared/mocks/patient-dev-mock";
 
-export type AppRole = "clinician" | "patient" | "admin";
+export type { AppRole };
 
 type AuthState = {
   user: User | null;
+  /** Granted by the server (app_metadata, roles.ts) -- never user_metadata. */
   role: AppRole | null;
+  /** A clinician signup waiting for an admin. */
+  pendingRole: "clinician" | null;
   loading: boolean;
   signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
 
-function roleFromUser(user: User | null): AppRole | null {
-  const role = user?.user_metadata?.role;
-  return role === "clinician" || role === "patient" || role === "admin" ? role : null;
-}
-
 // The signed-in patient auth-context.tsx hands out when
 // NEXT_PUBLIC_TBCT_PATIENT_MOCK=1 -- see patient-dev-mock.ts's own header.
-// Only the fields patient-facing code actually reads (id, email,
-// user_metadata.role) are populated; the cast covers the rest of the real
-// Supabase User shape, which nothing here needs.
+// Roles are read from app_metadata only (roles.ts), so the mock patient
+// carries its role there; the cast covers the rest of the real Supabase User
+// shape, which nothing here needs. Local development only: the flag is never
+// set in a deployment, and the mock never talks to Supabase.
 function mockPatientUser(): User {
   return {
     id: PATIENT_MOCK_USER_ID,
     email: PATIENT_MOCK_EMAIL,
     user_metadata: { role: "patient" },
-    app_metadata: {},
+    app_metadata: { role: "patient" },
     aud: "authenticated",
     created_at: new Date().toISOString(),
   } as unknown as User;
@@ -40,7 +40,10 @@ function mockPatientUser(): User {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const mockMode = isPatientMockModeEnabled();
   const [user, setUser] = useState<User | null>(mockMode ? mockPatientUser() : null);
-  const [loading, setLoading] = useState(!mockMode);
+  // In mock mode too: the pages wait until the in-browser fake data is seeded.
+  const [loading, setLoading] = useState(true);
+  const [claiming, setClaiming] = useState(false);
+  const claimedFor = useRef<string | null>(null);
   // Never calls getSupabaseBrowserClient() in mock mode -- that's what lets
   // this run with no NEXT_PUBLIC_SUPABASE_URL/ANON_KEY configured at all,
   // since that client throws immediately if they're missing.
@@ -66,17 +69,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.subscription.unsubscribe();
   }, [supabase, mockMode]);
 
+  // A session without a granted role (a new signup, or an account from before
+  // roles moved to app_metadata) asks the server once: a patient signup is
+  // granted at once, a clinician signup becomes a pending request. The
+  // refreshed session then carries the new app_metadata.
+  useEffect(() => {
+    if (!supabase || !user || grantedRole(user) || claimedFor.current === user.id) return;
+    claimedFor.current = user.id;
+    setClaiming(true);
+    fetch("/api/auth/claim-role", { method: "POST" })
+      .then(async (response) => {
+        const body = (await response.json().catch(() => null)) as { ok?: boolean; result?: { role?: string | null; pendingRole?: string } } | null;
+        if (body?.ok && (body.result?.role || body.result?.pendingRole)) await supabase.auth.refreshSession();
+      })
+      .catch(() => undefined)
+      .finally(() => setClaiming(false));
+  }, [user, supabase]);
+
   const value = useMemo<AuthState>(
     () => ({
       user,
-      role: roleFromUser(user),
-      loading,
+      role: grantedRole(user),
+      pendingRole: pendingRole(user),
+      loading: loading || claiming,
       signOut: async () => {
         if (mockMode || !supabase) return;
         await supabase.auth.signOut();
       },
     }),
-    [user, loading, supabase, mockMode],
+    [user, loading, claiming, supabase, mockMode],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

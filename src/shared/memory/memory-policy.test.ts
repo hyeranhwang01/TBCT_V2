@@ -1,12 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getParticipant, saveParticipant } from "@/shared/data/repositories/participant-repository";
 import { CANONICAL_PROMPT_ITEMS, CANONICAL_STAGE_NODES } from "@/shared/protocol/source-fidelity-catalog";
 import { compileDialogueContract } from "@/shared/dialogue-agent/dialogue-contract-compiler";
-import { createCanonicalTestRuntimeSession, getRuntimeSession } from "@/shared/api/runtime-session-api";
-import { startRuntimeSession } from "@/shared/api/runtime-execution-api";
 import { getOrCreateParticipantForUser } from "@/shared/api/participant-api";
-import { listMemoryRetrievalRuns, saveLongitudinalMemory } from "@/shared/data/repositories/longitudinal-memory-repository";
-import { getLocalDb } from "@/shared/data/db/tbct-local-db";
 import {
   DEFAULT_LONGITUDINAL_MEMORY_POLICY,
   LONGITUDINAL_MEMORY_POLICY_ENV,
@@ -15,7 +10,6 @@ import {
   resolveLongitudinalMemoryPolicy,
   type LongitudinalMemoryPolicy,
 } from "@/shared/memory/memory-policy";
-import type { LongitudinalMemory } from "@/types/longitudinal-memory";
 import type { RuntimeSession } from "@/types/runtime-session";
 import type { RuntimePromptItem } from "@/types/protocol-runtime";
 
@@ -105,8 +99,7 @@ function sessionWithMemory(sessionDefinitionId: string): RuntimeSession {
   return {
     id: "policy-session", projectId: "TBCT-BR-001", protocolId: "tbct-br-001", protocolVersion: "1", releaseId: "release-1",
     sessionDefinitionId, participantId: "policy-participant", status: "waiting_for_input", patientAlias: "Synthetic", locale: "ko-KR",
-    runtimeContext: { fields: {}, riskSignals: [], iterationCounts: {}, longitudinalMemory: { treatmentGoals: ["아침에 10분 산책하기"], patientPreferences: [], activeHomework: [], relevantBarriers: [], copingStrategies: [], items: ITEMS } },
-  } as unknown as RuntimeSession;
+    runtimeContext: { fields: {}, riskSignals: [], iterationCounts: {}, longitudinalMemory: { treatmentGoals: ["아침에 10분 산책하기"], patientPreferences: [], activeHomework: [], relevantBarriers: [], copingStrategies: [], items: ITEMS } } } as unknown as RuntimeSession;
 }
 
 function compile(promptIdFragment: string, sessionDefinitionId: string) {
@@ -116,98 +109,15 @@ function compile(promptIdFragment: string, sessionDefinitionId: string) {
   return compileDialogueContract({ session: sessionWithMemory(sessionDefinitionId), node, sourcePromptItem, runtimePromptItem, recentMessages: [], clarificationAttemptCount: 0, isFirstPromptOfNode: true, isFirstPromptOfSession: false });
 }
 
-describe("the contract follows the decided scope", () => {
-  // S03 ccd-connection: administrative turn, no protected field in the node.
-  // S03 automatic-thought: participant-owned, node not protected.
-  // S03 primary-emotion: participant-owned turn in a protected node.
-  // (These were S01/S02 prompts until both became prompt-driven,
-  // note2026_09_25_prompt_driven_s01_s02 -- they compile no contract now.)
-  const cases: Array<[string, string, string, boolean]> = [
-    ["administrative_only", "-ccd-connection", "tbct-s03", true],
-    ["administrative_only", "-automatic-thought", "tbct-s03", false],
-    ["unprotected_nodes", "-automatic-thought", "tbct-s03", true],
-    ["unprotected_nodes", "-primary-emotion", "tbct-s03", false],
-    ["all_turns", "-primary-emotion", "tbct-s03", true],
-  ];
-  it.each(cases)("scope %s: %s (%s) carries memory = %s", (scope, prompt, sessionId, expected) => {
-    setPolicy({ injectionScope: scope as LongitudinalMemoryPolicy["injectionScope"] });
-    expect(compile(prompt, sessionId).participantMemory !== undefined).toBe(expected);
-  });
-
-  it("carries memory on the shipped default config, with no setting at all", () => {
-    setPolicy(undefined);
-    expect(compile("-ccd-connection", "tbct-s03").participantMemory).toEqual(ITEMS);
-  });
-
-  it("never mixes memory into confirmedState, in any scope", () => {
-    // The scope decides where memory APPEARS; it can never make memory
-    // quotable. confirmedState is message-composition.ts's quote-source pool,
-    // so keeping memory out of it is what stops the assistant presenting a
-    // prior-session summary as the participant's own words -- and that holds
-    // even at all_turns, where every turn carries memory.
-    for (const scope of MEMORY_INJECTION_SCOPES) {
-      setPolicy({ injectionScope: scope });
-      for (const [prompt, sessionId] of [["-ccd-connection", "tbct-s03"], ["-automatic-thought", "tbct-s03"], ["-primary-emotion", "tbct-s03"]] as const) {
-        expect(JSON.stringify(compile(prompt, sessionId).confirmedState)).not.toContain("산책");
-      }
-    }
-  });
-});
-
-describe("retrieval follows the decision", () => {
-  function approved(participantId: string, id: string, memoryType: LongitudinalMemory["memoryType"], retentionPolicyId: string): LongitudinalMemory {
-    const now = new Date().toISOString();
-    return { id, participantId, projectId: "TBCT-BR-001", memoryType, title: memoryType, content: `content ${id}`, status: "approved", sensitivity: "standard", sourceType: "session_summary", sourceSessionId: "RS-earlier", sourceMessageIds: [], sourceNodeIds: [], sourceExecutionLogIds: [], isDirectlyReported: true, isSystemDerived: false, validFrom: now, retentionPolicyId, createdAt: now, updatedAt: now, createdBy: "System" };
-  }
-
-  beforeEach(async () => {
-    const db = getLocalDb();
-    await db.transaction("rw", db.tables, async () => {
-      await Promise.all(db.tables.map((table) => table.clear()));
-    });
-  });
-
-  it("retrieves on the shipped default config, with no setting at all", async () => {
-    setPolicy(undefined);
-    const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s01", locale: "ko-KR" });
-    await saveLongitudinalMemory(approved(session.participantId, "MEM-1", "treatment_goal", "RET-GOAL"));
-    await startRuntimeSession(session.id);
-    const runs = await listMemoryRetrievalRuns(session.id);
-    expect(runs.length).toBeGreaterThan(0);
-    expect(runs.every((run) => run.selectedMemoryIds.includes("MEM-1"))).toBe(true);
-    expect((await getRuntimeSession(session.id))?.session.runtimeContext.longitudinalMemory?.items).toEqual([
-      { id: "MEM-1", type: "treatment_goal", content: "content MEM-1" },
-    ]);
-  });
-
-  it("still withholds everything from a participant who has not consented -- the one remaining gate", async () => {
-    const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s01", locale: "ko-KR" });
-    const participant = (await getParticipant(session.participantId))!;
-    await saveParticipant({ ...participant, consent: { ...participant.consent, crossSessionUseAllowed: false } });
-    await saveLongitudinalMemory(approved(session.participantId, "MEM-1", "treatment_goal", "RET-GOAL"));
-
-    await startRuntimeSession(session.id);
-
-    const view = await getRuntimeSession(session.id);
-    expect(view?.session.runtimeContext.longitudinalMemory).toBeUndefined();
-    expect(await listMemoryRetrievalRuns(session.id)).toEqual([]);
-    // Logged as skipped, not as a failure -- declining consent is expected.
-    expect(view?.logs.some((log) => log.status === "skipped" && log.summary.includes("cross-session use not consented"))).toBe(true);
-  });
-
-  it("applies maxItemsPerNode and allowedMemoryTypes", async () => {
-    setPolicy({ maxItemsPerNode: 1, allowedMemoryTypes: ["homework_assignment"] });
-    const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s01", locale: "ko-KR" });
-    await saveLongitudinalMemory(approved(session.participantId, "MEM-goal", "treatment_goal", "RET-GOAL"));
-    await saveLongitudinalMemory(approved(session.participantId, "MEM-hw-1", "homework_assignment", "RET-HW-ASG"));
-    await saveLongitudinalMemory(approved(session.participantId, "MEM-hw-2", "homework_assignment", "RET-HW-ASG"));
-    await startRuntimeSession(session.id);
-    const runs = await listMemoryRetrievalRuns(session.id);
-    expect(runs.length).toBeGreaterThan(0);
-    for (const run of runs) {
-      expect(run.selectedMemoryIds).toHaveLength(1);
-      expect(run.selectedMemoryIds[0]).toMatch(/^MEM-hw-/);
-      expect(run.excluded).toEqual(expect.arrayContaining([{ memoryId: "MEM-goal", reason: "memory type not requested" }]));
+describe("the contract never carries the retired memories", () => {
+  // Whatever the old policy scope says: the compiler no longer reads
+  // runtimeContext.longitudinalMemory (note2026_09_27_memory_rag_m3_m7).
+  it.each(MEMORY_INJECTION_SCOPES)("scope %s", (scope) => {
+    setPolicy({ injectionScope: scope });
+    for (const [prompt, sessionId] of [["-ccd-connection", "tbct-s03"], ["-automatic-thought", "tbct-s03"], ["-primary-emotion", "tbct-s03"]] as const) {
+      const contract = compile(prompt, sessionId);
+      expect(contract.participantMemory).toBeUndefined();
+      expect(JSON.stringify(contract)).not.toContain("산책");
     }
   });
 });

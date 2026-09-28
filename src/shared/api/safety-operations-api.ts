@@ -1,5 +1,6 @@
 import { getLocalDb } from "@/shared/data/db/tbct-local-db";
 import { updateRuntimeSessionRecord } from "@/shared/data/repositories/runtime-session-repository";
+import { sealSessionRecord } from "@/shared/trial/runtime-trial";
 import { getCurrentDemoActor } from "@/shared/demo-actor";
 import { findActiveTriggerSuppression, getClinicianHandoff, getInterventionRecord, getPendingResumeRequest, listClinicianHandoffs, listFollowUpTasks, listInterventionRecords, listNotifications, listResumeRequests, listSafetyEvents, listSafetyReports, listSafetyTransitions, listSafetyTriageRecords, listPendingClinicianHandoffs, saveClinicianHandoff, saveFollowUpTask, saveInterventionRecord, saveNotification, saveResumeRequest, saveSafetyEvent, saveSafetyReport, saveSafetyTransition, saveSafetyTriageRecord, saveTriggerSuppression, updateClinician, updateClinicianHandoff, updateFollowUpTask, updateInterventionRecord, updateNotification, updateResumeRequest, updateSafetyEvent, updateTriggerSuppression, getSafetyEvent, listClinicians, getClinician, getSafetyReport } from "@/shared/data/repositories/safety-event-repository";
 // The clinician safety-monitoring domain (events, transitions, triage,
@@ -431,6 +432,7 @@ export async function terminateSessionForSafety(sessionId: string, eventId: stri
   await updateRuntimeSessionRecord(sessionId, { status: "terminated", terminatedAt: new Date().toISOString() });
   const next = await updateSafetyEvent(eventId, { status: "resolved", patientFacingStatus: "session_terminated", resolutionSummary: input.patientFacingMessage });
   await transition(eventId, event.status, "resolved", input.reason);
+  await sealSessionRecord(sessionId, view.session.participantId);
   return next;
 }
 

@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { LEGACY_ROUTE_ROLES, grantedRole, pendingRole, requestedRole } from "@/shared/auth/roles";
 
 // Server-only Supabase client (Route Handlers, middleware) -- reads the
 // session from the request's cookies so a route handler can learn which
@@ -35,17 +36,40 @@ export async function createSupabaseServerClient() {
 }
 
 /** The authenticated caller's id + role for this request, or null if there
- * is no valid session. `role` mirrors what auth-context.tsx reads
- * client-side (user_metadata.role, set at signup). Route handlers use this
- * for authorization -- see runtime-execution-api.ts's callers. */
+ * is no valid session OR no role the server has granted. The role comes from
+ * app_metadata only (src/shared/auth/roles.ts) -- user_metadata is editable
+ * by the user, so trusting it let any patient become a clinician. A user
+ * without a granted role (a clinician signup awaiting approval) is treated as
+ * not authenticated: most routes restrict only role "patient" and would
+ * otherwise give a role-less caller full access. Route handlers use this for
+ * authorization -- see runtime-execution-api.ts's callers. getUser() reads the
+ * user from Supabase Auth, so a newly granted role counts at once. */
 export async function getAuthenticatedCaller() {
+  const user = await getSignedInUser();
+  if (!user?.role || !LEGACY_ROUTE_ROLES.includes(user.role)) return null;
+  return { userId: user.userId, email: user.email, role: user.role as "clinician" | "patient" | "admin" };
+}
+
+/** Any signed-in user with a granted role, including assessor and
+ * coordinator -- for routes written for those roles (the trial store). */
+export async function getStaffCaller() {
+  const user = await getSignedInUser();
+  if (!user?.role) return null;
+  return { userId: user.userId, email: user.email, role: user.role };
+}
+
+/** The signed-in user whatever their role -- only for /api/auth/claim-role,
+ * which is where a role gets granted. Every other route uses
+ * getAuthenticatedCaller. */
+export async function getSignedInUser() {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) return null;
-  const role = data.user.user_metadata?.role;
   return {
     userId: data.user.id,
     email: data.user.email ?? null,
-    role: role === "clinician" || role === "patient" || role === "admin" ? role : null,
+    role: grantedRole(data.user),
+    requestedRole: requestedRole(data.user),
+    pendingRole: pendingRole(data.user),
   };
 }

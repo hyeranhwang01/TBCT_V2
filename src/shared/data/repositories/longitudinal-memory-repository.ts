@@ -1,7 +1,7 @@
 import { PARTICIPANT_STORE_ENDPOINT, type ParticipantStoreOp } from "@/shared/runtime/participant-store-ops";
 import { resolveStoreUrl, runtimeFetch } from "@/shared/runtime/resolve-store-url";
 import { getRetentionPolicy as getRetentionPolicyConstant, listRetentionPolicies as listRetentionPoliciesConstant } from "@/shared/memory/retention-policies";
-import type { GoalTrackingRecord, HomeworkTrackingRecord, LongitudinalMemory, MemoryCandidate, MemoryRetrievalResult, MemoryUsageLog } from "@/types/longitudinal-memory";
+import type { GoalTrackingRecord, HomeworkTrackingRecord, LongitudinalMemory } from "@/types/longitudinal-memory";
 
 // Every longitudinal-memory record now lives in Neon Postgres alongside the
 // participant roster (src/shared/data/server/participant-store.ts): approved
@@ -47,49 +47,6 @@ export async function updateLongitudinalMemory(memoryId: string, patch: Partial<
  * expireEligibleMemories (longitudinal-memory-api.ts). */
 export async function listExpiredApprovedMemories(): Promise<LongitudinalMemory[]> {
   return callStore<LongitudinalMemory[]>({ op: "listExpiredApprovedMemories" });
-}
-
-export async function listMemoryCandidates(participantId?: string) {
-  return callStore<MemoryCandidate[]>({ op: "listMemoryCandidates", participantId });
-}
-
-export async function getMemoryCandidate(candidateId: string) {
-  return callStore<MemoryCandidate | undefined>({ op: "getMemoryCandidate", candidateId });
-}
-
-export async function saveMemoryCandidate(candidate: MemoryCandidate) {
-  await callStore<MemoryCandidate>({ op: "saveMemoryCandidate", candidate });
-  return candidate;
-}
-
-export async function updateMemoryCandidate(candidateId: string, patch: Partial<MemoryCandidate>) {
-  return callStore<MemoryCandidate>({ op: "updateMemoryCandidate", candidateId, patch });
-}
-
-export async function deleteMemoryCandidate(candidateId: string) {
-  await callStore<void>({ op: "deleteMemoryCandidate", candidateId });
-}
-
-export async function saveMemoryRetrievalRun(run: MemoryRetrievalResult) {
-  await callStore<MemoryRetrievalResult>({ op: "saveMemoryRetrievalRun", run });
-  return run;
-}
-
-export async function listMemoryRetrievalRuns(runtimeSessionId: string) {
-  return callStore<MemoryRetrievalResult[]>({ op: "listMemoryRetrievalRuns", runtimeSessionId });
-}
-
-export async function saveMemoryUsageLog(log: MemoryUsageLog) {
-  await callStore<MemoryUsageLog>({ op: "saveMemoryUsageLog", log });
-  return log;
-}
-
-export async function listMemoryUsageLogs(runtimeSessionId: string) {
-  return callStore<MemoryUsageLog[]>({ op: "listMemoryUsageLogs", runtimeSessionId });
-}
-
-export async function listAllMemoryUsageLogs(participantId: string) {
-  return callStore<MemoryUsageLog[]>({ op: "listAllMemoryUsageLogs", participantId });
 }
 
 export async function listRetentionPolicies() {

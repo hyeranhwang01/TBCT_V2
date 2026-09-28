@@ -89,30 +89,14 @@ function compileFor(promptIdFragment: string, sessionDefinitionId: string, withM
 }
 
 describe("contract compiler: participantMemory", () => {
-  it("carries the session's memories (with ids) on an administrative turn that asks for no participant content", () => {
-    // S03 "ccd-connection" explains how the Intra-TR builds on the diagram -- no participant content, in a node with no protected field.
-    // (It was S01's three-person preview until S01 became prompt-driven, note2026_09_25_prompt_driven_s01_s02.)
-    const contract = compileFor("ccd-connection", "tbct-s03");
-    expect(contract.participantOwned).toBe(false);
-    expect(contract.participantMemory).toEqual(MEMORY_ITEMS);
-    // Never mixed into confirmedState (the quote-source pool).
-    expect(JSON.stringify(contract.confirmedState)).not.toContain("산책");
-  });
-
-  it("is absent on a participant-owned turn (S03 primary emotion)", () => {
-    const contract = compileFor("primary-emotion", "tbct-s03");
-    expect(contract.participantOwned).toBe(true);
+  // The old clinician-approved memories are retired
+  // (note2026_09_27_memory_rag_m3_m7): a session stored before the change may
+  // still carry them, and none of them passed the participant's memory
+  // consent, so the compiler never reads them -- on any turn.
+  it.each([["ccd-connection"], ["primary-emotion"], ["automatic-thought"]])("never carries stored old memories (S03 %s)", (prompt) => {
+    const contract = compileFor(prompt, "tbct-s03");
     expect(contract.participantMemory).toBeUndefined();
-  });
-
-  it("is absent on a protected-field stage (S03 automatic thought)", () => {
-    const contract = compileFor("automatic-thought", "tbct-s03");
-    expect(contract.participantOwned || contract.nodeRequiresProtectedField).toBe(true);
-    expect(contract.participantMemory).toBeUndefined();
-  });
-
-  it("is absent when the session carries no memory", () => {
-    expect(compileFor("ccd-connection", "tbct-s03", false).participantMemory).toBeUndefined();
+    expect(JSON.stringify(contract)).not.toContain("산책");
   });
 });
 
@@ -229,7 +213,7 @@ describe("providers: memory reaches Claude's system prompt, never the Groq fallb
 });
 
 describe("turn record: injected memory ids", () => {
-  it("reports the ids of the memories that were on the contract", async () => {
+  it("reports none for a session stored with the old memories", async () => {
     const sourcePromptItem = CANONICAL_PROMPT_ITEMS.find((item) => item.id.startsWith("tbct-s03") && item.id.includes("-ccd-connection"))!;
     const node = CANONICAL_STAGE_NODES.find((item) => item.id === sourcePromptItem.nodeId)!;
     const result = await resolveDialogueAgentMessage({
@@ -244,6 +228,7 @@ describe("turn record: injected memory ids", () => {
       isFirstPromptOfNode: true,
       isFirstPromptOfSession: false,
     });
-    expect(result.injectedMemoryIds).toEqual(["MEM-goal", "MEM-hw"]);
+    // Nothing is on the contract any more, so nothing is reported.
+    expect(result.injectedMemoryIds).toBeUndefined();
   });
 });

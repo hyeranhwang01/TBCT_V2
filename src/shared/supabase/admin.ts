@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import WebSocket from "ws";
 import { resolveAppUrl } from "@/shared/notifications/resend-client";
+import { grantedRole, pendingRole, requestedRole, type AppRole } from "@/shared/auth/roles";
 
 // Server-only Supabase client using the service-role key -- this bypasses
 // RLS and Auth entirely (full admin access), so it must never be imported
@@ -47,7 +48,7 @@ export async function listClinicianEmails(): Promise<string[]> {
     const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
     if (error) throw error;
     for (const user of data.users) {
-      if (user.user_metadata?.role === "clinician" && user.email) emails.push(user.email);
+      if (grantedRole(user) === "clinician" && user.email) emails.push(user.email);
     }
     if (data.users.length < 1000) break;
     page += 1;
@@ -70,7 +71,12 @@ export async function getUserEmail(userId: string): Promise<string | null> {
 export interface AdminUserSummary {
   id: string;
   email: string | null;
-  role: "clinician" | "patient" | "admin" | null;
+  /** Granted by the server (app_metadata) -- the role that counts. */
+  role: AppRole | null;
+  /** A clinician signup waiting for approval. */
+  pendingRole: "clinician" | null;
+  /** What the account asked for at signup (user-editable, informational). */
+  requestedRole: "clinician" | "patient" | null;
   createdAt: string;
   banned: boolean;
 }
@@ -89,11 +95,12 @@ export async function listAllUsers(): Promise<AdminUserSummary[]> {
     const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
     if (error) throw error;
     for (const user of data.users) {
-      const role = user.user_metadata?.role;
       users.push({
         id: user.id,
         email: user.email ?? null,
-        role: role === "clinician" || role === "patient" || role === "admin" ? role : null,
+        role: grantedRole(user),
+        pendingRole: pendingRole(user),
+        requestedRole: requestedRole(user),
         createdAt: user.created_at,
         // banned_until is a far-future timestamp once banned (see
         // setUserBanned's own ban_duration value), "none" otherwise.
@@ -119,8 +126,8 @@ export async function setUserBanned(userId: string, banned: boolean): Promise<vo
   if (error) throw error;
 }
 
-/** One-time admin bootstrap: invites a brand-new user by email with
- * role="admin" already set in user_metadata, so the very first admin
+/** One-time admin bootstrap: invites a brand-new user by email and grants
+ * role="admin" (app_metadata), so the very first admin
  * doesn't need to sign up through any self-service flow (there isn't
  * one, deliberately -- see this app's clinician self-signup problem this
  * feature exists to address) and doesn't need a temporary password
@@ -140,5 +147,44 @@ export async function inviteAdminUser(email: string): Promise<{ id: string; emai
     redirectTo: `${resolveAppUrl()}/set-password`,
   });
   if (error) throw error;
+  // The invite's `data` lands in user_metadata, which grants nothing
+  // (roles.ts); the role itself is granted here.
+  await grantUserRole(data.user.id, "admin");
   return { id: data.user.id, email: data.user.email ?? null };
+}
+
+/** Grants (or, with null, removes) a user's role -- written to app_metadata,
+ * which only the service role can change (roles.ts). Clears a pending
+ * request either way. */
+export async function grantUserRole(userId: string, role: AppRole | null): Promise<void> {
+  const admin = getAdminClient();
+  const { error } = await admin.auth.admin.updateUserById(userId, { app_metadata: { role, role_request: null } });
+  if (error) throw error;
+}
+
+/** Records a clinician signup as waiting for an admin; grants nothing. */
+export async function requestClinicianRole(userId: string): Promise<void> {
+  const admin = getAdminClient();
+  const { error } = await admin.auth.admin.updateUserById(userId, { app_metadata: { role_request: "clinician" } });
+  if (error) throw error;
+}
+
+/** For the one-off role migration (scripts/migrate-roles-to-app-metadata.ts):
+ * every user's granted role and the role recorded in user_metadata before
+ * roles moved to app_metadata -- including "admin", which is not requestable. */
+export async function listUsersForRoleMigration(): Promise<Array<{ id: string; email: string | null; granted: AppRole | null; recorded: AppRole | null; createdAt: string }>> {
+  const admin = getAdminClient();
+  const users: Array<{ id: string; email: string | null; granted: AppRole | null; recorded: AppRole | null; createdAt: string }> = [];
+  let page = 1;
+  while (true) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw error;
+    for (const user of data.users) {
+      const recorded = user.user_metadata?.role;
+      users.push({ id: user.id, email: user.email ?? null, granted: grantedRole(user), recorded: recorded === "clinician" || recorded === "patient" || recorded === "admin" ? recorded : null, createdAt: user.created_at });
+    }
+    if (data.users.length < 1000) break;
+    page += 1;
+  }
+  return users;
 }
