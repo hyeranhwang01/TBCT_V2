@@ -1,38 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { ChevronDown, NotebookTabs } from "lucide-react";
 import { PatientShell } from "@/patient/components/patient-shell";
-import { Badge, Button, Card, EmptyState, PageSkeleton } from "@/shared/components/ui/primitives";
+import { homeworkTitle, isOpenSession } from "@/patient/components/session-record-card";
+import { EmptyBlock, PtCard, PtLinkButton, PtSkeleton, SectionHeading, SessionNumber } from "@/patient/components/ui/kit";
 import { listRuntimeSessionsForParticipant } from "@/shared/api/runtime-session-api";
 import { getOrCreateParticipantForUiLocale } from "@/shared/api/participant-api";
-import { HOMEWORK_LABEL_BY_SESSION, hasHomeworkActivity } from "@/types/homework";
+import { hasHomeworkActivity } from "@/types/homework";
 import { useT } from "@/shared/i18n/context";
 import { useAuth } from "@/shared/auth/auth-context";
+import { sessionMetaFor, sessionNumberOf, sessionUnit } from "@/patient/lib/session-meta";
+import { cn } from "@/shared/utils";
 
-// One place that lists every session's homework (2026-09-13). Until now the
-// only way in was the session that produced it: the completion screen, or a
-// button that appeared on the session list once that session was finished.
+// One place that lists every session's homework. In-progress sessions are
+// listed too: the detail screen (homework-page.tsx) never required a finished
+// session -- it ensures the record when it opens.
 //
-// In-progress sessions are listed too. The detail screen
-// (homework-page.tsx) never required a finished session -- it ensures the
-// record when it opens -- so this only exposes what already worked, which
-// matters for S01: its homework sheet is the same list of 15 cognitive
-// distortions the participant reads during the session.
-//
-// Scoped to the logged-in patient's own participant, exactly like
-// patient-list-page.tsx; never the cross-patient list.
-//
-// 2026-09-22 (UI overhaul, W2): repeating the same session (e.g. running S01
-// twice) creates a second RuntimeSession with the same sessionDefinitionId,
-// so the same-titled card used to show up twice with nothing but the date to
-// tell them apart. This groups by sessionDefinitionId, numbers each group's
-// sessions in the order they were created (1st, 2nd, ...), and collapses
-// everything but the newest round behind a toggle. Purely a display change --
-// no new API call, no schema change, no session/homework record is deleted
-// or hidden from the clinician side (homework-panel, CD-Quest trend still
-// read the same underlying per-session records).
+// Repeating a session creates a second RuntimeSession with the same
+// sessionDefinitionId, so sessions are grouped by definition, numbered in
+// creation order (1st, 2nd, ...), and everything but the newest round sits
+// behind a toggle. Display only: no record is hidden from the clinician side.
 type HomeworkListSession = {
   id: string;
   sessionDefinitionId: string;
@@ -55,8 +44,7 @@ export function groupSessionsByDefinition<T extends HomeworkListSession>(session
   return order.map((sessionDefinitionId) => {
     const chronological = [...bySessionDefinition.get(sessionDefinitionId)!].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
     const roundBySessionId = new Map(chronological.map((session, index) => [session.id, index + 1]));
-    // Keep the group's own sessions in the same newest-first order the caller
-    // already sorted the flat list into (matches the current UX).
+    // Keep the caller's newest-first order within the group.
     const rounds = bySessionDefinition
       .get(sessionDefinitionId)!
       .map((session) => ({ ...session, round: roundBySessionId.get(session.id)! }));
@@ -68,7 +56,6 @@ export function HomeworkListPage() {
   const { t, locale } = useT();
   const { user } = useAuth();
   const userId = user?.id ?? "";
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const participantQuery = useQuery({ queryKey: ["runtime-participant", userId], queryFn: () => getOrCreateParticipantForUiLocale(userId, locale), enabled: Boolean(userId) });
   const participant = participantQuery.data;
   const sessionsQuery = useQuery({
@@ -82,70 +69,119 @@ export function HomeworkListPage() {
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 
   const groups = groupSessionsByDefinition(sessions);
+  // Homework of a session still in progress comes first; the rest follows in
+  // session order (1, 2, 3, ...). Within a session, rounds stay newest-first.
+  const bySessionNumber = (left: { sessionDefinitionId: string }, right: { sessionDefinitionId: string }) => sessionNumberOf(left.sessionDefinitionId) - sessionNumberOf(right.sessionDefinitionId);
+  const activeGroups = groups.filter((group) => isOpenSession(group.rounds[0].status)).sort(bySessionNumber);
+  const pastGroups = groups.filter((group) => !isOpenSession(group.rounds[0].status)).sort(bySessionNumber);
 
   if (participantQuery.isLoading || sessionsQuery.isLoading) {
-    return <PatientShell title={t("homeworkList.title")}><PageSkeleton /></PatientShell>;
+    return <PatientShell title={t("patientUi.nav.homework")}><PtSkeleton /></PatientShell>;
   }
 
-  const formatDate = (value: string) =>
-    new Date(value).toLocaleDateString(locale === "ko" ? "ko-KR" : "en-US", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" });
-
-  const renderSessionCard = (session: (typeof sessions)[number], round: number, totalRounds: number) => (
-    <Card key={session.id} className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
-      <div className="space-y-1.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="text-base font-semibold text-text-primary">{HOMEWORK_LABEL_BY_SESSION[session.sessionDefinitionId]}</div>
-          {totalRounds > 1 && <Badge tone="neutral">{t("homeworkList.roundLabel", { n: round })}</Badge>}
-        </div>
-        <div className="text-sm text-text-secondary">
-          {session.sessionDefinitionId} · {formatDate(session.updatedAt)}
-        </div>
-        <Badge tone={session.status === "completed" ? "success" : "neutral"}>
-          {session.status === "completed" ? t("homeworkList.sessionDone") : t("homeworkList.sessionOngoing")}
-        </Badge>
-      </div>
-      <Link href={`/projects/demo/patient/homework/${session.id}`}>
-        <Button variant={session.status === "completed" ? "violet" : "secondary"}>{t("homeworkList.open")}</Button>
-      </Link>
-    </Card>
-  );
-
   return (
-    <PatientShell title={t("homeworkList.title")} progressLabel={t("homeworkList.eyebrow")}>
-      <div className="space-y-4">
-        <Card className="p-5">
-          <p className="text-sm text-text-secondary">{t("homeworkList.description")}</p>
-        </Card>
-
-        {sessions.length === 0 ? (
-          <Card><EmptyState title={t("homeworkList.empty")} description={t("homeworkList.emptyHint")} /></Card>
-        ) : (
-          <div className="space-y-3">
-            {groups.map(({ sessionDefinitionId, rounds }) => {
-              const totalRounds = rounds.length;
-              const [latest, ...earlier] = rounds; // rounds is already newest-first
-              const isExpanded = Boolean(expandedGroups[sessionDefinitionId]);
-              return (
-                <div key={sessionDefinitionId} className="space-y-2">
-                  {renderSessionCard(latest, latest.round, totalRounds)}
-                  {earlier.length > 0 && (
-                    <div className="pl-1">
-                      <button
-                        type="button"
-                        className="text-sm font-medium text-clinical-blue hover:underline"
-                        onClick={() => setExpandedGroups((prev) => ({ ...prev, [sessionDefinitionId]: !prev[sessionDefinitionId] }))}
-                      >
-                        {isExpanded ? t("homeworkList.hidePreviousRounds") : t("homeworkList.showPreviousRounds", { count: earlier.length })}
-                      </button>
-                      {isExpanded && <div className="mt-2 space-y-2">{earlier.map((session) => renderSessionCard(session, session.round, totalRounds))}</div>}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+    <PatientShell
+      title={t("patientUi.nav.homework")}
+    >
+      {sessions.length === 0 ? (
+        <PtCard><EmptyBlock icon={<NotebookTabs />} title={t("homeworkList.empty")} description={t("homeworkList.emptyHint")} /></PtCard>
+      ) : (
+        <div className="max-w-3xl space-y-10">
+          {activeGroups.length > 0 && (
+            <section>
+              <SectionHeading title={t("patientUi.records.active")} />
+              <div className="space-y-3">{activeGroups.map((group) => <HomeworkGroup key={group.sessionDefinitionId} group={group} defaultOpen />)}</div>
+            </section>
+          )}
+          {pastGroups.length > 0 && (
+            <section>
+              <SectionHeading title={t("patientUi.records.past")} />
+              <div className="space-y-3">{pastGroups.map((group) => <HomeworkGroup key={group.sessionDefinitionId} group={group} />)}</div>
+            </section>
+          )}
+        </div>
+      )}
     </PatientShell>
   );
 }
+
+type HomeworkRound = HomeworkListSession & { round: number };
+
+/** One session's homework, laid out like a row on the session history page:
+ * number, homework title, and the newest round's session status and date.
+ * Opening it shows the way into the homework and, folded one level further,
+ * the earlier rounds. */
+function HomeworkGroup({ group, defaultOpen = false }: { group: { sessionDefinitionId: string; rounds: HomeworkRound[] }; defaultOpen?: boolean }) {
+  const { t, locale } = useT();
+  const [open, setOpen] = useState(defaultOpen);
+  const [showEarlier, setShowEarlier] = useState(false);
+  const { sessionDefinitionId, rounds } = group;
+  const [latest, ...earlier] = rounds; // already newest-first
+  const meta = sessionMetaFor(sessionDefinitionId);
+  const done = latest.status === "completed";
+  const formatDate = (value: string) => new Date(value).toLocaleDateString(locale === "ko" ? "ko-KR" : "en-US", { timeZone: "Asia/Seoul", month: "long", day: "numeric" });
+  const statusText = (status: string) => (status === "completed" ? t("homeworkList.sessionDone") : t("homeworkList.sessionOngoing"));
+  return (
+    <section className="overflow-hidden rounded-card bg-surface">
+      <button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open} className="transition-ui flex w-full items-center gap-4 px-5 py-5 text-left hover:bg-surface-hover sm:px-6">
+        <SessionNumber number={sessionNumberOf(sessionDefinitionId)} caption={sessionUnit(locale)} size="sm" tone={done ? "soft" : "gold"} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[16px] font-bold tracking-[-0.02em] text-text-primary">{homeworkTitle(t, sessionDefinitionId)}</span>
+          <span className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[13px] text-text-muted">
+            <span className={cn("inline-flex items-center gap-1.5 font-semibold", done ? "text-success" : "text-gold-strong")}>
+              <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
+              {statusText(latest.status)}
+            </span>
+            {meta && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span className="truncate">{meta.title[locale]}</span>
+              </>
+            )}
+            <span aria-hidden="true">·</span>
+            <span>{formatDate(latest.updatedAt)}</span>
+            {rounds.length > 1 && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span>{t("homeworkList.roundLabel", { n: latest.round })}</span>
+              </>
+            )}
+          </span>
+        </span>
+        <ChevronDown className={cn("h-5 w-5 shrink-0 text-text-muted transition-transform", open && "rotate-180")} aria-hidden="true" />
+      </button>
+      {open && (
+        <div className="space-y-4 px-5 pb-6 sm:pl-[84px] sm:pr-6">
+          <PtLinkButton href={`/projects/demo/patient/homework/${latest.id}`} variant={done ? "primary" : "secondary"} size="sm">
+            <NotebookTabs className="h-4 w-4" />
+            {t("homeworkList.open")}
+          </PtLinkButton>
+          {earlier.length > 0 && (
+            <div className="rounded-2xl bg-surface-subtle">
+              <button type="button" onClick={() => setShowEarlier((value) => !value)} aria-expanded={showEarlier} className="transition-ui flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-[13px] font-semibold text-text-secondary hover:bg-surface-hover">
+                {showEarlier ? t("homeworkList.hidePreviousRounds") : t("homeworkList.showPreviousRounds", { count: earlier.length })}
+                <ChevronDown className={cn("h-4 w-4 transition-transform", showEarlier && "rotate-180")} aria-hidden="true" />
+              </button>
+              {showEarlier && (
+                <div className="divide-y divide-border px-4 pb-1">
+                  {earlier.map((session) => (
+                    <div key={session.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                      <div className="flex flex-wrap items-center gap-x-1.5 text-[13px] text-text-muted">
+                        <span className="font-semibold text-text-secondary">{t("homeworkList.roundLabel", { n: session.round })}</span>
+                        <span className="font-semibold">{statusText(session.status)}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{formatDate(session.updatedAt)}</span>
+                      </div>
+                      <PtLinkButton href={`/projects/demo/patient/homework/${session.id}`} variant="ghost" size="sm">{t("homeworkList.open")}</PtLinkButton>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+

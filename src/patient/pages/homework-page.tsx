@@ -3,7 +3,8 @@
 import { useParams, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { PatientShell } from "@/patient/components/patient-shell";
-import { Card, EmptyState, PageSkeleton } from "@/shared/components/ui/primitives";
+import { NotebookTabs } from "lucide-react";
+import { EmptyBlock, PtCard, PtLinkButton, PtSkeleton } from "@/patient/components/ui/kit";
 import { getRuntimeSession } from "@/shared/api/runtime-session-api";
 import { ensureHomeworkForSession } from "@/patient/lib/api/homework-api";
 import { useRealtimeInvalidate } from "@/shared/supabase/use-realtime-invalidate";
@@ -46,9 +47,9 @@ export function HomeworkPage() {
   // changes is equivalent, minus the repeated write attempts every 4s.
   useRealtimeInvalidate([{ table: "homework_records", filter: `runtime_session_id=eq.${sessionId}` }], ["homework-record", sessionId], Boolean(session));
 
-  if (sessionQuery.isLoading || homeworkQuery.isLoading) return <PatientShell title={t("homework.loading")}><PageSkeleton /></PatientShell>;
+  if (sessionQuery.isLoading || homeworkQuery.isLoading) return <PatientShell title={t("homework.loading")} hideHeader><PtSkeleton /></PatientShell>;
   if (!session || !hasHomeworkActivity(session.sessionDefinitionId) || !homeworkQuery.data) {
-    return <PatientShell title={t("homework.loading")}><Card><EmptyState title={t("homework.notAvailable")} /></Card></PatientShell>;
+    return <PatientShell title={t("homeworkList.title")} hideHeader><PtCard><EmptyBlock icon={<NotebookTabs />} title={t("homework.notAvailable")} action={<PtLinkButton href="/projects/demo/patient/homework" variant="secondary">{t("homeworkList.title")}</PtLinkButton>} /></PtCard></PatientShell>;
   }
 
   return <HomeworkSessionView sessionView={sessionQuery.data!} homework={homeworkQuery.data} label={HOMEWORK_LABEL_BY_SESSION[session.sessionDefinitionId]} />;

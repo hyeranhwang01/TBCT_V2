@@ -1,9 +1,12 @@
 import { updateParticipantProfile } from "@/shared/api/participant-api";
-import { listRuntimeSessionsForParticipant, setRuntimeSessionStatus } from "@/shared/api/runtime-session-api";
+import { listRuntimeSessionsForParticipant } from "@/shared/api/runtime-session-api";
+import { updateRuntimeSessionRecord } from "@/shared/data/repositories/runtime-session-repository";
 import type { RuntimeParticipant } from "@/types/longitudinal-memory";
 import { UI_LOCALE_TO_SESSION_LOCALE, type UiLocale } from "@/shared/i18n/locales";
 
 export { UI_LOCALE_TO_SESSION_LOCALE };
+
+const ENDED_STATUSES = new Set(["completed", "terminated", "failed"]);
 
 /**
  * The website's own UI-chrome language (LocaleToggle / useT()) and each
@@ -23,9 +26,17 @@ export { UI_LOCALE_TO_SESSION_LOCALE };
  */
 export async function propagateLocaleToOpenSessions(participant: Pick<RuntimeParticipant, "id">, sessionLocale: string): Promise<number> {
   const sessions = await listRuntimeSessionsForParticipant(participant.id);
-  const staleSessions = sessions.filter((session) => session.status !== "completed" && session.locale !== sessionLocale);
-  await Promise.all(staleSessions.map((session) => setRuntimeSessionStatus(session.id, session.status, { locale: sessionLocale }).catch(() => {})));
-  return staleSessions.length;
+  // Ended sessions (completed, terminated, failed) keep the language they
+  // were held in; only a session that can still continue takes the new one.
+  const staleSessions = sessions.filter((session) => !ENDED_STATUSES.has(session.status) && session.locale !== sessionLocale);
+  // Only the locale changes; the status stays as it is. This used to go
+  // through setRuntimeSessionStatus(id, sameStatus, { locale }), which the
+  // runtime state machine rejects as a self-transition (waiting_for_input ->
+  // waiting_for_input is not an allowed move). The rejection was swallowed,
+  // so no open session ever switched language, while the toast reported that
+  // they had.
+  const results = await Promise.allSettled(staleSessions.map((session) => updateRuntimeSessionRecord(session.id, { locale: sessionLocale })));
+  return results.filter((result) => result.status === "fulfilled").length;
 }
 
 /** Persists the new language onto the participant record, then propagates it

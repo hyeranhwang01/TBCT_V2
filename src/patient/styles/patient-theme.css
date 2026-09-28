@@ -1,0 +1,214 @@
+/* Patient app design tokens (v2, 2026-09-27).
+ *
+ * Palette taken from the lab mark: a deep forest green with a gold accent
+ * kept for progress and "now" markers, on plain grey neutrals with flat white
+ * cards (a warm cream canvas with outlined cards read too much like other
+ * assistant products).
+ *
+ * Everything here hangs off :root:has(.patient-app), which only matches while
+ * PatientShell is mounted. That is why this file can redefine the SAME
+ * variables globals.css defines (clinical-blue, surface, border, ...) without
+ * touching a single clinician page: the clinician app never renders
+ * .patient-app. Redefining them on :root rather than on .patient-app itself
+ * also re-themes things React portals to <body> (toasts, dialogs).
+ *
+ * Specificity note: :root:has(.patient-app) is (0,2,0), which ties with the
+ * :root[data-theme="dark"] rule in globals.css' mobile block and wins on
+ * source order (this file loads after globals.css). */
+
+:root:has(.patient-app) {
+  color-scheme: light;
+
+  /* Actions use a clearer green than the lab mark itself; the mark's own
+     deep forest green stays for the home journey board (brand-deep). */
+  --color-brand: 22 128 84;
+  --color-brand-strong: 15 106 68;
+  --color-brand-soft: 221 241 230;
+  --color-brand-tint: 240 248 244;
+  --color-brand-ink: 12 94 60;
+  --color-brand-deep: 29 74 49;
+  --color-gold: 232 180 68;
+  --color-gold-strong: 150 108 22;
+  --color-gold-soft: 251 241 216;
+  --color-canvas: 242 244 246;
+
+  /* Neutral greys, no tint: white cards sit on a grey page without
+     outlines, the way most consumer apps are laid out. */
+  --color-background: 242 244 246;
+  --color-surface: 255 255 255;
+  --color-surface-subtle: 247 248 250;
+  --color-surface-hover: 236 239 242;
+  --color-text-primary: 25 31 40;
+  --color-text-secondary: 78 89 104;
+  --color-text-muted: 139 149 161;
+  --color-border: 229 232 235;
+  --color-border-strong: 209 214 219;
+
+  /* Legacy names still used by shared primitives and the s0N worksheets /
+     homework screens -- mapped onto the new palette so they match. */
+  --color-clinical-blue: 22 128 84;
+  --color-clinical-blue-light: 230 245 237;
+  --color-ai-violet: 134 97 24;
+  --color-ai-violet-light: 251 241 216;
+  --color-success: 36 122 76;
+  --color-success-light: 228 243 233;
+  --color-warning: 170 110 20;
+  --color-warning-light: 252 242 222;
+  --color-critical: 186 62 56;
+  --color-critical-light: 251 234 232;
+
+  --pt-shadow-sm: none;
+  --pt-shadow-md: 0 4px 16px rgba(25, 31, 40, 0.06);
+  --pt-shadow-lg: 0 8px 32px rgba(25, 31, 40, 0.12);
+}
+
+/* Dark theme. globals.css deliberately forces the light palette below 640px,
+   so the patient dark palette follows the same rule. */
+@media (min-width: 640px) and (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])):has(.patient-app) {
+      color-scheme: dark;
+      --color-brand: 46 150 100;
+      --color-brand-strong: 38 130 86;
+      --color-brand-soft: 30 56 44;
+      --color-brand-tint: 24 36 30;
+      --color-brand-ink: 132 214 168;
+      --color-brand-deep: 27 58 40;
+      --color-gold: 230 186 92;
+      --color-gold-strong: 230 186 92;
+      --color-gold-soft: 56 46 24;
+      --color-canvas: 16 18 21;
+      --color-background: 16 18 21;
+      --color-surface: 28 31 35;
+      --color-surface-subtle: 34 37 42;
+      --color-surface-hover: 42 46 52;
+      --color-text-primary: 236 238 241;
+      --color-text-secondary: 172 179 188;
+      --color-text-muted: 120 128 139;
+      --color-border: 44 48 54;
+      --color-border-strong: 60 65 73;
+      --color-clinical-blue: 92 190 138;
+      --color-clinical-blue-light: 28 50 40;
+      --color-ai-violet: 214 170 80;
+      --color-ai-violet-light: 50 42 22;
+      --color-success: 88 178 128;
+      --color-success-light: 24 48 34;
+      --color-warning: 224 170 90;
+      --color-warning-light: 58 44 20;
+      --color-critical: 232 120 112;
+      --color-critical-light: 60 28 26;
+      --pt-shadow-sm: none;
+      --pt-shadow-md: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
+      --pt-shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.35), 0 18px 48px rgba(0, 0, 0, 0.35);
+    }
+}
+@media (min-width: 640px) {
+  :root[data-theme="dark"]:has(.patient-app) {
+    color-scheme: dark;
+    --color-brand: 46 150 100;
+    --color-brand-strong: 38 130 86;
+    --color-brand-soft: 30 56 44;
+    --color-brand-tint: 24 36 30;
+    --color-brand-ink: 132 214 168;
+    --color-brand-deep: 27 58 40;
+    --color-gold: 230 186 92;
+    --color-gold-strong: 230 186 92;
+    --color-gold-soft: 56 46 24;
+    --color-canvas: 16 18 21;
+    --color-background: 16 18 21;
+    --color-surface: 28 31 35;
+    --color-surface-subtle: 34 37 42;
+    --color-surface-hover: 42 46 52;
+    --color-text-primary: 236 238 241;
+    --color-text-secondary: 172 179 188;
+    --color-text-muted: 120 128 139;
+    --color-border: 44 48 54;
+    --color-border-strong: 60 65 73;
+    --color-clinical-blue: 92 190 138;
+    --color-clinical-blue-light: 28 50 40;
+    --color-ai-violet: 214 170 80;
+    --color-ai-violet-light: 50 42 22;
+    --color-success: 88 178 128;
+    --color-success-light: 24 48 34;
+    --color-warning: 224 170 90;
+    --color-warning-light: 58 44 20;
+    --color-critical: 232 120 112;
+    --color-critical-light: 60 28 26;
+    --pt-shadow-sm: none;
+    --pt-shadow-md: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
+    --pt-shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.35), 0 18px 48px rgba(0, 0, 0, 0.35);
+  }
+}
+
+html body:has(.patient-app) {
+  background: rgb(var(--color-canvas));
+  background-image: none;
+  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+  letter-spacing: -0.01em;
+  word-break: keep-all;
+}
+
+/* Re-skin the shared rainbow decorations the primitives still carry. */
+:root:has(.patient-app) .rainbow-button,
+:root:has(.patient-app) .rainbow-fill {
+  background-image: none;
+  background-color: rgb(var(--color-brand));
+}
+:root:has(.patient-app) .rainbow-button {
+  box-shadow: 0 6px 16px rgb(var(--color-brand) / 0.22);
+}
+:root:has(.patient-app) .rainbow-button:hover {
+  background-color: rgb(var(--color-brand-strong));
+  filter: none;
+}
+:root:has(.patient-app) .rainbow-text {
+  color: rgb(var(--color-brand));
+  background: none;
+}
+:root:has(.patient-app) .rainbow-card {
+  border: 1px solid rgb(var(--color-border));
+  background: rgb(var(--color-surface));
+  box-shadow: var(--pt-shadow-md);
+  backdrop-filter: none;
+}
+
+:root:has(.patient-app) button:focus-visible,
+:root:has(.patient-app) a:focus-visible,
+:root:has(.patient-app) input:focus-visible,
+:root:has(.patient-app) textarea:focus-visible,
+:root:has(.patient-app) select:focus-visible,
+:root:has(.patient-app) [role="switch"]:focus-visible {
+  outline: 2px solid rgb(var(--color-brand));
+  outline-offset: 2px;
+}
+
+:root:has(.patient-app) .skeleton {
+  background: rgb(var(--color-surface-hover));
+}
+
+.patient-app ::selection {
+  background: rgb(var(--color-gold) / 0.35);
+}
+
+/* The session screen is one full-height column: header, scrolling
+   conversation, docked composer. dvh so mobile browser chrome is accounted for. */
+.pt-session-viewport {
+  height: calc(100dvh - var(--pt-shell-offset, 0px));
+}
+
+.pt-scroll-fade {
+  mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 8px), transparent 100%);
+}
+
+.pt-safe-bottom {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 0px);
+}
+
+@keyframes pt-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.pt-rise { animation: pt-rise var(--motion-medium) var(--ease-ui) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-rise { animation: none; }
+}

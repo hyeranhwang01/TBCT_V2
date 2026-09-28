@@ -2,15 +2,13 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { ClipboardList, HelpCircle, History, ListChecks, MessageCircle, Settings, UserRound, Wrench } from "lucide-react";
+import { ArrowLeft, BookOpenCheck, Home, LifeBuoy, MessageCircle, NotebookTabs, UserRound, Wrench } from "lucide-react";
 import { motion } from "framer-motion";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, ConfirmActionDialog } from "@/shared/components/ui/primitives";
+import { ConfirmActionDialog } from "@/shared/components/ui/primitives";
 import { LocaleToggle } from "@/shared/components/ui/locale-toggle";
-import { Logo } from "@/shared/components/ui/logo";
-import { ThemeToggle } from "@/shared/components/ui/theme-toggle";
 import { useT } from "@/shared/i18n/context";
 import { useDevMode } from "@/shared/dev-mode/dev-mode";
 import { useAuth } from "@/shared/auth/auth-context";
@@ -18,52 +16,107 @@ import { getOrCreateParticipantForUiLocale } from "@/shared/api/participant-api"
 import { applyPatientLocaleChange } from "@/patient/lib/api/patient-locale-sync";
 import { fadeUp } from "@/shared/motion/motion-variants";
 import { useReducedMotionPreference } from "@/shared/motion/use-reduced-motion-preference";
+import { BrandMark, PageHero, ProgressBar, StatusPill } from "@/patient/components/ui/kit";
+import { useTextScale } from "@/patient/lib/text-scale";
+import { cn } from "@/shared/utils";
+
+const PRETENDARD_CSS = "https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css";
+const BASE = "/projects/demo/patient";
+// Every round control in the top bar shares one size and style.
+const headerIconClass = "transition-ui inline-flex h-10 w-10 items-center justify-center rounded-full text-text-secondary hover:bg-surface-hover hover:text-text-primary [&_svg]:h-[19px] [&_svg]:w-[19px]";
+
+type NavItem = { href: string; label: string; icon: ReactNode; match: (pathname: string) => boolean; tourId?: string;
+  /** Shown as the round profile button at the right end of the desktop top
+   * bar rather than as a text link. */
+  desktopAside?: boolean };
+
+function useNavItems(): NavItem[] {
+  const { t } = useT();
+  return [
+    { href: BASE, label: t("patientUi.nav.home"), icon: <Home />, match: (p) => p === BASE || p === `${BASE}/` },
+    { href: `${BASE}/history`, label: t("patientUi.nav.sessions"), icon: <BookOpenCheck />, match: (p) => p.includes("/patient/history") || p.includes("/patient/sessions/") },
+    { href: `${BASE}/homework`, label: t("patientUi.nav.homework"), icon: <NotebookTabs />, match: (p) => p.includes("/patient/homework") },
+    { href: `${BASE}/messages`, label: t("patientUi.nav.messages"), icon: <MessageCircle />, match: (p) => p.includes("/patient/messages"), tourId: "messages-link" },
+    { href: `${BASE}/profile`, label: t("patientUi.nav.me"), icon: <UserRound />, match: (p) => p.includes("/patient/profile") || p.includes("/patient/checkin"), tourId: "profile-link", desktopAside: true },
+  ];
+}
+
+/** Logout with the same confirmation step the old header had; used by the
+ * profile page. */
+export function useLogoutConfirm() {
+  const { t } = useT();
+  const router = useRouter();
+  const { signOut } = useAuth();
+  const [open, setOpen] = useState(false);
+  const isKo = t("auth.logout") === "로그아웃";
+  const dialog = (
+    <ConfirmActionDialog
+      open={open}
+      onClose={() => setOpen(false)}
+      onConfirm={async () => {
+        setOpen(false);
+        await signOut();
+        router.push("/patient/login");
+      }}
+      title={isKo ? "로그아웃하시겠습니까?" : "Log out?"}
+      description={isKo ? "진행 내용은 저장되며 로그인 화면으로 이동합니다." : "Your progress is saved and you will return to sign in."}
+      confirmLabel={t("auth.logout")}
+    />
+  );
+  return { openLogout: () => setOpen(true), logoutDialog: dialog };
+}
 
 export function PatientShell({
   title,
+  eyebrow,
+  description,
   sessionLabel,
   progressLabel,
   progressPercent,
   saveState,
   children,
   actions,
+  hideHeader = false,
+  immersive = false,
+  backHref,
 }: {
   title: string;
+  /** Small line above the title. */
+  eyebrow?: string;
+  description?: ReactNode;
+  /** Legacy badge props -- still passed by the per-session homework screens. */
   sessionLabel?: string;
   progressLabel?: string;
-  /** 0-100 -- renders a thin progress bar under the title/badges row (see
-   * computeSessionProgress in patient-session-page.tsx). Distinct from
-   * progressLabel, which several other patient pages already use for an
-   * unrelated status/locale badge -- adding this as its own prop keeps
-   * those call sites unaffected. */
   progressPercent?: number;
   saveState?: string;
   children: ReactNode;
   actions?: ReactNode;
+  /** The page draws its own heading. */
+  hideHeader?: boolean;
+  /** Full-height screen with its own header (the session chat): no page
+   * padding, no mobile top/bottom bars. */
+  immersive?: boolean;
+  backHref?: string;
 }) {
   const { t, locale } = useT();
-  const router = useRouter();
   const pathname = usePathname();
+  const textScale = useTextScale();
   const reducedMotion = useReducedMotionPreference();
-  const { user, signOut } = useAuth();
-  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const { user } = useAuth();
   const devMode = useDevMode();
   const queryClient = useQueryClient();
-  // Reuses the same ["runtime-participant", userId] query every patient
-  // page already mounts -- React Query dedupes the identical key, so this
-  // never fires a second network request, it just gives this shared header
-  // a handle on the participant record so the language toggle can sync
-  // participant.locale + open sessions (see patient-locale-sync.ts), not
-  // only the website's own UI chrome text.
+  const navItems = useNavItems();
+  // Same ["runtime-participant", userId] query every patient page mounts --
+  // React Query dedupes it; the shell only needs it for the locale sync.
   const participantQuery = useQuery({
     queryKey: ["runtime-participant", user?.id ?? ""],
     queryFn: () => getOrCreateParticipantForUiLocale(user!.id, locale),
     enabled: Boolean(user?.id),
   });
-  const handleLogout = async () => {
-    await signOut();
-    router.push("/patient/login");
-  };
+  // The toggle has already switched the UI language by the time the sync
+  // below resolves; reading t through a ref makes the toast use the new one.
+  const tRef = useRef(t);
+  tRef.current = t;
   const handleLocaleChange = async (next: "ko" | "en") => {
     const participant = participantQuery.data;
     if (!participant) return;
@@ -74,149 +127,210 @@ export function PatientShell({
       await queryClient.invalidateQueries({ queryKey: ["patient-runtime-session"] });
       toast.success(
         updatedSessionCount > 0
-          ? t("patientShell.localeSynced.withSessions", { count: updatedSessionCount })
-          : t("patientShell.localeSynced.profileOnly"),
+          ? tRef.current("patientShell.localeSynced.withSessions", { count: updatedSessionCount })
+          : tRef.current("patientShell.localeSynced.profileOnly"),
       );
     } catch {
-      // Non-critical -- the UI chrome language itself already switched via
-      // LocaleToggle's own setLocale call regardless of this promise's
-      // outcome, so a failed sync here degrades to "chrome language changed,
-      // participant record/sessions didn't" rather than blocking anything.
-      toast.error(t("patientShell.localeSyncFailed"));
+      // The UI language already switched inside LocaleToggle; only the
+      // participant/session sync failed.
+      toast.error(tRef.current("patientShell.localeSyncFailed"));
     }
   };
-  return (
-    <div className="patient-app min-h-screen overflow-hidden bg-background lg:m-6 lg:flex lg:min-h-[calc(100vh-48px)] lg:rounded-[32px] lg:shadow-[0_24px_70px_rgba(51,70,112,0.16)]">
-      <aside className="hidden w-[260px] shrink-0 flex-col border-r border-border bg-surface lg:flex">
-        <Link href="/projects/demo/patient" className="flex h-[112px] items-center gap-3 border-b border-border px-7">
-          <Logo className="h-12 w-12" />
-          <div><div className="text-xl font-black tracking-[-0.04em]">TBCT</div><div className="text-xs text-text-secondary">{t("patientShell.logoSubtitle")}</div></div>
-        </Link>
-        <nav className="flex-1 space-y-2 p-5">
-          <PatientNavLink href="/projects/demo/patient" active={pathname === "/projects/demo/patient"} icon={<ListChecks className="h-5 w-5" />} label={t("patientShell.home")} />
-          <PatientNavLink href="/projects/demo/patient/history" active={pathname.includes("/patient/history")} icon={<History className="h-5 w-5" />} label={t("patientShell.history")} />
-          <PatientNavLink href="/projects/demo/patient/homework" active={pathname.includes("/homework")} icon={<ClipboardList className="h-5 w-5" />} label={t("homeworkList.navLabel")} />
-          <PatientNavLink href="/projects/demo/patient/profile" active={pathname.includes("/profile")} icon={<UserRound className="h-5 w-5" />} label={t("patientPortal.profile")} />
-          <PatientNavLink href="/projects/demo/patient/messages" active={pathname.includes("/messages")} icon={<MessageCircle className="h-5 w-5" />} label={t("messages.title")} />
-          <div className="my-5 border-t border-border" />
-          <PatientNavLink href="/projects/demo/patient/profile" active={false} icon={<Settings className="h-5 w-5" />} label={t("nav.account")} />
-        </nav>
-        <div className="m-5 rounded-[24px] border border-clinical-blue-light bg-clinical-blue-light/30 p-5 text-center">
-          <div className="text-3xl">🫶</div>
-          <div className="mt-3 text-sm font-bold">{t("patientShell.crisisHelp")}</div>
-          <div className="mt-1 text-xs leading-5 text-text-secondary">{t("patientShell.helpDescription")}</div>
-          <Link href="/crisis" target="_blank"><Button variant="secondary" className="mt-4 w-full"><HelpCircle className="h-4 w-4" />{t("patientShell.helpButton")}</Button></Link>
+
+  // The one crisis entry point on every screen size (the onboarding tour
+  // points here): a red lifebuoy, with what it does shown on hover/focus.
+  const crisisLink = (
+    <span className="group relative inline-flex">
+      <Link
+        href="/crisis"
+        target="_blank"
+        rel="noopener noreferrer"
+        data-tour-id="crisis-help"
+        aria-label={`${t("patientUi.shell.help")} - ${t("patientUi.shell.helpCardBody")}`}
+        className={cn(headerIconClass, "bg-critical-light text-critical hover:bg-critical/15 hover:text-critical")}
+      >
+        <LifeBuoy aria-hidden="true" />
+      </Link>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute right-0 top-full z-40 mt-2 w-60 translate-y-1 rounded-2xl bg-[#191F28] px-4 py-3 text-left opacity-0 shadow-[var(--pt-shadow-lg)] transition duration-150 group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100"
+      >
+        <span className="block text-[13px] font-bold text-white">{t("patientUi.shell.help")}</span>
+        <span className="mt-0.5 block text-[12px] leading-snug text-white/75">{t("patientUi.shell.helpCardBody")}</span>
+      </span>
+    </span>
+  );
+  const profileItem = navItems.find((item) => item.desktopAside);
+
+  const devToggle = devMode.available && (
+    <button
+      type="button"
+      onClick={devMode.toggle}
+      aria-pressed={devMode.enabled}
+      title={t("devMode.toggleHint")}
+      aria-label={t("devMode.toggleHint")}
+      className={cn(
+        headerIconClass,
+        devMode.enabled && "bg-gold text-[#2a2208] hover:bg-gold hover:text-[#2a2208]",
+      )}
+    >
+      <Wrench aria-hidden="true" />
+    </button>
+  );
+
+  const legacyBadges = (sessionLabel || saveState || (eyebrow && progressLabel) || progressPercent !== undefined) && (
+    <>
+      {(sessionLabel || saveState || (eyebrow && progressLabel)) && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {sessionLabel && <StatusPill tone="brand">{sessionLabel}</StatusPill>}
+          {eyebrow && progressLabel && <StatusPill tone="neutral">{progressLabel}</StatusPill>}
+          {saveState && <StatusPill tone="success">{saveState}</StatusPill>}
         </div>
-      </aside>
-      <div className="min-w-0 flex-1">
-      <header className="patient-app-header border-b border-white/30 px-4 pb-5 pt-[calc(1.25rem+env(safe-area-inset-top))] lg:px-8 lg:py-7">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <Logo className="mt-0.5 h-9 w-9 shrink-0 lg:hidden" />
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-clinical-blue">{t("patientShell.eyebrow")}</div>
-              <h1 className="mt-1 text-xl font-semibold text-text-primary">{title}</h1>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {sessionLabel && <Badge tone="primary">{sessionLabel}</Badge>}
-                {progressLabel && <Badge tone="neutral">{progressLabel}</Badge>}
-                {saveState && <Badge tone="success">{saveState}</Badge>}
-              </div>
-              {progressPercent !== undefined && (
-                <div className="mt-3 max-w-xs">
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
-                    <div className="rainbow-fill h-full rounded-full transition-[width] duration-500" style={{ width: `${progressPercent}%` }} />
-                  </div>
-                  <div className="mt-1 text-[11px] text-text-muted">{t("patientShell.sessionProgress", { percent: progressPercent })}</div>
-                </div>
+      )}
+      {progressPercent !== undefined && (
+        <div className="mt-4 max-w-xs">
+          <ProgressBar value={progressPercent} />
+          <div className="mt-1.5 text-xs text-text-muted">{t("patientShell.sessionProgress", { percent: progressPercent })}</div>
+        </div>
+      )}
+    </>
+  );
+  const pageHeader = !hideHeader && !immersive && (
+    <PageHero
+      title={title}
+      eyebrow={eyebrow ?? progressLabel}
+      description={(description || legacyBadges) ? <>{description}{legacyBadges}</> : undefined}
+      actions={actions}
+    />
+  );
+
+  return (
+    <div className="patient-app min-h-dvh bg-canvas text-text-primary">
+      <link rel="stylesheet" href={PRETENDARD_CSS} precedence="default" />
+
+      <div className={cn(immersive && "flex h-dvh flex-col")}>
+        {/* One top bar for every size: brand and, on desktop, the main menu
+            as text links (a web app's global nav, not a chat product's side
+            rail). Phones get the bottom tab bar instead. The immersive session
+            screen drops it on every size: a counselling session is its own
+            room, with its own quiet header (back, help, more). */}
+        <header className={cn("sticky top-0 z-20 shrink-0 border-b border-border bg-surface/90 backdrop-blur-md", immersive && "hidden")}>
+          <div className="mx-auto flex h-16 max-w-[1280px] items-center justify-between gap-3 px-4 pt-[env(safe-area-inset-top)] sm:px-6 lg:px-10">
+            <div className="flex min-w-0 items-center gap-2 md:gap-6 lg:gap-10">
+              {backHref && (
+                <Link href={backHref} className="transition-ui -ml-2 inline-flex h-10 w-10 items-center justify-center rounded-full text-text-secondary hover:bg-surface-hover md:hidden" aria-label={t("patientUi.shell.back")}>
+                  <ArrowLeft className="h-5 w-5" />
+                </Link>
+              )}
+              <Link href={BASE} className={cn("items-center gap-2", backHref ? "hidden md:flex" : "flex")}>
+                <BrandMark className="h-8 w-8" />
+                <span className="text-[17px] font-extrabold tracking-[-0.03em]">TBCT</span>
+              </Link>
+              <nav className="hidden h-16 items-stretch gap-1 md:flex" aria-label={t("patientUi.nav.label")}>
+                {navItems.filter((item) => !item.desktopAside).map((item) => {
+                  const active = item.match(pathname);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      data-tour-id={item.tourId}
+                      aria-current={active ? "page" : undefined}
+                      className={cn(
+                        "transition-ui relative flex items-center px-3.5 text-[15px] font-semibold",
+                        active ? "text-text-primary after:absolute after:inset-x-3.5 after:bottom-0 after:h-[3px] after:rounded-full after:bg-brand" : "text-text-muted hover:text-text-primary",
+                      )}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
+            <div className="flex items-center gap-1">
+              {devToggle}
+              <LocaleToggle onChange={(next) => void handleLocaleChange(next)} className="h-10 gap-1 rounded-full border-transparent bg-transparent px-3 text-[13px] font-bold text-text-secondary hover:bg-surface-hover hover:text-text-primary" />
+              {crisisLink}
+              {profileItem && (
+                <Link
+                  href={profileItem.href}
+                  data-tour-id={profileItem.tourId}
+                  aria-current={profileItem.match(pathname) ? "page" : undefined}
+                  title={profileItem.label}
+                  aria-label={profileItem.label}
+                  className={cn(
+                    headerIconClass,
+                    "hidden md:inline-flex",
+                    profileItem.match(pathname) ? "bg-brand text-white hover:bg-brand-strong hover:text-white" : "bg-surface-hover",
+                  )}
+                >
+                  {profileItem.icon}
+                </Link>
               )}
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Developer mode: unlocks every session on the journey so any one
-                can be started without finishing the one before it. Hidden
-                entirely when NEXT_PUBLIC_DEV_TOOLS=off. */}
-            {devMode.available && (
-              <Button
-                size="sm"
-                variant={devMode.enabled ? "violet" : "ghost"}
-                onClick={devMode.toggle}
-                aria-pressed={devMode.enabled}
-                title={t("devMode.toggleHint")}
-              >
-                <Wrench className="h-4 w-4" />
-                {t("devMode.toggle")}
-              </Button>
-            )}
-            <LocaleToggle onChange={(next) => void handleLocaleChange(next)} />
-            <span data-tour-id="theme-toggle" className="hidden sm:inline-flex"><ThemeToggle /></span>
-            {/* Replays the onboarding tour -- it only ever mounts on the
-                session-list page (see patient-list-page.tsx), so this
-                button (present on every patient page via this shared shell)
-                links there with a flag that page picks up on load. */}
-            <Link href="/projects/demo/patient?tour=1">
-              <Button size="icon" variant="ghost" title={t("onboarding.replayTour")}>
-                <HelpCircle className="h-4 w-4" />
-              </Button>
-            </Link>
-            <span data-tour-id="crisis-help">
-              <Link href="/crisis" target="_blank" rel="noopener noreferrer">
-                <Button variant="secondary" className="border-critical text-critical hover:bg-critical-light">{t("patientShell.crisisHelp")}</Button>
-              </Link>
-            </span>
-            {pathname !== "/projects/demo/patient" && <Link href="/projects/demo/patient"><Button variant="secondary">{t("patientShell.home")}</Button></Link>}
-            {actions}
-            <Button variant="ghost" onClick={() => setLogoutConfirmOpen(true)}>{t("auth.logout")}</Button>
-          </div>
-        </div>
-      </header>
-      {/* Says so plainly while the lock is off, and warns about the one thing
-          that surprises people who skip ahead: a session started out of order
-          has no previous session to review (see session-continuity.ts's
-          EMPTY_CONTINUITY_SEED). */}
-      {devMode.enabled && (
-        <div role="status" className="border-b border-ai-violet bg-ai-violet-light/40 px-4 py-2 text-xs font-semibold text-text-primary lg:px-8">
-          {t("devMode.banner")}
-        </div>
-      )}
-      <main className="p-4 lg:p-8">
-        {/* Every patient page wraps itself in its own <PatientShell> (see
-            studio-app.tsx's routing), so this is the one shared place that
-            gives every one of them the same subtle enter transition on
-            navigation instead of popping in instantly -- matches the same
-            treatment on the clinician side (see app-shell.tsx). */}
-        <motion.div
-          key={pathname}
-          initial={reducedMotion ? false : "initial"}
-          animate={reducedMotion ? undefined : "animate"}
-          variants={reducedMotion ? undefined : fadeUp}
-        >
-          {children}
-        </motion.div>
-      </main>
-      <footer className="border-t border-border bg-surface px-4 py-3 text-xs text-text-secondary lg:px-6">
-        <div className="mx-auto flex max-w-5xl flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <span>{t("patientShell.demoNotice")}</span>
-          <span>{t("patientShell.safetyNotice")}</span>
-        </div>
-      </footer>
-      </div>
-      <ConfirmActionDialog
-        open={logoutConfirmOpen}
-        onClose={() => setLogoutConfirmOpen(false)}
-        onConfirm={() => void handleLogout()}
-        title={t("auth.logout") === "로그아웃" ? "로그아웃하시겠습니까?" : "Log out?"}
-        description={t("auth.logout") === "로그아웃" ? "진행 내용은 저장되며 로그인 화면으로 이동합니다." : "Your progress is saved and you will return to sign in."}
-        confirmLabel={t("auth.logout")}
-      />
-    </div>
-  );
-}
+        </header>
 
-function PatientNavLink({ href, active, icon, label }: { href: string; active: boolean; icon: ReactNode; label: string }) {
-  return (
-    <Link href={href} className={`relative flex items-center gap-3 rounded-panel px-4 py-3 text-sm font-semibold transition ${active ? "bg-clinical-blue-light text-clinical-blue" : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"}`}>
-      {active && <span className="rainbow-fill absolute -left-5 h-8 w-1 rounded-r-full" />}
-      {icon}<span>{label}</span>
-    </Link>
+        {devMode.enabled && (
+          <div role="status" className="border-b border-gold/40 bg-gold-soft px-4 py-2 text-center text-xs font-semibold text-gold-strong">
+            {t("devMode.banner")}
+          </div>
+        )}
+
+        <main className={cn(immersive ? "min-h-0 flex-1" : "mx-auto max-w-[1280px] px-4 pb-28 pt-6 sm:px-6 sm:pt-8 md:pb-16 lg:px-10")}>
+          {/* Every patient page wraps itself in its own shell, so this is the
+              one shared place for the page-enter transition. */}
+          <motion.div
+            key={pathname}
+            initial={reducedMotion ? false : "initial"}
+            animate={reducedMotion ? undefined : "animate"}
+            variants={reducedMotion ? undefined : fadeUp}
+            className={cn(immersive && "h-full")}
+            // The immersive session screen scales its own conversation column
+            // instead, so its header and worksheet keep their size.
+            style={immersive ? undefined : { zoom: textScale }}
+          >
+            {pageHeader}
+            {/* Positioned so the page content paints above the hero's
+                backdrop, which can reach below the title. */}
+            <div className={cn("relative", immersive && "h-full")}>{children}</div>
+          </motion.div>
+          {!immersive && (
+            <footer className="mt-14 flex flex-col gap-1 border-t border-border pt-5 text-xs text-text-muted sm:flex-row sm:justify-between">
+              <span>{t("patientShell.demoNotice")}</span>
+              <span>{t("patientShell.safetyNotice")}</span>
+            </footer>
+          )}
+        </main>
+      </div>
+
+      {/* Mobile tab bar */}
+      {!immersive && (
+        <nav
+          aria-label={t("patientUi.nav.label")}
+          className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
+        >
+          <div className="mx-auto grid h-16 max-w-lg grid-cols-5">
+            {navItems.map((item) => {
+              const active = item.match(pathname);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  data-tour-id={item.tourId}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-1 text-[11px] font-semibold [&_svg]:h-[22px] [&_svg]:w-[22px]",
+                    active ? "text-brand-ink" : "text-text-muted",
+                  )}
+                >
+                  {item.icon}
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+      )}
+    </div>
   );
 }

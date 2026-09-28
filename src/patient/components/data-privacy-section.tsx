@@ -1,23 +1,24 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronRight, Download, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, Modal, textareaClass } from "@/shared/components/ui/primitives";
+import { Modal } from "@/shared/components/ui/primitives";
 import { createDataDeletionRequest, listDataDeletionRequestsByParticipant } from "@/shared/api/data-deletion-request-api";
 import { useT } from "@/shared/i18n/context";
+import { IconTile, ListGroup, ListRow, PtButton, StatusPill, ptTextareaClass } from "@/patient/components/ui/kit";
 
 function formatTimestamp(value: string) {
   return new Date(value).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
-/** Patient self-service data export + deletion request -- export is a
- * live read straight from the existing stores (see
- * src/app/api/patient-data-export/route.ts), a plain link since the
- * route sets its own Content-Disposition. Deletion is a REQUEST, not an
- * automatic delete -- see sql/018_data_deletion_requests.sql's own doc
- * comment for why (clinical record-keeping obligations). */
-export function DataPrivacySection({ participantId }: { participantId: string }) {
+/** Patient self-service data export + deletion request. Export is a live
+ * read from the existing stores (src/app/api/patient-data-export/route.ts),
+ * a plain link since the route sets its own Content-Disposition. Deletion is
+ * a REQUEST, not an automatic delete -- see sql/018_data_deletion_requests.sql
+ * for why (clinical record-keeping obligations). */
+export function DataPrivacySection({ participantId, title }: { participantId: string; title?: string }) {
   const { t } = useT();
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
@@ -44,39 +45,38 @@ export function DataPrivacySection({ participantId }: { participantId: string })
   });
 
   return (
-    <Card className="p-4">
-      <div className="text-sm font-semibold text-text-primary">{t("dataPrivacy.title")}</div>
-      <p className="mt-2 text-xs text-text-secondary">{t("dataPrivacy.description")}</p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {/* Plain <a>, not next/link's <Link>: this triggers a file
-            download (the route sets its own Content-Disposition), not a
-            page navigation -- Link's client-side routing would try to
-            intercept the click instead of letting the browser download it. */}
+    <>
+      <ListGroup title={title ?? t("dataPrivacy.title")}>
+        <p className="px-4 pb-1 pt-3.5 text-[13px] leading-snug text-text-secondary">{t("dataPrivacy.description")}</p>
+        {/* Plain <a>, not <Link>: this is a file download (the route sets its
+            own Content-Disposition), not a page navigation. */}
         {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-        <a href="/api/patient-data-export">
-          <Button variant="secondary">{t("dataPrivacy.export")}</Button>
+        <a href="/api/patient-data-export" className="transition-ui flex w-full items-center gap-3.5 px-4 py-3.5 text-left hover:bg-surface-hover">
+          <IconTile icon={<Download />} size="sm" tone="neutral" />
+          <span className="flex-1 text-[15px] font-semibold text-text-primary">{t("dataPrivacy.export")}</span>
+          <ChevronRight className="h-4 w-4 text-text-muted" aria-hidden="true" />
         </a>
         {pendingRequest ? (
-          <Badge tone="warning">{t("dataPrivacy.deletion.pendingSince", { date: formatTimestamp(pendingRequest.createdAt) })}</Badge>
+          <ListRow icon={<Trash2 />} tone="critical" title={t("dataPrivacy.deletion.request")} trailing={<StatusPill tone="warning">{t("dataPrivacy.deletion.pendingSince", { date: formatTimestamp(pendingRequest.createdAt) })}</StatusPill>} />
         ) : (
-          <Button variant="secondary" onClick={() => setModalOpen(true)}>{t("dataPrivacy.deletion.request")}</Button>
+          <ListRow icon={<Trash2 />} tone="critical" title={t("dataPrivacy.deletion.request")} onClick={() => setModalOpen(true)} />
         )}
-      </div>
+      </ListGroup>
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={t("dataPrivacy.deletion.modalTitle")} description={t("dataPrivacy.deletion.modalDescription")}>
         <div className="space-y-3 p-5">
           <textarea
-            className={textareaClass}
+            className={ptTextareaClass}
             placeholder={t("dataPrivacy.deletion.reasonPlaceholder")}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
           />
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setModalOpen(false)}>{t("common.cancel")}</Button>
-            <Button variant="danger" loading={submitMutation.isPending} onClick={() => submitMutation.mutate()}>{t("dataPrivacy.deletion.confirm")}</Button>
+            <PtButton variant="secondary" onClick={() => setModalOpen(false)}>{t("common.cancel")}</PtButton>
+            <PtButton variant="danger" loading={submitMutation.isPending} onClick={() => submitMutation.mutate()}>{t("dataPrivacy.deletion.confirm")}</PtButton>
           </div>
         </div>
       </Modal>
-    </Card>
+    </>
   );
 }

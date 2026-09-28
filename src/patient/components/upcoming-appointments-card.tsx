@@ -1,20 +1,23 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Badge, Card } from "@/shared/components/ui/primitives";
+import { CalendarDays } from "lucide-react";
 import { listAppointmentsByParticipant } from "@/shared/api/appointment-api";
 import { useRealtimeInvalidate } from "@/shared/supabase/use-realtime-invalidate";
 import { useT } from "@/shared/i18n/context";
+import { IconTile, StatusPill } from "@/patient/components/ui/kit";
 
-function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", weekday: "short", hour: "2-digit", minute: "2-digit" });
+function formatDay(iso: string, locale: "ko" | "en") {
+  return new Date(iso).toLocaleDateString(locale === "ko" ? "ko-KR" : "en-US", { timeZone: "Asia/Seoul", month: "long", day: "numeric", weekday: "short" });
+}
+function formatTime(iso: string, locale: "ko" | "en") {
+  return new Date(iso).toLocaleTimeString(locale === "ko" ? "ko-KR" : "en-US", { timeZone: "Asia/Seoul", hour: "numeric", minute: "2-digit" });
 }
 
-/** Patient-facing read-only view of their own upcoming appointments --
- * v1 has no patient self-scheduling (see sql/020_appointments.sql's own
- * doc comment), so this is display-only. */
+/** Read-only view of the patient's own upcoming appointments -- v1 has no
+ * patient self-scheduling (see sql/020_appointments.sql). */
 export function UpcomingAppointmentsCard({ participantId }: { participantId: string }) {
-  const { t } = useT();
+  const { t, locale } = useT();
   const appointmentsQuery = useQuery({
     queryKey: ["appointments", participantId],
     queryFn: () => listAppointmentsByParticipant(participantId),
@@ -26,16 +29,20 @@ export function UpcomingAppointmentsCard({ participantId }: { participantId: str
   if (!appointmentsQuery.data || upcoming.length === 0) return null;
 
   return (
-    <Card className="p-4">
-      <div className="text-sm font-semibold text-text-primary">{t("appointments.upcomingTitle")}</div>
-      <div className="mt-2 space-y-2">
+    <section className="rounded-card bg-surface p-5 shadow-[var(--pt-shadow-sm)]">
+      <h2 className="text-[15px] font-bold text-text-primary">{t("appointments.upcomingTitle")}</h2>
+      <ul className="mt-3 space-y-2">
         {upcoming.slice(0, 5).map((appointment) => (
-          <div key={appointment.id} className="flex items-center justify-between gap-3 rounded-panel border border-border px-3 py-2 text-sm">
-            <span className="text-text-primary">{formatDateTime(appointment.scheduledAt)}</span>
-            <Badge tone="primary">{appointment.durationMinutes}{t("appointments.minutesSuffix")}</Badge>
-          </div>
+          <li key={appointment.id} className="flex items-center gap-3 rounded-2xl bg-surface-subtle px-3 py-2.5">
+            <IconTile icon={<CalendarDays />} size="sm" />
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold text-text-primary">{formatDay(appointment.scheduledAt, locale)}</div>
+              <div className="text-[13px] text-text-secondary">{formatTime(appointment.scheduledAt, locale)}</div>
+            </div>
+            <StatusPill tone="neutral">{appointment.durationMinutes}{t("appointments.minutesSuffix")}</StatusPill>
+          </li>
         ))}
-      </div>
-    </Card>
+      </ul>
+    </section>
   );
 }

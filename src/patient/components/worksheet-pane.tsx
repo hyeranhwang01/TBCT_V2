@@ -283,6 +283,7 @@ function worksheetEditErrorText(error: unknown, isKorean: boolean) {
 function PatientProgressFeed({ fields, isKorean, activeCanonicalFieldKey }: { fields: WorksheetFieldView[]; isKorean: boolean; activeCanonicalFieldKey?: string }) {
   const reducedMotion = Boolean(useReducedMotionPreference());
   const orderedFields = [...fields].sort((left, right) => left.binding.displayOrder - right.binding.displayOrder);
+  const [showUpcoming, setShowUpcoming] = useState(false);
 
   if (!orderedFields.length) {
     return (
@@ -292,13 +293,37 @@ function PatientProgressFeed({ fields, isKorean, activeCanonicalFieldKey }: { fi
     );
   }
 
+  // What's been recorded, the item in progress and the one after it stay in
+  // view; the rest of the list folds away until asked for, so the pane
+  // doesn't open as a long form to fill in.
+  const reachedIndex = orderedFields.reduce((last, field, index) => (isFilledField(field) || field.binding.canonicalFieldKey === activeCanonicalFieldKey ? index : last), -1);
+  const visibleCount = Math.max(reachedIndex + 2, Math.min(3, orderedFields.length));
+  const hiddenCount = orderedFields.length - visibleCount;
+  const shownFields = showUpcoming || hiddenCount <= 0 ? orderedFields : orderedFields.slice(0, visibleCount);
+
   return (
     <div className="space-y-1.5">
-      {orderedFields.map((field) => (
+      {shownFields.map((field) => (
         <ProgressChecklistRow key={field.definition.id} field={field} isKorean={isKorean} reducedMotion={reducedMotion} isActive={field.binding.canonicalFieldKey === activeCanonicalFieldKey} />
       ))}
+      {hiddenCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowUpcoming((current) => !current)}
+          aria-expanded={showUpcoming}
+          className="w-full rounded-panel px-3 py-2 text-center text-[13px] font-semibold text-text-secondary transition hover:bg-surface-subtle"
+        >
+          {showUpcoming
+            ? (isKorean ? "앞으로 채울 항목 접기" : "Hide items still to come")
+            : (isKorean ? `앞으로 채울 항목 ${hiddenCount}개 보기` : `Show ${hiddenCount} items still to come`)}
+        </button>
+      )}
     </div>
   );
+}
+
+function isFilledField(field: WorksheetFieldView) {
+  return field.value !== null && field.value.value !== undefined && field.value.value !== "";
 }
 
 function ProgressChecklistRow({ field, isKorean, reducedMotion, isActive }: { field: WorksheetFieldView; isKorean: boolean; reducedMotion: boolean; isActive: boolean }) {

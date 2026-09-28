@@ -38,7 +38,7 @@ describe("installPatientDevMock", () => {
     vi.unstubAllEnvs();
   });
 
-  it("seeds a participant with 5 sessions (2 of them the same sessionDefinitionId) and homework for each", async () => {
+  it("seeds a participant with 6 sessions (repeats of s01 and s02) and homework for every session that has it", async () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("NEXT_PUBLIC_TBCT_PATIENT_MOCK", "1");
 
@@ -50,7 +50,11 @@ describe("installPatientDevMock", () => {
 
     const { listRuntimeSessionsForParticipant } = await import("@/shared/api/runtime-session-api");
     const sessions = await listRuntimeSessionsForParticipant(participant.id);
-    expect(sessions).toHaveLength(5);
+    expect(sessions).toHaveLength(6);
+
+    // s02: an attempt ended partway, then a completed one.
+    const s02Statuses = sessions.filter((session) => session.sessionDefinitionId === "tbct-s02").map((session) => session.status).sort();
+    expect(s02Statuses).toEqual(["completed", "terminated"]);
 
     const s01Sessions = sessions.filter((session) => session.sessionDefinitionId === "tbct-s01");
     expect(s01Sessions).toHaveLength(2);
@@ -58,6 +62,7 @@ describe("installPatientDevMock", () => {
 
     const { listHomeworkRecordsByParticipant } = await import("@/shared/data/repositories/homework-repository");
     const homework = await listHomeworkRecordsByParticipant(participant.id);
+    // The ended s02 attempt has no homework of its own.
     expect(homework.length).toBe(5);
     expect(homework.filter((record) => record.sessionDefinitionId === "tbct-s01")).toHaveLength(2);
   });

@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Button, inputClass } from "@/shared/components/ui/primitives";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { ArrowUp, Check, Mic, Square, X } from "lucide-react";
 import type { PromptItem } from "@/shared/protocol/source-fidelity-types";
 import type { PatientInput } from "@/types/runtime-session";
 import { useSpeechRecognition } from "@/patient/lib/speech/use-speech-recognition";
 import { choiceLabel } from "@/shared/runtime/patient-input-display";
+import { PtButton } from "@/patient/components/ui/kit";
+import { cn } from "@/shared/utils";
 
 type PatientPromptInput = Pick<PromptItem, "type" | "validation" | "outputFields">;
 
@@ -36,36 +38,29 @@ export function PatientInputControls({
       : [];
   const kind = String((payload?.kind ?? payload?.inputKind ?? (promptValidationKind === "enum" ? "single_choice" : promptValidationKind)) || "text");
   const promptKind = String(promptItem?.type ?? "");
-  // "consensus_weights" (S07's Consensus-chair re-weighing: advantage % +
-  // disadvantage %, must sum to 100 -- see SUM_TO_100_PAIR_KINDS in
-  // runtime-context.ts) is a genuine two-number answer, same shape as
-  // paired_ratings, but didn't match that prefix check -- so this prompt's
-  // type:"rating" fell through to the single-value RatingInput below,
-  // which can only ever submit ONE number for a two-field requirement.
-  // extractRuntimeState always rejected that as insufficient (needs 2
-  // numbers, got 1), so this step could never actually complete -- the
-  // dialogue agent kept generating a plausible-sounding "noted, that
-  // closes the exercise" reply around a deterministic fallback that was
-  // itself never accepted, looping indefinitely. Confirmed live in
-  // production. extractRuntimeState assigns numericValues[0]/[1] to
-  // outputFields[0]/[1] in that order (line ~441), matching the order
-  // PairedRatingInput renders and submits its two inputs in.
+  // "consensus_weights" (S07's consensus-chair re-weighing: advantage % +
+  // disadvantage %, summing to 100) is a genuine two-number answer, same
+  // shape as paired_ratings. Rendering it with the single-value RatingInput
+  // made the step impossible to complete (confirmed in production).
+  // extractRuntimeState assigns numericValues[0]/[1] to outputFields[0]/[1]
+  // in that order, matching the order PairedRatingInput submits them in.
   if (/^paired_ratings/.test(promptValidationKind) || promptValidationKind === "consensus_weights") {
     return <PairedRatingInput disabled={disabled} locale={locale} min={Number(validation.min ?? 0)} max={Number(validation.max ?? 100)} fields={promptItem?.outputFields ?? []} onSubmit={(first, second) => onSubmit({ kind: "rating", value: `${first}, ${second}` })} />;
   }
   if (kind === "single_choice") {
     return (
-      <div className="grid gap-2.5">
+      <div className="grid gap-2">
         {choices.map((choice) => (
-          <Button
+          <button
             key={choice}
-            variant="secondary"
+            type="button"
             disabled={disabled}
-            className="h-auto justify-start whitespace-normal px-4 py-3 text-left text-[15px] leading-snug"
             onClick={() => onSubmit({ kind: "single_choice", value: choice })}
+            className="transition-ui group flex w-full items-center gap-3 rounded-2xl border border-border bg-surface px-4 py-3.5 text-left text-[15px] font-semibold leading-snug text-text-primary hover:border-brand/50 hover:bg-brand-tint active:scale-[0.99] disabled:opacity-50"
           >
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-border-strong group-hover:border-brand" aria-hidden="true" />
             {choiceLabel(choice, locale)}
-          </Button>
+          </button>
         ))}
       </div>
     );
@@ -85,25 +80,35 @@ export function PatientInputControls({
   if (kind === "boolean") {
     return (
       <div className="grid grid-cols-2 gap-3">
-        <Button variant="secondary" disabled={disabled} className="h-14 flex-col gap-1 text-base" onClick={() => onSubmit({ kind: "boolean", value: true })}>
-          <span className="text-xl" aria-hidden="true">🙆</span>{isKorean ? "네" : "Yes"}
-        </Button>
-        <Button variant="secondary" disabled={disabled} className="h-14 flex-col gap-1 text-base" onClick={() => onSubmit({ kind: "boolean", value: false })}>
-          <span className="text-xl" aria-hidden="true">🙅</span>{isKorean ? "아니요" : "No"}
-        </Button>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onSubmit({ kind: "boolean", value: true })}
+          className="transition-ui flex h-14 items-center justify-center gap-2 rounded-2xl bg-brand text-base font-bold text-white shadow-[0_6px_16px_rgb(var(--color-brand)/0.22)] hover:bg-brand-strong active:scale-[0.98] disabled:opacity-50"
+        >
+          <Check className="h-5 w-5" aria-hidden="true" />
+          {isKorean ? "네" : "Yes"}
+        </button>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onSubmit({ kind: "boolean", value: false })}
+          className="transition-ui flex h-14 items-center justify-center gap-2 rounded-2xl border border-border bg-surface text-base font-bold text-text-primary hover:bg-surface-hover active:scale-[0.98] disabled:opacity-50"
+        >
+          <X className="h-5 w-5" aria-hidden="true" />
+          {isKorean ? "아니요" : "No"}
+        </button>
       </div>
     );
   }
   return (
-    <div className="grid gap-3">
-      <TextInput
-        disabled={disabled}
-        placeholder={String(payload?.placeholder ?? (isKorean ? "응답을 입력하거나 말해 주세요..." : "Write or speak your response..."))}
-        locale={locale}
-        onBeforeMic={onBeforeMic}
-        onSubmit={(value) => onSubmit({ kind: "text", value })}
-      />
-    </div>
+    <TextInput
+      disabled={disabled}
+      placeholder={String(payload?.placeholder ?? (isKorean ? "답변을 입력해 주세요" : "Type your answer"))}
+      locale={locale}
+      onBeforeMic={onBeforeMic}
+      onSubmit={(value) => onSubmit({ kind: "text", value })}
+    />
   );
 }
 
@@ -117,19 +122,26 @@ function readableFieldLabel(field: string, index: number, locale?: string) {
   return isKorean ? `평가 ${index + 1} (%)` : `Rating ${index + 1} (%)`;
 }
 
+const numberBox = "transition-ui h-11 w-20 rounded-xl border border-border bg-surface px-2 text-center text-[15px] font-bold text-text-primary focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand-soft";
+const rangeClass = "h-2 w-full cursor-pointer appearance-auto accent-[rgb(var(--color-brand))]";
+
 function PairedRatingInput({ disabled, min, max, fields, locale, onSubmit }: { disabled?: boolean; min: number; max: number; fields: string[]; locale?: string; onSubmit: (first: number, second: number) => void }) {
   const initial = Math.round((min + max) / 2);
   const [first, setFirst] = useState(initial);
   const [second, setSecond] = useState(initial);
+  const clamp = (value: number) => Math.max(min, Math.min(max, value));
   return (
-    <form className="grid gap-3" onSubmit={(event) => { event.preventDefault(); onSubmit(first, second); }}>
-      {[[first, setFirst], [second, setSecond]].map(([value, setter], index) => (
-        <label key={index} className="grid gap-1 text-sm text-text-secondary">
-          {readableFieldLabel(fields[index] ?? "", index, locale)}
-          <input type="number" min={min} max={max} value={value as number} disabled={disabled} onChange={(event) => (setter as (value: number) => void)(Math.max(min, Math.min(max, Number(event.target.value))))} className={inputClass} />
+    <form className="grid gap-4" onSubmit={(event) => { event.preventDefault(); onSubmit(first, second); }}>
+      {([[first, setFirst], [second, setSecond]] as const).map(([value, setter], index) => (
+        <label key={index} className="grid gap-2">
+          <span className="text-sm font-semibold text-text-primary">{readableFieldLabel(fields[index] ?? "", index, locale)}</span>
+          <span className="flex items-center gap-3">
+            <input type="range" min={min} max={max} value={value} disabled={disabled} onChange={(event) => setter(clamp(Number(event.target.value)))} className={rangeClass} aria-hidden="true" tabIndex={-1} />
+            <input type="number" min={min} max={max} value={value} disabled={disabled} onChange={(event) => setter(clamp(Number(event.target.value)))} className={numberBox} />
+          </span>
         </label>
       ))}
-      <Button disabled={disabled}>{locale?.startsWith("ko") ? "두 값 모두 제출" : "Submit both ratings"}</Button>
+      <PtButton type="submit" size="lg" block disabled={disabled}>{locale?.startsWith("ko") ? "두 값 모두 제출" : "Submit both ratings"}</PtButton>
     </form>
   );
 }
@@ -153,6 +165,7 @@ function TextInput({
   const latestValueRef = useRef(value);
   latestValueRef.current = value;
   const voiceTurnActiveRef = useRef(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const submitValue = (raw: string) => {
     const trimmed = raw.trim();
@@ -161,13 +174,10 @@ function TextInput({
     setValue("");
   };
 
-  // Recognition runs continuous (see use-speech-recognition.ts) so a
-  // mid-thought pause no longer ends the turn on its own -- submission now
-  // happens once, right when listening actually stops (the participant
-  // pressed the mic again to say "I'm done", or the browser ended the
-  // session on its own), using whatever was transcribed by then. This only
-  // fires for a turn that was actually started by voice (voiceTurnActiveRef),
-  // never for ordinary typing.
+  // Recognition runs continuous, so a mid-thought pause no longer ends the
+  // turn: submission happens once, when listening actually stops (the mic was
+  // pressed again, or the browser ended recognition), with whatever was
+  // transcribed by then. Only for a turn that was started by voice.
   useEffect(() => {
     if (voiceTurnActiveRef.current && !speech.listening) {
       voiceTurnActiveRef.current = false;
@@ -176,53 +186,89 @@ function TextInput({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [speech.listening]);
 
+  // Grow with the answer, up to about six lines.
+  useLayoutEffect(() => {
+    const box = textareaRef.current;
+    if (!box) return;
+    box.style.height = "0px";
+    box.style.height = `${Math.min(box.scrollHeight, 168)}px`;
+    box.style.overflowY = box.scrollHeight > 168 ? "auto" : "hidden";
+  }, [value]);
+
   const handleMicClick = () => {
     if (speech.listening) {
       speech.stop();
       return;
     }
-    // Voice input takes priority: interrupt any playback before we start listening.
+    // Voice input takes priority: interrupt any playback before listening.
     onBeforeMic?.();
     voiceTurnActiveRef.current = true;
     const started = speech.start((text) => setValue(text));
     if (!started) voiceTurnActiveRef.current = false;
   };
 
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Enter sends, Shift+Enter breaks the line. Never while an IME (Korean)
+    // is still composing, or the last syllable would be sent half-finished.
+    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+      submitValue(value);
+    }
+  };
+
   return (
     <form
-      className="flex gap-2"
       onSubmit={(event) => {
         event.preventDefault();
         submitValue(value);
       }}
     >
-      <input
-        name="message"
-        // Without this, the browser's own form-autofill offers every
-        // previously typed answer (from this or an earlier session) as a
-        // dropdown under the field -- surfacing old input history the
-        // participant didn't ask to see, sometimes visually covering the
-        // field itself, and re-exposing something hard to say that they'd
-        // already moved past. This field is never meant to be "remembered."
-        autoComplete="off"
-        className={inputClass}
-        placeholder={placeholder}
-        disabled={disabled}
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-      />
-      {speech.supported && (
-        <Button
-          type="button"
-          variant={speech.listening ? "danger" : "secondary"}
-          disabled={disabled}
-          aria-label={speech.listening ? (isKorean ? "듣기 중지" : "Stop listening") : (isKorean ? "말로 응답하기" : "Speak your response")}
-          onClick={handleMicClick}
-        >
-          {speech.listening ? "⏺" : "🎤"}
-        </Button>
+      {speech.listening && (
+        <div className="mb-2 flex items-center gap-2 rounded-xl bg-critical-light px-3 py-2 text-[13px] font-medium text-critical" role="status">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-critical" aria-hidden="true" />
+          {isKorean ? "듣고 있어요… 다 말씀하셨으면 마이크를 다시 눌러 주세요." : "Listening… tap the mic again when you're done."}
+        </div>
       )}
-      <Button disabled={disabled}>{isKorean ? "보내기" : "Send"}</Button>
+      <div className="flex items-end gap-2 rounded-[26px] border border-border bg-surface p-1.5 shadow-[var(--pt-shadow-sm)] focus-within:border-brand/60 focus-within:ring-4 focus-within:ring-brand-soft">
+        {speech.supported && (
+          <button
+            type="button"
+            disabled={disabled}
+            aria-label={speech.listening ? (isKorean ? "듣기 중지" : "Stop listening") : (isKorean ? "말로 응답하기" : "Speak your response")}
+            onClick={handleMicClick}
+            className={cn(
+              "transition-ui flex h-11 w-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40",
+              speech.listening ? "bg-critical text-white" : "text-text-secondary hover:bg-surface-hover",
+            )}
+          >
+            {speech.listening ? <Square className="h-4 w-4 fill-current" /> : <Mic className="h-5 w-5" />}
+          </button>
+        )}
+        <textarea
+          ref={textareaRef}
+          name="message"
+          // Without this the browser offers every previously typed answer as
+          // an autofill dropdown -- re-exposing things the participant already
+          // moved past. This field is never meant to be remembered.
+          autoComplete="off"
+          rows={1}
+          className={cn("min-h-11 flex-1 resize-none bg-transparent py-2.5 text-[15px] leading-6 text-text-primary placeholder:text-text-muted focus:outline-none", !speech.supported && "pl-3")}
+          placeholder={placeholder}
+          disabled={disabled}
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          onKeyDown={handleKeyDown}
+          aria-label={placeholder}
+        />
+        <button
+          type="submit"
+          disabled={disabled || !value.trim()}
+          aria-label={isKorean ? "보내기" : "Send"}
+          className="transition-ui flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand text-white hover:bg-brand-strong active:scale-95 disabled:bg-surface-hover disabled:text-text-muted"
+        >
+          <ArrowUp className="h-5 w-5" strokeWidth={2.5} />
+        </button>
+      </div>
     </form>
   );
 }
@@ -231,9 +277,11 @@ function RatingInput({ disabled, min, max, locale, onSubmit }: { disabled?: bool
   const isKorean = locale?.toLowerCase().startsWith("ko") ?? false;
   const initialValue = String(Math.max(min, Math.min(max, Math.round((min + max) / 2))));
   const [value, setValue] = useState(initialValue);
+  const numeric = Number.parseFloat(value);
+  const isPercent = min === 0 && max === 100;
   return (
     <form
-      className="grid gap-2"
+      className="grid gap-3"
       onSubmit={(event) => {
         event.preventDefault();
         const numericValue = Number.parseFloat(value);
@@ -241,38 +289,37 @@ function RatingInput({ disabled, min, max, locale, onSubmit }: { disabled?: bool
         onSubmit(Math.max(min, Math.min(max, numericValue)));
       }}
     >
-      <div className="flex items-center gap-3">
-        <input
-          type="range"
-          min={min}
-          max={max}
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          disabled={disabled}
-          className="w-full accent-[var(--clinical-blue)]"
-        />
-        <input
-          type="number"
-          min={min}
-          max={max}
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          disabled={disabled}
-          className={`${inputClass} w-24`}
-        />
+      <div className="flex items-center gap-4">
+        <div className="flex-1">
+          <input type="range" min={min} max={max} value={value} onChange={(event) => setValue(event.target.value)} disabled={disabled} className={rangeClass} aria-label={isKorean ? "점수" : "Rating"} />
+          <div className="mt-1 flex justify-between text-[11px] font-medium text-text-muted" aria-hidden="true">
+            <span>{min}{isPercent ? "%" : ""}</span>
+            <span>{max}{isPercent ? "%" : ""}</span>
+          </div>
+        </div>
+        <div className="flex items-baseline gap-0.5">
+          <input type="number" min={min} max={max} value={value} onChange={(event) => setValue(event.target.value)} disabled={disabled} className={numberBox} aria-label={isKorean ? "점수 직접 입력" : "Type a rating"} />
+          {isPercent && <span className="text-sm font-bold text-text-secondary">%</span>}
+        </div>
       </div>
-      <Button disabled={disabled}>{isKorean ? "평가 제출" : "Submit rating"}</Button>
+      <PtButton type="submit" size="lg" block disabled={disabled || Number.isNaN(numeric)}>{isKorean ? "평가 제출" : "Submit rating"}</PtButton>
     </form>
   );
 }
 
 function ChoiceRow({ disabled, options, locale, onSelect }: { disabled?: boolean; options: string[]; locale?: string; onSelect: (value: string) => void }) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="grid gap-2 sm:grid-cols-3">
       {options.map((option) => (
-        <Button key={option} variant="secondary" disabled={disabled} className="h-auto px-4 py-2.5 text-[15px]" onClick={() => onSelect(option)}>
+        <button
+          key={option}
+          type="button"
+          disabled={disabled}
+          onClick={() => onSelect(option)}
+          className="transition-ui rounded-2xl border border-border bg-surface px-4 py-3.5 text-[15px] font-semibold text-text-primary hover:border-brand/50 hover:bg-brand-tint active:scale-[0.99] disabled:opacity-50"
+        >
           {choiceLabel(option, locale)}
-        </Button>
+        </button>
       ))}
     </div>
   );
@@ -286,23 +333,31 @@ function MultiChoiceInput({ choices, disabled, locale, onSubmit }: { choices: st
   };
   return (
     <div className="grid gap-3">
+      <div className="text-xs font-semibold text-text-muted">{isKorean ? "해당하는 것을 모두 골라 주세요" : "Choose all that apply"}</div>
       <div className="flex flex-wrap gap-2">
-        {choices.map((choice) => (
-          <Button
-            key={choice}
-            type="button"
-            variant={selected.includes(choice) ? "primary" : "secondary"}
-            disabled={disabled}
-            className="h-auto px-4 py-2.5 text-[15px]"
-            onClick={() => toggle(choice)}
-          >
-            {choiceLabel(choice, locale)}
-          </Button>
-        ))}
+        {choices.map((choice) => {
+          const isSelected = selected.includes(choice);
+          return (
+            <button
+              key={choice}
+              type="button"
+              disabled={disabled}
+              aria-pressed={isSelected}
+              onClick={() => toggle(choice)}
+              className={cn(
+                "transition-ui inline-flex items-center gap-1.5 rounded-full border px-4 py-2.5 text-[15px] font-semibold active:scale-[0.98] disabled:opacity-50",
+                isSelected ? "border-brand bg-brand text-white" : "border-border bg-surface text-text-primary hover:bg-surface-hover",
+              )}
+            >
+              {isSelected && <Check className="h-4 w-4" aria-hidden="true" />}
+              {choiceLabel(choice, locale)}
+            </button>
+          );
+        })}
       </div>
-      <Button disabled={disabled || !selected.length} onClick={() => onSubmit(selected)}>
+      <PtButton size="lg" block disabled={disabled || !selected.length} onClick={() => onSubmit(selected)}>
         {isKorean ? "선택 제출" : "Submit selection"}
-      </Button>
+      </PtButton>
     </div>
   );
 }

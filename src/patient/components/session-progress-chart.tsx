@@ -1,17 +1,14 @@
 "use client";
 
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Card } from "@/shared/components/ui/primitives";
+import { PtCard } from "@/patient/components/ui/kit";
 import { useT } from "@/shared/i18n/context";
 import type { SessionProgressCard } from "@/types/worksheet";
 
-// Validated categorical pair (node scripts/validate_palette.js "#2a78d6,#eb6834"
-// --mode light --surface "#FFFFFF" -- all checks pass: CVD deltaE 24.7,
-// normal-vision deltaE 33.6). This app's own brand colors (clinical-blue +
-// ai-violet) fail that same check as an adjacent pair (deltaE 9.7, below the
-// 15 floor), so the two series below intentionally borrow from the dataviz
-// skill's validated default palette rather than the app's brand pair.
-const SERIES_COLORS = ["#2a78d6", "#eb6834"] as const;
+// Patient palette (v2): deep forest green and a darkened gold. The pair
+// differs strongly in lightness, which is what keeps it distinguishable for
+// every common color-vision deficiency, not just in hue.
+const SERIES_COLORS = ["#1D4A31", "#C28A1E"] as const;
 const SURFACE = "#FFFFFF";
 
 interface CustomTooltipEntry {
@@ -23,7 +20,7 @@ interface CustomTooltipEntry {
 function CustomTooltip({ active, payload, label, seriesLabels }: { active?: boolean; payload?: readonly CustomTooltipEntry[]; label?: string | number; seriesLabels: Record<string, string> }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-panel border border-border bg-surface px-3 py-2 text-xs shadow-sm">
+    <div className="rounded-xl border border-border bg-surface px-3 py-2 text-xs shadow-[var(--pt-shadow-md)]">
       <div className="mb-1 font-medium text-text-secondary">{label}</div>
       {payload.map((entry) => (
         <div key={String(entry.dataKey)} className="flex items-center gap-2">
@@ -68,9 +65,9 @@ export function SessionProgressChart({ card }: { card: SessionProgressCard }) {
   const delta = firstSeries && firstSeries.points.length >= 2 ? firstSeries.points.at(-1)!.value - firstSeries.points[0].value : undefined;
 
   return (
-    <Card className="p-4">
+    <PtCard className="p-5">
       <div className="flex items-baseline justify-between gap-3">
-        <div className="text-sm font-semibold text-text-primary">{t(`patientProfile.progress.sessions.${sessionKey}`)}</div>
+        <div className="text-[15px] font-bold text-text-primary">{t(`patientProfile.progress.sessions.${sessionKey}`)}</div>
         {delta !== undefined && (
           <div className={delta <= 0 ? "text-xs font-medium text-success" : "text-xs font-medium text-warning"}>
             {delta > 0 ? "+" : ""}{delta}pp
@@ -90,9 +87,9 @@ export function SessionProgressChart({ card }: { card: SessionProgressCard }) {
       <div className="mt-3 h-40 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={rows} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
-            <CartesianGrid stroke="#DDE4EC" strokeWidth={1} vertical={false} />
-            <XAxis dataKey="checkpoint" tick={{ fontSize: 11, fill: "#8491A3" }} axisLine={{ stroke: "#DDE4EC" }} tickLine={false} />
-            <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "#8491A3" }} axisLine={false} tickLine={false} width={32} />
+            <CartesianGrid stroke="#E6E3DA" strokeWidth={1} vertical={false} />
+            <XAxis dataKey="checkpoint" tick={{ fontSize: 11, fill: "#808A84" }} axisLine={{ stroke: "#E6E3DA" }} tickLine={false} />
+            <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "#808A84" }} axisLine={false} tickLine={false} width={32} />
             <Tooltip content={(props) => <CustomTooltip {...props} seriesLabels={seriesLabels} />} />
             {card.series.map((series, index) => (
               <Line
@@ -100,7 +97,7 @@ export function SessionProgressChart({ card }: { card: SessionProgressCard }) {
                 type="monotone"
                 dataKey={series.seriesKey}
                 stroke={SERIES_COLORS[index % SERIES_COLORS.length]}
-                strokeWidth={2}
+                strokeWidth={2.5}
                 dot={{ r: 4, strokeWidth: 2, stroke: SURFACE, fill: SERIES_COLORS[index % SERIES_COLORS.length] }}
                 activeDot={{ r: 6, strokeWidth: 2, stroke: SURFACE }}
                 connectNulls
@@ -110,6 +107,6 @@ export function SessionProgressChart({ card }: { card: SessionProgressCard }) {
           </LineChart>
         </ResponsiveContainer>
       </div>
-    </Card>
+    </PtCard>
   );
 }

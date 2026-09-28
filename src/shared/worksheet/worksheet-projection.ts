@@ -284,7 +284,7 @@ export async function getListScoreHistory(input: {
  * `checkpoint` is a stable key the UI resolves through i18n, not a
  * pre-localized label (see ProgressPoint's own doc comment).
  */
-const PROGRESS_SERIES_PLAN: Record<string, { seriesKey: string; checkpoints: { fieldKey: string; checkpoint: string }[] }[]> = {
+export const PROGRESS_SERIES_PLAN: Record<string, { seriesKey: string; checkpoints: { fieldKey: string; checkpoint: string }[] }[]> = {
   "tbct-s03": [
     {
       seriesKey: "belief",

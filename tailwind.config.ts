@@ -37,6 +37,18 @@ export default {
         "text-muted": "rgb(var(--color-text-muted) / <alpha-value>)",
         border: "rgb(var(--color-border) / <alpha-value>)",
         "border-strong": "rgb(var(--color-border-strong) / <alpha-value>)",
+        // Patient app only -- these variables are defined solely under
+        // :root:has(.patient-app) in src/patient/styles/patient-theme.css, so
+        // they have no meaning (and no effect) on clinician pages.
+        brand: "rgb(var(--color-brand) / <alpha-value>)",
+        "brand-strong": "rgb(var(--color-brand-strong) / <alpha-value>)",
+        "brand-soft": "rgb(var(--color-brand-soft) / <alpha-value>)",
+        "brand-tint": "rgb(var(--color-brand-tint) / <alpha-value>)",
+        "brand-ink": "rgb(var(--color-brand-ink) / <alpha-value>)",
+        gold: "rgb(var(--color-gold) / <alpha-value>)",
+        "gold-strong": "rgb(var(--color-gold-strong) / <alpha-value>)",
+        "gold-soft": "rgb(var(--color-gold-soft) / <alpha-value>)",
+        canvas: "rgb(var(--color-canvas) / <alpha-value>)",
       },
       fontFamily: {
         sans: ["Inter", "Pretendard", "SUIT", "system-ui", "sans-serif"],
@@ -44,6 +56,7 @@ export default {
       },
       borderRadius: {
         panel: "18px",
+        card: "20px",
       },
       boxShadow: {
         none: "none",

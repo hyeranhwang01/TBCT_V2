@@ -982,5 +982,58 @@
       ".claude/launch.json",
       "src/shared/mocks/patient-dev-mock.ts"
     ]
+  },
+  "note2026_09_27_patient_ui_v2_full_redesign": {
+    "task": "Ground-up redesign of every patient-facing screen on branch donghoo/patient-ui-v2 (user instruction 2026-09-27: 'replace it entirely, keep every existing feature, big-company polish, easy for patients; palette from the lab logo -- deep forest green + gold'). The user will test locally and switch back to donghoo/patient-ui-overhaul if they dislike it, so the whole redesign lives on its own branch.",
+    "constraint": "Presentation only. No API, DB schema, runtime/session transition, safety or protected-field change. No clinician file changes. Shared design primitives (globals.css :root tokens, primitives.tsx) stay byte-identical; the patient palette is applied by redefining the same CSS variables under :root:has(.patient-app), which only matches while the patient shell is mounted, so clinician pages cannot be affected. s0N worksheet/homework components are not rewritten -- they inherit the new palette through those variables.",
+    "sharedFileJustification": {
+      "tailwind.config.ts": "Additive only: new color names (brand, gold, canvas, ...) that resolve to CSS variables defined exclusively in the patient scope. No existing token changes.",
+      "src/shared/i18n/dictionaries/{ko,en}.ts": "Additive keys for new patient copy; existing keys unchanged except SESSION title data is not stored there.",
+      "src/app/layout.tsx": "One import line for src/patient/styles/patient-theme.css. Imported from the patient shell instead, the stylesheet lived in each dynamically loaded page chunk and was dropped on every dev hot-reload, leaving the patient app unstyled until a full reload. Every rule in the file is scoped to :root:has(.patient-app), so on clinician pages it matches nothing.",
+      "src/shared/worksheet/worksheet-projection.ts": "Adds the `export` keyword to PROGRESS_SERIES_PLAN only (no value or logic change) so the session screen can recognise, from the same field plan getPatientProgressSeries uses, the moment a re-rating lands -- instead of keeping a second copy of the belief/intensity field pairs in patient code.",
+      "src/patient/components/worksheet-pane.tsx": "Patient variant only (PatientProgressFeed): upcoming, not-yet-reached rows beyond the active one fold behind a 'show N more' toggle so the checklist reads as what's done + what's now, instead of a long questionnaire-like list. Clinician variant and all data/realtime logic untouched."
+    },
+    "featurePreservation": [
+      "Home: 8-step journey + continue CTA (data-tour-id journey-continue), dev-mode per-step entry (aria-label devMode.openSession), local ?preview=1, upcoming appointments (data-tour-id appointments), onboarding tour + ?tour=1 replay, participant-locale auto-adopt",
+      "Shell: locale toggle w/ participant+open-session sync, theme toggle (data-tour-id theme-toggle), crisis help link (data-tour-id crisis-help), dev-mode toggle + banner, logout confirm, nav to history/homework/profile/messages (data-tour-id profile-link / messages-link, previously missing so the tour skipped those steps)",
+      "Session: every mutation/effect in patient-session-page.tsx kept verbatim (auto-start, auto-retry, reveal queue, TTS auto-read/mute/replay, safety hold + resume banner, end confirm, completion link, worksheet pane, progress estimate)",
+      "Input controls: all kinds (single/multi choice, rating, paired_ratings/consensus_weights, activity_completion, homework_status, boolean, text + STT) with identical onSubmit payloads",
+      "Complete page: aha-moment progress hero, summary link, homework CTA",
+      "Profile: alias/locale/country, memory consent x3, notification prefs x3, MFA (hidden in dev-mock), data export/deletion",
+      "History, homework list (groupSessionsByDefinition), homework detail (s0N components), messages thread, PHQ-9/GAD-7 check-in (incl. self-harm safety alert dispatch), new-session picker",
+      "Surfaced previously orphaned features: MoodCheckinWidget and the PHQ-9/GAD-7 check-in page now reachable from home/profile"
+    ],
+    "contentFix": "Home SESSION_TITLES listed S02 as 'problems and goals'; S02 has been CD-Quest (spec titleKo '인지왜곡 유형') since the 2026-09-21 redesign. Corrected in the patient-facing title map.",
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "tailwind.config.ts",
+      "src/patient/styles/**",
+      "src/patient/lib/session-meta.ts",
+      "src/patient/components/**",
+      "src/patient/pages/**",
+      "src/shared/i18n/dictionaries/ko.ts",
+      "src/shared/i18n/dictionaries/en.ts",
+      "src/shared/mocks/patient-dev-mock.ts",
+      "src/app/layout.tsx",
+      "src/shared/mocks/patient-dev-mock.test.ts",
+      "src/patient/lib/api/patient-locale-sync.ts",
+      "src/patient/lib/api/patient-locale-sync.test.ts",
+      "src/shared/worksheet/worksheet-projection.ts",
+      "src/patient/lib/text-scale.ts",
+      "src/patient/lib/progress-moment.ts",
+      "src/patient/lib/progress-moment.test.ts",
+      "src/patient/components/worksheet-pane.tsx"
+    ],
+    "doNotTouch": [
+      "src/shared/protocol/tbct-source-text.generated.ts",
+      "src/shared/protocol/session-prompts.generated.ts",
+      "src/patient/sessions/**",
+      "src/clinician/**",
+      "src/app/globals.css",
+      "src/shared/components/ui/primitives.tsx",
+      "src/shared/api/**",
+      "src/shared/runtime/**"
+    ],
+    "bugFixLocaleSync": "propagateLocaleToOpenSessions wrote the new locale via setRuntimeSessionStatus(id, sameStatus, {locale}); assertRuntimeTransition rejects same-status moves (waiting_for_input -> waiting_for_input), the error was swallowed by .catch(() => {}), so no open session ever changed language while the toast claimed it had. Now writes { locale } with updateRuntimeSessionRecord (the same call setRuntimeSessionStatus makes after its assertion) and counts only fulfilled writes. Test added."
   }
 }

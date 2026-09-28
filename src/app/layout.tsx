@@ -1,6 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import "@xyflow/react/dist/style.css";
 import "./globals.css";
+// Patient palette. Every rule in it is scoped to :root:has(.patient-app), so it
+// is inert on clinician pages; loaded here rather than from the patient shell
+// so it is never dropped with a dynamically loaded page chunk.
+import "@/patient/styles/patient-theme.css";
 import { Providers } from "@/app/providers";
 
 export const metadata: Metadata = {
