@@ -253,7 +253,9 @@ async function retrieveMemoryFor(view: RuntimeSessionView): Promise<TurnRetrieva
 function memoryMetadata(retrieval: TurnRetrieval | null | undefined) {
   if (!retrieval) return {};
   const { consentState, algorithmVersion, indexVersion, selected } = retrieval.record;
-  return { memoryRetrieval: { consentState, algorithmVersion, indexVersion, chunkIds: selected.map((item) => item.chunkId), scores: selected.map((item) => item.score) } };
+  // surfacedThisSession: per chunk id, whether an earlier call of this session
+  // already showed it (retrieval-v2; a label, not a filter).
+  return { memoryRetrieval: { consentState, algorithmVersion, indexVersion, chunkIds: selected.map((item) => item.chunkId), scores: selected.map((item) => item.score), surfacedThisSession: selected.map((item) => Boolean(item.surfacedThisSession)) } };
 }
 
 function logRetrieval(retrieval: TurnRetrieval | null | undefined, messageId: string) {

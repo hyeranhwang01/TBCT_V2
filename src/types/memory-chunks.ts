@@ -38,6 +38,35 @@ export interface MemoryChunkTags {
   distortions: string[];
 }
 
+/** Who wrote the words (sql/043). "system" is reserved for interpretations
+ * the program derives (Phase B); nothing writes it yet. */
+export type MemoryChunkAuthor = "participant" | "system" | "clinician";
+
+/** What kind of memory a chunk is (sql/043); retrieval gives each its own
+ * quota (chunk-scorer.ts). raw: an episode of the conversation; record: a
+ * worksheet or homework value; interpretation: a derived reading (Phase B),
+ * gated by the session's TBCT level (session-levels.ts); clinician_note. */
+export type MemoryChunkLayer = "raw" | "record" | "interpretation" | "clinician_note";
+
+/** The latest validity event of a chunk (sql/043), when there is one. No
+ * event: valid. */
+export interface MemoryChunkValidity {
+  state: "invalid" | "valid";
+  reason: string;
+  actor?: string;
+  createdAt: string;
+}
+
+/** One row of memory_chunk_validity_events (sql/043). Append-only; the latest
+ * event of a chunk decides whether it may be retrieved. */
+export interface MemoryChunkValidityEvent extends MemoryChunkValidity {
+  id: string;
+  chunkId: string;
+  participantId: string;
+  /** A chunk that replaces this one (Phase B). */
+  supersededBy?: string;
+}
+
 export interface MemoryChunk {
   id: string;
   participantId: string;
@@ -58,6 +87,15 @@ export interface MemoryChunk {
   /** When the participant said or wrote it. */
   sourceCreatedAt: string;
   indexVersion: string;
+  author: MemoryChunkAuthor;
+  layer: MemoryChunkLayer;
+  /** TBCT level (1 automatic thoughts, 2 assumptions, 3 core beliefs), for an
+   * interpretation only. */
+  cognitiveLevel?: number;
+  /** Set by the safety code; a flagged chunk is never retrieved. */
+  sensitivityFlags: string[];
+  /** Read with the chunk (latest event); absent when there is none. */
+  validity?: MemoryChunkValidity;
   tags?: MemoryChunkTags | null;
   taggedAt?: string;
   tagModel?: string;
@@ -68,6 +106,8 @@ export interface MemoryChunk {
   suppressedReason?: string;
   createdAt: string;
 }
+
+export type MemoryChunkRetrievalParts = { slot?: number; affinity?: number; tags: number; text: number; recency: number };
 
 /** One row of memory_chunk_retrievals (sql/029): a retrieval for one model call. */
 export interface MemoryChunkRetrieval {
@@ -81,6 +121,10 @@ export interface MemoryChunkRetrieval {
   indexVersion: string;
   query: { text: string; focusField?: string; themes?: MemoryChunkTags; opening: boolean };
   candidateCount: number;
-  selected: Array<{ chunkId: string; score: number; parts: { affinity: number; tags: number; text: number; recency: number } }>;
+  /** parts: retrieval-v2 (slot 1 = a fixed slot of this step, offered
+   * whatever its relevance). Rows logged by retrieval-v1 carry
+   * { affinity, tags, text, recency } instead, so readers take either.
+   * surfacedThisSession: already shown on an earlier call of this session. */
+  selected: Array<{ chunkId: string; score: number; parts: MemoryChunkRetrievalParts; surfacedThisSession?: boolean }>;
   createdAt: string;
 }

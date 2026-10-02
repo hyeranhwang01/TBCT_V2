@@ -22,7 +22,7 @@ import { stableId } from "@/shared/memory/stable-id";
 import type { RuntimeContext, RuntimeMessage } from "@/types/runtime-session";
 import type { HomeworkEntryRecord, HomeworkRecord } from "@/types/homework";
 import type { LongitudinalMemory } from "@/types/longitudinal-memory";
-import type { MemoryChunk, MemoryChunkKind, MemoryElementKind } from "@/types/memory-chunks";
+import type { MemoryChunk, MemoryChunkAuthor, MemoryChunkKind, MemoryChunkLayer, MemoryElementKind } from "@/types/memory-chunks";
 
 /** Bump when the way chunks are cut changes: chunks get new ids, and a
  * rebuild writes the new cut beside the old one instead of over it. */
@@ -76,10 +76,21 @@ function cap(text: string, max = MAX_CHUNK_CHARS) {
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }
 
-/** True when the risk check finds anything in the text -- a current
- * disclosure or wording that would get the safety clarification. */
+/** What the risk check finds in the text -- a current disclosure or wording
+ * that would get the safety clarification. */
+export function riskSignalsOf(text: string): string[] {
+  return assessTurnRisk({ text, currentContext: {} as RuntimeContext }).riskSignals;
+}
+
 export function carriesRiskSignal(text: string): boolean {
-  return assessTurnRisk({ text, currentContext: {} as RuntimeContext }).riskSignals.length > 0;
+  return riskSignalsOf(text).length > 0;
+}
+
+/** Provenance by where a chunk came from (sql/043, note2026_10_02_memory_rag_v2_phase_a).
+ * Nothing built here is an interpretation: those are Phase B. */
+export function provenanceOf(kind: MemoryChunkKind): { author: MemoryChunkAuthor; layer: MemoryChunkLayer } {
+  if (kind === "clinician_note") return { author: "clinician", layer: "clinician_note" };
+  return { author: "participant", layer: kind === "episode" ? "raw" : "record" };
 }
 
 /** The registry ids of distortion names as a participant or the model wrote
@@ -205,7 +216,13 @@ export function episodeChunks(messages: RuntimeMessage[]): ChunkDraft[] {
 
 function finish(input: { participantId: string; runtimeSessionId: string; sessionDefinitionId: string; sourceCreatedAt: string; now: string }, kind: MemoryChunkKind, draft: ChunkDraft): MemoryChunk | null {
   const content = cap(clean(draft.content) ? draft.content.trim() : "");
-  if (!content || carriesRiskSignal(content)) return null;
+  if (!content) return null;
+  // Any risk signal still keeps the text out of memory altogether, as before.
+  // sensitivityFlags is the slot the safety code fills when it later keeps a
+  // chunk but marks it (retrieval never offers a flagged chunk); from here it
+  // is always empty.
+  const signals = riskSignalsOf(content);
+  if (signals.length) return null;
   return {
     id: `MCH-${stableId(`${MEMORY_INDEX_VERSION}|${input.participantId}|${input.runtimeSessionId}|${draft.key}`)}`,
     participantId: input.participantId,
@@ -221,6 +238,8 @@ function finish(input: { participantId: string; runtimeSessionId: string; sessio
     distortionIds: draft.distortionIds ?? [],
     sourceCreatedAt: input.sourceCreatedAt,
     indexVersion: MEMORY_INDEX_VERSION,
+    ...provenanceOf(kind),
+    sensitivityFlags: signals,
     tags: null,
     suppressed: false,
     createdAt: input.now,

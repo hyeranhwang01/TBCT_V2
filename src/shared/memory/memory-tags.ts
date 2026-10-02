@@ -1,17 +1,26 @@
-// The closed tag list for memory chunks (tags v1). The tagger may only choose
-// from these; anything else is dropped. The same list is what the model picks
+// The closed tag list for memory chunks. The tagger may only choose from
+// these; anything else is dropped. The same list is what the model picks
 // currentThemes from on each turn, so a chunk and a moment in a later session
 // meet on the same words even when the participant's own words differ
 // ("팀장님" in one session, "상사" in the next -> person "boss").
 //
 // Distortions are the 15 of src/shared/protocol/cognitive-distortions.ts.
-// Core-belief categories are the three of the TBCT/CBT literature (helpless,
-// unlovable, worthless). The list is for clinical review (Prof. de Oliveira).
+// The list is for clinical review (Prof. de Oliveira).
+//
+// tags-v2 (note2026_10_02_memory_rag_v2_phase_a): tags are retrieval keys
+// only, and chunks are tagged on CHUNK_TAG_AXES -- without the core-belief
+// categories (helpless, unlovable, worthless), which are not the book's (de
+// Oliveira 2015 works with the participant's own wording of a core belief, at
+// level 3 from S5) and would have the tagger read a belief into words that do
+// not state one. TAG_AXES, with beliefs, stays as it was: it is the schema of
+// the turn tool's currentThemes (prompt-session-agent.ts), and changing it
+// would change the prompt. The scorer ignores beliefs on both sides, so
+// tags-v1 rows that carry them are read the same way.
 
 import { DISTORTION_IDS } from "@/shared/protocol/cognitive-distortions";
 import type { MemoryChunkTags } from "@/types/memory-chunks";
 
-export const MEMORY_TAGS_VERSION = "tags-v1";
+export const MEMORY_TAGS_VERSION = "tags-v2";
 
 type TagList = ReadonlyArray<{ id: string; ko: string; en: string }>;
 
@@ -66,6 +75,9 @@ export const TAG_AXES = {
 export type TagAxis = keyof typeof TAG_AXES;
 export const TAG_AXIS_NAMES = Object.keys(TAG_AXES) as TagAxis[];
 
+/** The axes a chunk is tagged and matched on (tags-v2): every axis but beliefs. */
+export const CHUNK_TAG_AXES = TAG_AXIS_NAMES.filter((axis) => axis !== "beliefs");
+
 /** Keeps only known ids, once each, in list order. */
 export function sanitizeTags(input: unknown): MemoryChunkTags {
   const source = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
@@ -93,12 +105,18 @@ export function describeTagList(): string {
   ].join("\n");
 }
 
-/** JSON schema of a tag set, for a tool definition. */
-export function tagSetJsonSchema() {
+/** The chunk tagger's list (tags-v2): no core-belief categories. */
+export function describeChunkTagList(): string {
+  return describeTagList().split("\n").filter((line) => !line.startsWith("beliefs")).join("\n");
+}
+
+/** JSON schema of a tag set, for a tool definition. Defaults to every axis
+ * (the turn tool's currentThemes); the chunk tagger passes CHUNK_TAG_AXES. */
+export function tagSetJsonSchema(axes: readonly TagAxis[] = TAG_AXIS_NAMES) {
   return {
     type: "object",
     additionalProperties: false,
-    required: TAG_AXIS_NAMES,
-    properties: Object.fromEntries(TAG_AXIS_NAMES.map((axis) => [axis, { type: "array", items: { type: "string", enum: TAG_AXES[axis] } }])),
+    required: [...axes],
+    properties: Object.fromEntries(axes.map((axis) => [axis, { type: "array", items: { type: "string", enum: TAG_AXES[axis] } }])),
   };
 }

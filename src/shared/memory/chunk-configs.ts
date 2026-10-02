@@ -1,15 +1,15 @@
 // Per-session memory settings. WORKSHEET_CHUNKERS: which sessions cut their
 // worksheet their own way (chunk-builder.ts); a session missing there gets one
-// chunk per recorded text value. RETRIEVAL_AFFINITY: which earlier chunks
-// matter at each step of a session that retrieves (chunk-scorer.ts); a
-// session missing there still retrieves, on tags and wording alone. S01 has no
-// earlier session. Add a session when it is rebuilt: its file sits beside its
+// chunk per recorded text value. RETRIEVAL_SLOTS: which kinds of earlier
+// chunk a step of a session is about and always gets (chunk-scorer.ts,
+// retrieval-v2); everything else -- and every step of a session missing
+// there -- is retrieved on tags and wording alone. S01 has no earlier session. Add a session when it is rebuilt: its file sits beside its
 // prompt fields.
 
 import { s01MemoryChunks } from "@/patient/sessions/s01/memory-chunks";
-import { s02MemoryChunks, s02RetrievalAffinity } from "@/patient/sessions/s02/memory-chunks";
+import { s02MemoryChunks, s02RetrievalSlots } from "@/patient/sessions/s02/memory-chunks";
 import type { WorksheetChunker } from "@/shared/memory/chunk-builder";
-import type { RetrievalAffinity } from "@/shared/memory/chunk-scorer";
+import type { RetrievalSlots } from "@/shared/memory/chunk-scorer";
 
 const WORKSHEET_CHUNKERS: Record<string, WorksheetChunker> = {
   "tbct-s01": s01MemoryChunks,
@@ -20,10 +20,10 @@ export function worksheetChunkerFor(sessionDefinitionId: string): WorksheetChunk
   return WORKSHEET_CHUNKERS[sessionDefinitionId];
 }
 
-const RETRIEVAL_AFFINITY: Record<string, RetrievalAffinity> = {
-  "tbct-s02": s02RetrievalAffinity,
+const RETRIEVAL_SLOTS: Record<string, RetrievalSlots> = {
+  "tbct-s02": s02RetrievalSlots,
 };
 
-export function retrievalAffinityFor(sessionDefinitionId: string): RetrievalAffinity {
-  return RETRIEVAL_AFFINITY[sessionDefinitionId] ?? {};
+export function retrievalSlotsFor(sessionDefinitionId: string): RetrievalSlots {
+  return RETRIEVAL_SLOTS[sessionDefinitionId] ?? {};
 }

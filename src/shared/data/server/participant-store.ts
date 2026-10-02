@@ -184,12 +184,14 @@ export async function listMemoryConsentEvents(participantId: string): Promise<Me
 
 // ---- Memory chunks (sql/027_participant_memory_chunks.sql) ----
 // One column per field (no data jsonb): the append-only guard in 027 checks
-// the columns.
+// the columns. Provenance columns and validity events: sql/043.
 
 type MemoryChunkRow = {
   id: string; participant_id: string; runtime_session_id: string; session_definition_id: string; session_index: number;
   chunk_kind: MemoryChunk["chunkKind"]; element_kind: MemoryChunk["elementKind"]; field_names: string[]; source_message_ids: string[]; source_ref: string | null;
   content: string; distortion_ids: string[]; source_created_at: Date | string; index_version: string;
+  author: MemoryChunk["author"]; layer: MemoryChunk["layer"]; cognitive_level: number | null; sensitivity_flags: string[];
+  validity_state?: "invalid" | "valid" | null; validity_reason?: string | null; validity_actor?: string | null; validity_at?: Date | string | null;
   tags: MemoryChunk["tags"]; tagged_at: Date | string | null; tag_model: string | null; tag_prompt_version: string | null;
   suppressed: boolean; suppressed_at: Date | string | null; suppressed_by: string | null; suppressed_reason: string | null; created_at: Date | string;
 };
@@ -212,6 +214,11 @@ function chunkFromRow(row: MemoryChunkRow): MemoryChunk {
     distortionIds: row.distortion_ids,
     sourceCreatedAt: iso(row.source_created_at),
     indexVersion: row.index_version,
+    author: row.author,
+    layer: row.layer,
+    ...(row.cognitive_level !== null && row.cognitive_level !== undefined ? { cognitiveLevel: Number(row.cognitive_level) } : {}),
+    sensitivityFlags: row.sensitivity_flags ?? [],
+    ...(row.validity_state ? { validity: { state: row.validity_state, reason: row.validity_reason ?? "", actor: row.validity_actor ?? undefined, createdAt: iso(row.validity_at!) } } : {}),
     tags: row.tags ?? null,
     taggedAt: row.tagged_at ? iso(row.tagged_at) : undefined,
     tagModel: row.tag_model ?? undefined,
@@ -228,18 +235,18 @@ function chunkFromRow(row: MemoryChunkRow): MemoryChunk {
  * adds nothing twice). Returns how many were new. One statement per 200
  * chunks -- a session makes a few dozen. */
 export async function saveMemoryChunks(chunks: MemoryChunk[]): Promise<number> {
-  const COLUMNS = 16;
+  const COLUMNS = 20;
   let inserted = 0;
   for (let start = 0; start < chunks.length; start += 200) {
     const batch = chunks.slice(start, start + 200);
     const values: unknown[] = [];
     const tuples = batch.map((chunk, row) => {
-      values.push(chunk.id, chunk.participantId, chunk.runtimeSessionId, chunk.sessionDefinitionId, chunk.sessionIndex, chunk.chunkKind, chunk.elementKind, chunk.fieldNames, chunk.sourceMessageIds, chunk.sourceRef ?? null, chunk.content, chunk.distortionIds, chunk.sourceCreatedAt, chunk.indexVersion, chunk.tags ? JSON.stringify(chunk.tags) : null, chunk.createdAt);
+      values.push(chunk.id, chunk.participantId, chunk.runtimeSessionId, chunk.sessionDefinitionId, chunk.sessionIndex, chunk.chunkKind, chunk.elementKind, chunk.fieldNames, chunk.sourceMessageIds, chunk.sourceRef ?? null, chunk.content, chunk.distortionIds, chunk.sourceCreatedAt, chunk.indexVersion, chunk.tags ? JSON.stringify(chunk.tags) : null, chunk.createdAt, chunk.author, chunk.layer, chunk.cognitiveLevel ?? null, chunk.sensitivityFlags ?? []);
       const offset = row * COLUMNS;
       return `(${Array.from({ length: COLUMNS }, (_, column) => `$${offset + column + 1}`).join(",")},false)`;
     });
     const result = await getPgPool().query(
-      `INSERT INTO participant_memory_chunks (id, participant_id, runtime_session_id, session_definition_id, session_index, chunk_kind, element_kind, field_names, source_message_ids, source_ref, content, distortion_ids, source_created_at, index_version, tags, created_at, suppressed)
+      `INSERT INTO participant_memory_chunks (id, participant_id, runtime_session_id, session_definition_id, session_index, chunk_kind, element_kind, field_names, source_message_ids, source_ref, content, distortion_ids, source_created_at, index_version, tags, created_at, author, layer, cognitive_level, sensitivity_flags, suppressed)
        VALUES ${tuples.join(",")}
        ON CONFLICT (id) DO NOTHING`,
       values,
@@ -249,27 +256,36 @@ export async function saveMemoryChunks(chunks: MemoryChunk[]): Promise<number> {
   return inserted;
 }
 
+/** Each chunk with its latest validity event (sql/043), if any. */
+const CHUNK_WITH_VALIDITY = `SELECT c.*, v.state AS validity_state, v.reason AS validity_reason, v.actor AS validity_actor, v.created_at AS validity_at
+  FROM participant_memory_chunks c
+  LEFT JOIN LATERAL (SELECT e.state, e.reason, e.actor, e.created_at FROM memory_chunk_validity_events e WHERE e.chunk_id = c.id ORDER BY e.created_at DESC, e.id DESC LIMIT 1) v ON true`;
+
 export async function listMemoryChunks(op: Extract<ParticipantStoreOp, { op: "listMemoryChunks" }>): Promise<MemoryChunk[]> {
   // officialAttemptsOnly (note2026_09_28_rct_backend): a session's worksheet
   // and conversation chunks come from its official attempt (sql/033) once
   // there is one; a repeat of a module that already has one is left out.
   // Homework and clinician notes are not attempts and always count.
+  // includeInvalid (note2026_10_02_memory_rag_v2_phase_a): by default a chunk
+  // whose latest validity event is 'invalid' is left out, so retrieval never
+  // sees it; a later 'valid' event brings it back.
   const { rows } = await getPgPool().query<MemoryChunkRow>(
-    `SELECT c.* FROM participant_memory_chunks c
+    `${CHUNK_WITH_VALIDITY}
      WHERE c.participant_id = $1 AND ($2::int IS NULL OR c.session_index < $2) AND ($3::boolean OR NOT c.suppressed)
+       AND ($5::boolean OR v.state IS DISTINCT FROM 'invalid')
        AND (NOT $4::boolean OR c.chunk_kind IN ('homework', 'clinician_note') OR NOT EXISTS (
          SELECT 1 FROM runtime_sessions s
          WHERE s.id = c.runtime_session_id AND NOT s.is_official AND EXISTS (
            SELECT 1 FROM runtime_sessions o WHERE o.participant_id = s.participant_id AND o.module_number = s.module_number AND o.is_official)))
      ORDER BY c.session_index ASC, c.source_created_at ASC, c.id ASC`,
-    [op.participantId, op.beforeSessionIndex ?? null, op.includeSuppressed ?? false, op.officialAttemptsOnly ?? false],
+    [op.participantId, op.beforeSessionIndex ?? null, op.includeSuppressed ?? false, op.officialAttemptsOnly ?? false, op.includeInvalid ?? false],
   );
   return rows.map(chunkFromRow);
 }
 
 export async function listMemoryChunksBySession(runtimeSessionId: string): Promise<MemoryChunk[]> {
   const { rows } = await getPgPool().query<MemoryChunkRow>(
-    "SELECT * FROM participant_memory_chunks WHERE runtime_session_id = $1 ORDER BY source_created_at ASC, id ASC",
+    `${CHUNK_WITH_VALIDITY} WHERE c.runtime_session_id = $1 ORDER BY c.source_created_at ASC, c.id ASC`,
     [runtimeSessionId],
   );
   return rows.map(chunkFromRow);
@@ -283,6 +299,25 @@ export async function suppressMemoryChunk(op: Extract<ParticipantStoreOp, { op: 
     [op.chunkId, op.actorUserId ?? null, op.reason.trim()],
   );
   if (!rows[0]) throw new Error("Memory chunk not found");
+  return chunkFromRow(rows[0]);
+}
+
+/** A clinician's decision that a chunk no longer holds, or holds again
+ * (sql/043). Appends an event; the chunk row is not touched. Returns the chunk
+ * as it now reads. clock_timestamp(), not now(): two decisions in one
+ * transaction still order. */
+export async function setMemoryChunkValidity(op: Extract<ParticipantStoreOp, { op: "setMemoryChunkValidity" }>): Promise<MemoryChunk> {
+  if (op.state !== "invalid" && op.state !== "valid") throw new Error("Validity must be 'invalid' or 'valid'");
+  if (!op.reason?.trim()) throw new Error("A reason is required to change a memory chunk's validity");
+  const pool = getPgPool();
+  const { rows: found } = await pool.query<{ participant_id: string }>("SELECT participant_id FROM participant_memory_chunks WHERE id = $1", [op.chunkId]);
+  if (!found[0]) throw new Error("Memory chunk not found");
+  await pool.query(
+    `INSERT INTO memory_chunk_validity_events (id, chunk_id, participant_id, state, reason, actor, superseded_by, created_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,clock_timestamp())`,
+    [`MCV-${globalThis.crypto.randomUUID()}`, op.chunkId, found[0].participant_id, op.state, op.reason.trim(), op.actorUserId ?? null, op.supersededBy ?? null],
+  );
+  const { rows } = await pool.query<MemoryChunkRow>(`${CHUNK_WITH_VALIDITY} WHERE c.id = $1`, [op.chunkId]);
   return chunkFromRow(rows[0]);
 }
 
@@ -468,6 +503,8 @@ export async function dispatchParticipantStoreOp(op: ParticipantStoreOp): Promis
       return listMemoryChunksBySession(op.runtimeSessionId);
     case "suppressMemoryChunk":
       return suppressMemoryChunk(op);
+    case "setMemoryChunkValidity":
+      return setMemoryChunkValidity(op);
     case "listUntaggedMemoryChunks":
       return listUntaggedMemoryChunks(op.participantId);
     case "setMemoryChunkTags":

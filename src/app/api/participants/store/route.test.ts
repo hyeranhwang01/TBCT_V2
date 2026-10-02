@@ -86,18 +86,20 @@ describe("memory consent through the participant store route", () => {
     expect(dispatched).toEqual([expect.objectContaining({ participantId: "PT-other", source: "clinician", actor: { actorUserId: "clin-1", actorRole: "clinician" } })]);
   });
 
-  it("keeps every memory-chunk operation away from a patient, and records the clinician who suppresses one", async () => {
+  it("keeps every memory-chunk operation away from a patient, and records the clinician who suppresses one or changes its validity", async () => {
     for (const op of [
       { op: "listMemoryChunks", participantId: "PT-own" },
       { op: "listMemoryChunksBySession", runtimeSessionId: "RS-own" },
       { op: "saveMemoryChunks", chunks: [] },
       { op: "suppressMemoryChunk", chunkId: "MCH-1", reason: "x" },
+      { op: "setMemoryChunkValidity", chunkId: "MCH-1", state: "invalid", reason: "x" },
     ] as ParticipantStoreOp[]) {
       expect(await call(op)).toBe(403);
     }
     expect(dispatched).toEqual([]);
     caller.current = { userId: "clin-1", email: null, role: "clinician" };
     expect(await call({ op: "suppressMemoryChunk", chunkId: "MCH-1", reason: "x", actorUserId: "someone-else" })).toBe(200);
-    expect(dispatched).toEqual([expect.objectContaining({ op: "suppressMemoryChunk", actorUserId: "clin-1" })]);
+    expect(await call({ op: "setMemoryChunkValidity", chunkId: "MCH-1", state: "valid", reason: "x", actorUserId: "someone-else" })).toBe(200);
+    expect(dispatched).toEqual([expect.objectContaining({ op: "suppressMemoryChunk", actorUserId: "clin-1" }), expect.objectContaining({ op: "setMemoryChunkValidity", actorUserId: "clin-1" })]);
   });
 });

@@ -6,10 +6,19 @@
 //  1. consent (memory-consent.ts) -- declined or undecided: nothing is read,
 //     and the record says so;
 //  2. candidates: this participant's chunks from earlier sessions, not
-//     suppressed;
-//  3. chunk-scorer.ts picks at most three.
+//     suppressed and not marked invalid by a clinician (the store);
+//  3. chunk-scorer.ts (retrieval-v2) filters and picks a few, by layer.
+// Each pick is marked when an earlier call of this session already showed it
+// (surfacedThisSession) -- metadata for the record and a label for the model,
+// never a reason to leave it out (note2026_10_02_memory_rag_v2_phase_a).
 // The result is logged (memory_chunk_retrievals) against the message the call
 // produces.
+//
+// The lines put in the <program> block carry the chunks and neutral labels
+// only. How the model is to use them (check it still holds, never record it as
+// today's answer, never quote a counsellor's note) is the prompt's job (Common
+// §7, docs/prompts/TBCT_AI_Prompt_Common.md); repeating it here made two
+// sources of the same rule that could drift apart.
 //
 // Also here: the authorship guard. A value the model tries to record that is
 // found in what it was shown from earlier sessions (retrieved chunks, or the
@@ -18,17 +27,20 @@
 // and is rejected.
 
 import { getParticipant } from "@/shared/data/repositories/participant-repository";
-import { listMemoryChunks } from "@/shared/data/repositories/memory-chunk-repository";
+import { listMemoryChunkRetrievals, listMemoryChunks } from "@/shared/data/repositories/memory-chunk-repository";
 import { memoryConsentStatus } from "@/shared/memory/memory-consent";
 import { MEMORY_INDEX_VERSION, sessionIndexOf } from "@/shared/memory/chunk-builder";
 import { RETRIEVAL_ALGORITHM_VERSION, containment, normalizeForMatch, scoreChunks, selectChunks, type ScoredChunk } from "@/shared/memory/chunk-scorer";
-import { retrievalAffinityFor } from "@/shared/memory/chunk-configs";
+import { retrievalSlotsFor } from "@/shared/memory/chunk-configs";
 import { sanitizeTags } from "@/shared/memory/memory-tags";
 import type { MemoryChunk, MemoryChunkRetrieval, MemoryChunkTags } from "@/types/memory-chunks";
 
+/** A selected chunk, and whether an earlier call of this session showed it. */
+export type RetrievedChunk = ScoredChunk & { surfacedThisSession: boolean };
+
 export type TurnRetrieval = {
   record: Omit<MemoryChunkRetrieval, "id" | "messageId" | "createdAt">;
-  selected: ScoredChunk[];
+  selected: RetrievedChunk[];
   /** Every earlier-session chunk the participant has (consent given), for the
    * authorship guard: what the model was shown on an earlier call of this
    * session is not re-selected on every call, but must stay unrecordable. */
@@ -70,31 +82,45 @@ export async function retrieveForTurn(input: {
   // record but are not candidates beside the new ones.
   // Of a repeated session, only the official attempt (listMemoryChunks).
   const candidates = (await listMemoryChunks(input.participantId, { beforeSessionIndex: currentSessionIndex, officialAttemptsOnly: true })).filter((chunk) => chunk.indexVersion === MEMORY_INDEX_VERSION);
-  const selected = selectChunks(scoreChunks(candidates, { ...query, currentSessionIndex }, retrievalAffinityFor(input.sessionDefinitionId)));
+  const picked = selectChunks(scoreChunks(candidates, { ...query, currentSessionIndex }, retrievalSlotsFor(input.sessionDefinitionId)));
+  // What earlier calls of this session showed. Only a label: a failed read
+  // leaves every pick unmarked rather than failing the turn.
+  const shownBefore = picked.length
+    ? new Set((await listMemoryChunkRetrievals(input.runtimeSessionId).catch(() => [])).flatMap((retrieval) => retrieval.selected.map((item) => item.chunkId)))
+    : new Set<string>();
+  const selected = picked.map((item) => ({ ...item, surfacedThisSession: shownBefore.has(item.chunk.id) }));
   return {
-    record: { ...base, candidateCount: candidates.length, selected: selected.map((item) => ({ chunkId: item.chunk.id, score: item.score, parts: item.parts })) },
+    record: { ...base, candidateCount: candidates.length, selected: selected.map((item) => ({ chunkId: item.chunk.id, score: item.score, parts: item.parts, surfacedThisSession: item.surfacedThisSession })) },
     selected,
     earlierTexts: candidates.map((chunk) => chunk.content),
   };
 }
 
-/** The lines the <program> block carries for the retrieved chunks. */
-export function retrievalProgramLines(selected: ScoredChunk[]): string[] {
+const AUTHOR_LABEL: Record<MemoryChunk["author"], string> = { participant: "participant", clinician: "clinician", system: "program" };
+
+/** The lines the <program> block carries for the retrieved chunks: a neutral
+ * header per kind, then one line per chunk labelled [session · date · what it
+ * is · who wrote it · "mentioned earlier today" when an earlier call of this
+ * session showed it]. No instructions (see the header of this file). */
+export function retrievalProgramLines(selected: Array<ScoredChunk & { surfacedThisSession?: boolean }>): string[] {
   const own = selected.filter((item) => item.chunk.chunkKind !== "clinician_note");
   const notes = selected.filter((item) => item.chunk.chunkKind === "clinician_note");
-  const line = (chunk: MemoryChunk) => {
+  const line = (item: (typeof selected)[number]) => {
+    const chunk = item.chunk;
     const label = ELEMENT_LABEL[chunk.elementKind] ?? chunk.elementKind;
     const session = chunk.sessionIndex > 0 ? `Session ${chunk.sessionIndex}` : "earlier";
-    return `- [${session} · ${chunk.sourceCreatedAt.slice(0, 10)} · ${label}] ${chunk.content.replace(/\n/g, " / ")}`;
+    const author = AUTHOR_LABEL[chunk.author] ?? (chunk.chunkKind === "clinician_note" ? "clinician" : "participant");
+    const tags = [session, chunk.sourceCreatedAt.slice(0, 10), label, author, ...(item.surfacedThisSession ? ["mentioned earlier today"] : [])];
+    return `- [${tags.join(" · ")}] ${chunk.content.replace(/\n/g, " / ")}`;
   };
   const lines: string[] = [];
   if (own.length) {
-    lines.push("Earlier sessions, retrieved for this moment (the participant's own words from before, not said today; check whether it still holds before building on it, and never record it as today's answer):");
-    lines.push(...own.map((item) => line(item.chunk)));
+    lines.push("Earlier-session memory (program note):");
+    lines.push(...own.map(line));
   }
   if (notes.length) {
-    lines.push("Counsellor's note (background for you only; do not quote it to the participant):");
-    lines.push(...notes.map((item) => line(item.chunk)));
+    lines.push("Counsellor's note:");
+    lines.push(...notes.map(line));
   }
   return lines;
 }

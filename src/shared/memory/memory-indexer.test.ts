@@ -4,7 +4,7 @@ import { createCanonicalTestRuntimeSession, getRuntimeSession } from "@/shared/a
 import { startRuntimeSession, submitPatientInput } from "@/shared/api/runtime-execution-api";
 import { appendHomeworkEntry, ensureHomeworkForSession } from "@/patient/lib/api/homework-api";
 import { DISTORTION_EXAMPLE_ENTRY_TYPE, buildDistortionExampleData } from "@/patient/sessions/s01/distortion-table";
-import { listMemoryChunks, listMemoryChunksBySession, suppressMemoryChunk } from "@/shared/data/repositories/memory-chunk-repository";
+import { listMemoryChunks, listMemoryChunksBySession, setMemoryChunkValidity, suppressMemoryChunk } from "@/shared/data/repositories/memory-chunk-repository";
 import { indexAtCompletion } from "@/shared/memory/memory-indexer";
 import { installScriptedPromptSession, lastParticipantText, type ScriptedPromptSession } from "@/test/fakes/prompt-session.fake";
 
@@ -73,5 +73,23 @@ describe("memory chunks through the runtime", () => {
     expect(suppressed).toMatchObject({ suppressed: true, suppressedReason: "참가자가 수정 요청" });
     expect((await listMemoryChunks(s01.participantId)).some((chunk) => chunk.id === goal!.id)).toBe(false);
     expect((await listMemoryChunks(s01.participantId, { includeSuppressed: true })).some((chunk) => chunk.id === goal!.id)).toBe(true);
+  }, 60_000);
+
+  it("leaves a chunk marked invalid out until it is marked valid again, keeping the chunk as it was", async () => {
+    fake = installScriptedPromptSession((request) => (lastParticipantText(request) ? { reply: "마칠게요.", inputHint: "none", sessionComplete: true, fieldUpdates: { s01Goal: "회의에서 한 번은 말하기" } } : { reply: "목표가 뭔가요?", focusField: "s01Goal" }));
+    const s01 = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s01", locale: "ko-KR" });
+    await startRuntimeSession(s01.id);
+    await say(s01.id, "회의에서 한 번은 말해 보고 싶어요", 1);
+    const goal = (await listMemoryChunksBySession(s01.id)).find((chunk) => chunk.elementKind === "goal")!;
+    expect(goal).toMatchObject({ author: "participant", layer: "record", sensitivityFlags: [] });
+    expect(goal.validity).toBeUndefined();
+    const listed = async (options = {}) => (await listMemoryChunks(s01.participantId, options)).some((chunk) => chunk.id === goal.id);
+
+    await expect(setMemoryChunkValidity(goal.id, "invalid", " ")).rejects.toThrow(/reason/);
+    expect(await setMemoryChunkValidity(goal.id, "invalid", "참가자가 목표를 바꿈")).toMatchObject({ content: goal.content, validity: { state: "invalid", reason: "참가자가 목표를 바꿈" } });
+    expect(await listed()).toBe(false);
+    expect(await listed({ includeInvalid: true })).toBe(true);
+    expect(await setMemoryChunkValidity(goal.id, "valid", "다시 같은 목표를 말함")).toMatchObject({ validity: { state: "valid" } });
+    expect(await listed()).toBe(true);
   }, 60_000);
 });

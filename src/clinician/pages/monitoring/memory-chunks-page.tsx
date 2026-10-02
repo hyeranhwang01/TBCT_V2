@@ -7,12 +7,16 @@ import { AppShell } from "@/clinician/components/app-shell";
 import { Badge, Button, Card, EmptyState, Modal, PageHeader, inputClass, textareaClass } from "@/shared/components/ui/primitives";
 import { MemoryConsentPanel } from "@/clinician/pages/monitoring/memory-consent-panel";
 import { listRuntimeParticipants } from "@/shared/api/participant-api";
-import { listMemoryChunks, suppressMemoryChunk } from "@/shared/data/repositories/memory-chunk-repository";
+import { listMemoryChunks, setMemoryChunkValidity, suppressMemoryChunk } from "@/shared/data/repositories/memory-chunk-repository";
 import { useT } from "@/shared/i18n/context";
 import type { MemoryChunk } from "@/types/memory-chunks";
 
 /** A participant's memory chunks (sql/027): what later sessions may retrieve,
- * with the tags and the clinician's one control over it -- suppression.
+ * with the tags and the clinician's controls over it -- suppression, and
+ * validity (sql/043): marking a chunk as no longer holding, and later as
+ * holding again, each with a reason and kept as a history
+ * (note2026_10_02_memory_rag_v2_phase_a). Invalid chunks are always listed
+ * here, so they can be marked valid again.
  * Replaces the old candidate review queue, which approved summary-derived
  * memories; memory is now the participant's own words, used with their
  * consent (note2026_09_27_memory_rag_m3_m7). */
@@ -23,11 +27,13 @@ export function MemoryChunksPage() {
   const [includeSuppressed, setIncludeSuppressed] = useState(false);
   const [target, setTarget] = useState<MemoryChunk | null>(null);
   const [reason, setReason] = useState("");
+  const [validityTarget, setValidityTarget] = useState<{ chunk: MemoryChunk; state: "invalid" | "valid" } | null>(null);
+  const [validityReason, setValidityReason] = useState("");
   const participantsQuery = useQuery({ queryKey: ["runtime-participants"], queryFn: listRuntimeParticipants });
   const participant = participantsQuery.data?.find((item) => item.id === participantId);
   const chunksQuery = useQuery({
     queryKey: ["memory-chunks", participantId, includeSuppressed],
-    queryFn: () => listMemoryChunks(participantId, { includeSuppressed }),
+    queryFn: () => listMemoryChunks(participantId, { includeSuppressed, includeInvalid: true }),
     enabled: Boolean(participantId),
   });
   const suppressMutation = useMutation({
@@ -39,6 +45,16 @@ export function MemoryChunksPage() {
       await queryClient.invalidateQueries({ queryKey: ["memory-chunks", participantId] });
     },
     onError: () => toast.error(t("memoryChunksPage.failed")),
+  });
+  const validityMutation = useMutation({
+    mutationFn: () => setMemoryChunkValidity(validityTarget!.chunk.id, validityTarget!.state, validityReason.trim()),
+    onSuccess: async () => {
+      toast.success(t("memoryChunksPage.validityDone"));
+      setValidityTarget(null);
+      setValidityReason("");
+      await queryClient.invalidateQueries({ queryKey: ["memory-chunks", participantId] });
+    },
+    onError: () => toast.error(t("memoryChunksPage.validityFailed")),
   });
 
   return (
@@ -67,12 +83,23 @@ export function MemoryChunksPage() {
                 <div className="flex flex-wrap gap-2">
                   <Badge tone="primary">{chunk.chunkKind === "clinician_note" ? t("memoryChunksPage.note") : t("memoryChunksPage.session", { index: chunk.sessionIndex })}</Badge>
                   <Badge tone="neutral">{chunk.elementKind}</Badge>
+                  <Badge tone="neutral">{t(`memoryChunksPage.author.${chunk.author ?? "participant"}`)}</Badge>
+                  <Badge tone="neutral">{t(`memoryChunksPage.layer.${chunk.layer ?? "raw"}`)}</Badge>
+                  {chunk.cognitiveLevel ? <Badge tone="neutral">{t("memoryChunksPage.level", { level: chunk.cognitiveLevel })}</Badge> : null}
+                  {chunk.sensitivityFlags?.length ? <Badge tone="warning">{t("memoryChunksPage.flagged")}</Badge> : null}
                   {chunk.suppressed && <Badge tone="warning">{t("memoryChunksPage.suppressed", { reason: chunk.suppressedReason ?? "" })}</Badge>}
+                  {chunk.validity?.state === "invalid" && <Badge tone="warning">{t("memoryChunksPage.invalid", { reason: chunk.validity.reason })}</Badge>}
+                  {chunk.validity?.state === "valid" && <Badge tone="neutral">{t("memoryChunksPage.revalidated", { reason: chunk.validity.reason })}</Badge>}
                 </div>
                 <div className="mt-2 whitespace-pre-line text-sm text-text-primary">{chunk.content}</div>
                 <div className="mt-2 text-xs text-text-secondary">{chunk.tags ? Object.values(chunk.tags).flat().join(", ") || "—" : t("memoryChunksPage.untagged")}</div>
               </div>
-              {!chunk.suppressed && <Button variant="secondary" onClick={() => setTarget(chunk)}>{t("memoryChunksPage.suppress")}</Button>}
+              <div className="flex shrink-0 flex-wrap gap-2">
+                {chunk.validity?.state === "invalid"
+                  ? <Button variant="secondary" onClick={() => setValidityTarget({ chunk, state: "valid" })}>{t("memoryChunksPage.revalidate")}</Button>
+                  : <Button variant="secondary" onClick={() => setValidityTarget({ chunk, state: "invalid" })}>{t("memoryChunksPage.invalidate")}</Button>}
+                {!chunk.suppressed && <Button variant="secondary" onClick={() => setTarget(chunk)}>{t("memoryChunksPage.suppress")}</Button>}
+              </div>
             </div>
           </Card>
         ))}
@@ -83,6 +110,22 @@ export function MemoryChunksPage() {
           <textarea className={textareaClass} placeholder={t("memoryChunksPage.reason")} value={reason} onChange={(event) => setReason(event.target.value)} />
           <div className="flex justify-end">
             <Button variant="danger" disabled={!reason.trim()} loading={suppressMutation.isPending} onClick={() => suppressMutation.mutate()}>{t("memoryChunksPage.confirm")}</Button>
+          </div>
+        </div>
+      </Modal>
+      <Modal
+        open={Boolean(validityTarget)}
+        onClose={() => setValidityTarget(null)}
+        title={t(validityTarget?.state === "valid" ? "memoryChunksPage.revalidateTitle" : "memoryChunksPage.invalidateTitle")}
+        description={t(validityTarget?.state === "valid" ? "memoryChunksPage.revalidateDescription" : "memoryChunksPage.invalidateDescription")}
+      >
+        <div className="space-y-3 p-5">
+          <div className="whitespace-pre-line rounded-panel border border-border p-3 text-sm text-text-secondary">{validityTarget?.chunk.content}</div>
+          <textarea className={textareaClass} placeholder={t("memoryChunksPage.reason")} value={validityReason} onChange={(event) => setValidityReason(event.target.value)} />
+          <div className="flex justify-end">
+            <Button variant={validityTarget?.state === "valid" ? "primary" : "danger"} disabled={!validityReason.trim()} loading={validityMutation.isPending} onClick={() => validityMutation.mutate()}>
+              {t(validityTarget?.state === "valid" ? "memoryChunksPage.revalidate" : "memoryChunksPage.invalidate")}
+            </Button>
           </div>
         </div>
       </Modal>

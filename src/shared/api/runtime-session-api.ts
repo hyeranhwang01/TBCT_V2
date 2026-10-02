@@ -262,7 +262,7 @@ export async function getRuntimeSession(sessionId: string): Promise<RuntimeSessi
   ]);
   const retrievedIds = new Set(memoryChunkRetrievals.flatMap((item) => item.selected.map((selected) => selected.chunkId)));
   const retrievedMemoryChunks = retrievedIds.size
-    ? (await listMemoryChunks(session.participantId, { includeSuppressed: true }).catch(() => [])).filter((chunk) => retrievedIds.has(chunk.id))
+    ? (await listMemoryChunks(session.participantId, { includeSuppressed: true, includeInvalid: true }).catch(() => [])).filter((chunk) => retrievedIds.has(chunk.id))
     : [];
   const sourceFidelity = getRuntimeReleaseSourceSnapshot(release);
   

@@ -27,6 +27,8 @@ describe("migrations on a real Postgres", () => {
     const { db, pool } = await createTestDatabase();
     await db.query("INSERT INTO runtime_sessions (id, participant_id, protocol_id, release_id, status, updated_at, created_at, data) VALUES ('RS-1','P-1','p','r','completed',now(),now(),'{}')");
     await db.query("INSERT INTO runtime_messages (id, runtime_session_id, role, created_at, data) VALUES ('M-1','RS-1','patient',now(),'{}')");
+    // Append-only (sql/043): emptied by TRUNCATE like the rest.
+    await db.query("INSERT INTO memory_chunk_validity_events (id, chunk_id, participant_id, state, reason) VALUES ('MCV-1','MCH-1','P-1','invalid','x')");
     const tables = await truncateAppTables(pool as never);
     expect(tables).not.toContain("schema_migrations");
     expect(Object.values(await rowCounts(pool as never)).every((count) => count === 0)).toBe(true);

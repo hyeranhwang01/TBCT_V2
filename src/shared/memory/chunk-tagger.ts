@@ -17,7 +17,7 @@ import { recordModelUsage } from "@/shared/assessment/model-observability";
 import { getParticipant } from "@/shared/data/repositories/participant-repository";
 import { listUntaggedMemoryChunks, setMemoryChunkTags } from "@/shared/data/repositories/memory-chunk-repository";
 import { memoryUseAllowed } from "@/shared/memory/memory-consent";
-import { MEMORY_TAGS_VERSION, describeTagList, sanitizeTags, tagSetJsonSchema } from "@/shared/memory/memory-tags";
+import { CHUNK_TAG_AXES, MEMORY_TAGS_VERSION, describeChunkTagList, sanitizeTags, tagSetJsonSchema } from "@/shared/memory/memory-tags";
 import type { MemoryChunk, MemoryChunkTags } from "@/types/memory-chunks";
 
 const DEFAULT_MODEL = "claude-sonnet-5";
@@ -25,18 +25,19 @@ const TOOL_NAME = "submit_chunk_tags";
 const BATCH_SIZE = 30;
 const CHUNK_TEXT_LIMIT = 600;
 
-/** Bump when the tagging instructions change; stored on every tagged chunk. */
+/** Bump when the tagging instructions change; stored on every tagged chunk.
+ * tags-v2/p1: the core-belief axis is gone from the list, the schema and the
+ * rules (memory-tags.ts). */
 export const TAG_PROMPT_VERSION = `${MEMORY_TAGS_VERSION}/p1`;
 
 const SYSTEM = `You label short pieces of what a participant said or wrote in earlier sessions of a cognitive-therapy program (Trial-Based Cognitive Therapy), so that a later session can find the relevant piece again. The pieces are in Korean or English.
 
 For each piece, choose the tags that describe what it is about, only from these lists:
-${describeTagList()}
+${describeChunkTagList()}
 
 Rules:
 - Tag what the piece is about, not what it might imply. Leave an axis empty when nothing in the words points to it.
 - persons: the people who appear in the situation. "self" only when the piece is about how they see themselves.
-- beliefs: only when the words themselves express a view of oneself as helpless, unlovable or worthless.
 - distortions: only when the thought in the piece clearly shows the pattern.
 - Tag every piece you are given, by its id.`;
 
@@ -50,7 +51,7 @@ export function setChunkTaggerForTests(tagger: Tagger | undefined) {
   taggerForTests = tagger;
 }
 
-const TAG_SET_SCHEMA = tagSetJsonSchema();
+const TAG_SET_SCHEMA = tagSetJsonSchema(CHUNK_TAG_AXES);
 const TOOL_INPUT_SCHEMA = {
   type: "object",
   additionalProperties: false,

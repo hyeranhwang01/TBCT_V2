@@ -132,7 +132,7 @@ export async function addClinicianNote(input: {
 export async function getParticipantLongitudinalDashboard(participantId: string) {
   const [participant, chunks, homework, goals] = await Promise.all([
     getParticipant(participantId),
-    listMemoryChunks(participantId, { includeSuppressed: true }),
+    listMemoryChunks(participantId, { includeSuppressed: true, includeInvalid: true }),
     listHomeworkTrackingRecords(participantId),
     listGoalTrackingRecords(participantId),
   ]);

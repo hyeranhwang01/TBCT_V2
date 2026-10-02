@@ -202,9 +202,14 @@ export function RuntimeInspectorView({ view }: { view: RuntimeSessionView }) {
                         <li key={selected.chunkId} className="text-sm text-text-primary">
                           <div className="whitespace-pre-line">{chunk?.content ?? selected.chunkId}</div>
                           <div className="mt-1 text-xs text-text-secondary">
-                            {chunk ? `S${chunk.sessionIndex} · ${chunk.elementKind} · ` : ""}
-                            {t("runtimeInspector.memory.score", { score: selected.score, affinity: selected.parts.affinity, tags: selected.parts.tags, text: selected.parts.text, recency: selected.parts.recency })}
+                            {chunk ? `S${chunk.sessionIndex} · ${chunk.elementKind} · ${t(`memoryChunksPage.author.${chunk.author ?? "participant"}`)} · ${t(`memoryChunksPage.layer.${chunk.layer ?? "raw"}`)} · ` : ""}
+                            {/* retrieval-v1 rows carry a step affinity instead of a fixed slot. */}
+                            {selected.parts.affinity !== undefined
+                              ? t("runtimeInspector.memory.scoreV1", { score: selected.score, affinity: selected.parts.affinity, tags: selected.parts.tags, text: selected.parts.text, recency: selected.parts.recency })
+                              : t("runtimeInspector.memory.score", { score: selected.score, slot: selected.parts.slot ?? 0, tags: selected.parts.tags, text: selected.parts.text, recency: selected.parts.recency })}
+                            {selected.surfacedThisSession ? ` · ${t("runtimeInspector.memory.surfaced")}` : ""}
                             {chunk?.suppressed ? ` · ${t("runtimeInspector.memory.suppressed")}` : ""}
+                            {chunk?.validity?.state === "invalid" ? ` · ${t("runtimeInspector.memory.invalid")}` : ""}
                           </div>
                         </li>
                       );
@@ -223,7 +228,7 @@ export function RuntimeInspectorView({ view }: { view: RuntimeSessionView }) {
           <div className="mt-4 space-y-2">
             {(sessionMemoryChunks ?? []).map((chunk) => (
               <div key={chunk.id} className="rounded-panel border border-border p-3">
-                <div className="text-xs font-semibold text-text-muted">{chunk.chunkKind} · {chunk.elementKind}{chunk.suppressed ? ` · ${t("runtimeInspector.memory.suppressed")}` : ""}</div>
+                <div className="text-xs font-semibold text-text-muted">{chunk.chunkKind} · {chunk.elementKind} · {t(`memoryChunksPage.author.${chunk.author ?? "participant"}`)} · {t(`memoryChunksPage.layer.${chunk.layer ?? "raw"}`)}{chunk.suppressed ? ` · ${t("runtimeInspector.memory.suppressed")}` : ""}{chunk.validity?.state === "invalid" ? ` · ${t("runtimeInspector.memory.invalid")}` : ""}</div>
                 <div className="mt-1 whitespace-pre-line text-sm text-text-primary">{chunk.content}</div>
                 <div className="mt-1 text-xs text-text-secondary">
                   {t("runtimeInspector.memoryUsage.tags")}: {chunk.tags ? Object.values(chunk.tags).flat().join(", ") || "—" : t("runtimeInspector.memoryUsage.untagged")}

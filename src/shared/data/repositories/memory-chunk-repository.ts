@@ -23,7 +23,9 @@ export async function saveMemoryChunks(chunks: MemoryChunk[]) {
   return callStore<number>({ op: "saveMemoryChunks", chunks });
 }
 
-export async function listMemoryChunks(participantId: string, options: { beforeSessionIndex?: number; includeSuppressed?: boolean; officialAttemptsOnly?: boolean } = {}) {
+/** By default without suppressed chunks and without those a clinician has
+ * marked invalid (sql/043). */
+export async function listMemoryChunks(participantId: string, options: { beforeSessionIndex?: number; includeSuppressed?: boolean; officialAttemptsOnly?: boolean; includeInvalid?: boolean } = {}) {
   return callStore<MemoryChunk[]>({ op: "listMemoryChunks", participantId, ...options });
 }
 
@@ -33,6 +35,12 @@ export async function listMemoryChunksBySession(runtimeSessionId: string) {
 
 export async function suppressMemoryChunk(chunkId: string, reason: string) {
   return callStore<MemoryChunk>({ op: "suppressMemoryChunk", chunkId, reason });
+}
+
+/** A clinician marks a chunk as no longer holding ("invalid") or as holding
+ * again ("valid"); a reason is required. */
+export async function setMemoryChunkValidity(chunkId: string, state: "invalid" | "valid", reason: string) {
+  return callStore<MemoryChunk>({ op: "setMemoryChunkValidity", chunkId, state, reason });
 }
 
 export async function listUntaggedMemoryChunks(participantId: string) {

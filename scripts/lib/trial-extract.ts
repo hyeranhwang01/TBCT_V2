@@ -42,7 +42,8 @@ export const EXTRACT_QUERIES: Record<string, string> = {
 };
 
 
-const PARTICIPANT_TABLES = ["participant_memory_chunks", "memory_chunk_retrievals", "runtime_events", "session_records"];
+// memory_chunk_validity_events (sql/043): keyed by participant, not session.
+const PARTICIPANT_TABLES = ["participant_memory_chunks", "memory_chunk_retrievals", "memory_chunk_validity_events", "runtime_events", "session_records"];
 
 export type ExpiredStudy = { id: string; code: string; retentionYears: number; lockedAt: string; participants: string[]; sessionTables: string[] };
 

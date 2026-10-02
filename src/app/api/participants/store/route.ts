@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     // Who made a consent decision is taken from the session, never from the
     // request body.
     if (op.op === "recordMemoryConsent") op.actor = { actorUserId: caller.userId, actorRole: caller.role ?? undefined };
-    if (op.op === "suppressMemoryChunk") op.actorUserId = caller.userId;
+    if (op.op === "suppressMemoryChunk" || op.op === "setMemoryChunkValidity") op.actorUserId = caller.userId;
     const result = await dispatchParticipantStoreOp(op);
     return NextResponse.json({ ok: true, result });
   } catch (error) {
@@ -98,6 +98,7 @@ const PATIENT_DENIED_MEMORY_PIPELINE_OPS = new Set<ParticipantStoreOp["op"]>([
   "listMemoryChunks",
   "listMemoryChunksBySession",
   "suppressMemoryChunk",
+  "setMemoryChunkValidity",
   "listUntaggedMemoryChunks",
   "setMemoryChunkTags",
   "saveMemoryChunkRetrieval",

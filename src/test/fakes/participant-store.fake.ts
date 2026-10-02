@@ -7,7 +7,7 @@ import type {
   RuntimeSessionSummary,
 } from "@/types/longitudinal-memory";
 import type { ParticipantStoreOp } from "@/shared/runtime/participant-store-ops";
-import type { MemoryChunk, MemoryChunkRetrieval } from "@/types/memory-chunks";
+import type { MemoryChunk, MemoryChunkRetrieval, MemoryChunkValidityEvent } from "@/types/memory-chunks";
 import { fakeIsSupersededAttempt } from "@/test/fakes/runtime-session-store.fake";
 
 // Minimal in-memory stand-in for src/shared/data/server/participant-store.ts, used
@@ -26,6 +26,13 @@ const homeworkRecords = new Map<string, HomeworkTrackingRecord>();
 const consentEvents: MemoryConsentEvent[] = [];
 const memoryChunks = new Map<string, MemoryChunk>();
 const chunkRetrievals: MemoryChunkRetrieval[] = [];
+const validityEvents: MemoryChunkValidityEvent[] = [];
+
+/** A chunk with its latest validity event, as the real store reads it (sql/043). */
+function withValidity(chunk: MemoryChunk): MemoryChunk {
+  const latest = validityEvents.filter((event) => event.chunkId === chunk.id).at(-1);
+  return latest ? { ...chunk, validity: { state: latest.state, reason: latest.reason, actor: latest.actor, createdAt: latest.createdAt } } : chunk;
+}
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value));
@@ -45,6 +52,7 @@ export function resetFakeParticipantStore() {
   consentEvents.length = 0;
   memoryChunks.clear();
   chunkRetrievals.length = 0;
+  validityEvents.length = 0;
 }
 
 export async function dispatchFakeParticipantStoreOp(op: ParticipantStoreOp): Promise<unknown> {
@@ -94,10 +102,12 @@ export async function dispatchFakeParticipantStoreOp(op: ParticipantStoreOp): Pr
       return [...memoryChunks.values()]
         .filter((chunk) => chunk.participantId === op.participantId && (op.beforeSessionIndex === undefined || chunk.sessionIndex < op.beforeSessionIndex) && (op.includeSuppressed || !chunk.suppressed))
         .filter((chunk) => !op.officialAttemptsOnly || chunk.chunkKind === "homework" || chunk.chunkKind === "clinician_note" || !fakeIsSupersededAttempt(chunk.runtimeSessionId))
+        .map(withValidity)
+        .filter((chunk) => op.includeInvalid || chunk.validity?.state !== "invalid")
         .sort((left, right) => left.sessionIndex - right.sessionIndex || left.sourceCreatedAt.localeCompare(right.sourceCreatedAt) || left.id.localeCompare(right.id))
         .map(clone);
     case "listMemoryChunksBySession":
-      return [...memoryChunks.values()].filter((chunk) => chunk.runtimeSessionId === op.runtimeSessionId).sort((left, right) => left.sourceCreatedAt.localeCompare(right.sourceCreatedAt) || left.id.localeCompare(right.id)).map(clone);
+      return [...memoryChunks.values()].filter((chunk) => chunk.runtimeSessionId === op.runtimeSessionId).map(withValidity).sort((left, right) => left.sourceCreatedAt.localeCompare(right.sourceCreatedAt) || left.id.localeCompare(right.id)).map(clone);
     case "saveMemoryChunkRetrieval":
       if (!chunkRetrievals.some((item) => item.id === op.retrieval.id)) chunkRetrievals.push(clone(op.retrieval));
       return op.retrieval;
@@ -118,6 +128,14 @@ export async function dispatchFakeParticipantStoreOp(op: ParticipantStoreOp): Pr
       const next = { ...chunk, suppressed: true, suppressedAt: new Date().toISOString(), suppressedBy: op.actorUserId, suppressedReason: op.reason.trim() };
       memoryChunks.set(op.chunkId, clone(next));
       return clone(next);
+    }
+    case "setMemoryChunkValidity": {
+      const chunk = memoryChunks.get(op.chunkId);
+      if (op.state !== "invalid" && op.state !== "valid") throw new Error("Validity must be 'invalid' or 'valid'");
+      if (!op.reason?.trim()) throw new Error("A reason is required to change a memory chunk's validity");
+      if (!chunk) throw new Error("Memory chunk not found");
+      validityEvents.push({ id: `MCV-${validityEvents.length + 1}`, chunkId: op.chunkId, participantId: chunk.participantId, state: op.state, reason: op.reason.trim(), actor: op.actorUserId, supersededBy: op.supersededBy, createdAt: new Date().toISOString() });
+      return clone(withValidity(chunk));
     }
     case "listMemories": return [...memories.values()].filter((memory) => memory.participantId === op.participantId).map(clone);
     case "getMemory": return memories.has(op.memoryId) ? clone(memories.get(op.memoryId)) : undefined;

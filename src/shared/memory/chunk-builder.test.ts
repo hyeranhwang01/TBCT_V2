@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_CHUNK_CHARS, buildHomeworkChunks, buildSessionChunks, defaultWorksheetChunks, episodeChunks, sessionIndexOf } from "@/shared/memory/chunk-builder";
+import { MAX_CHUNK_CHARS, MEMORY_INDEX_VERSION, buildHomeworkChunks, buildSessionChunks, clinicianNoteChunk, defaultWorksheetChunks, episodeChunks, sessionIndexOf } from "@/shared/memory/chunk-builder";
 import { worksheetChunkerFor } from "@/shared/memory/chunk-configs";
 import { COGNITIVE_DISTORTIONS } from "@/shared/protocol/cognitive-distortions";
 import type { RuntimeMessage } from "@/types/runtime-session";
@@ -154,5 +154,21 @@ describe("homework chunks", () => {
   it("keeps any other entry as one chunk of its text", () => {
     const chunks = buildHomeworkChunks({ record: record("tbct-s06"), entries: [entry("E3", "try", { schemaVersion: 1, situation: "마트에 갔다", result: "생각보다 괜찮았다" })], locale: "ko-KR" });
     expect(chunks.map((chunk) => chunk.content)).toEqual(["과제 — 마트에 갔다 / 생각보다 괜찮았다"]);
+  });
+});
+
+describe("provenance (sql/043)", () => {
+  it("marks who wrote each chunk and which layer it is, with no safety flag on anything kept, and the same cut", () => {
+    const session = buildSessionChunks({ participantId: "PT-1", runtimeSessionId: "RS-1", sessionDefinitionId: "tbct-s06", locale: "ko-KR", fields: { automaticThought: "나는 늘 실패해" }, messages: [ask("요즘 어떠세요?", "s06Check"), say("회사에서는 계속 실수만 하는 것 같아요")], completedAt: "2026-09-20T01:00:00.000Z" });
+    expect(session.map((chunk) => [chunk.chunkKind, chunk.author, chunk.layer])).toEqual([["worksheet", "participant", "record"], ["episode", "participant", "raw"]]);
+    const homework = buildHomeworkChunks({ record: { id: "HW", runtimeSessionId: "RS-1", sessionDefinitionId: "tbct-s01", participantId: "PT-1", status: "in_progress", createdAt: "x", updatedAt: "x", data: {} }, entries: [{ id: "E1", homeworkRecordId: "HW", entryType: "x", createdAt: "2026-09-23T00:00:00.000Z", data: { text: "마트에 갔다" } }], locale: "ko-KR" });
+    expect(homework[0]).toMatchObject({ author: "participant", layer: "record" });
+    const note = clinicianNoteChunk({ id: "M1", participantId: "PT-1", sourceSessionId: "RS-1", content: "직장 스트레스가 큼", createdAt: "2026-09-20T00:00:00.000Z" });
+    expect(note).toMatchObject({ author: "clinician", layer: "clinician_note", sessionIndex: 0 });
+    for (const chunk of [...session, ...homework, note!]) {
+      expect(chunk.sensitivityFlags).toEqual([]);
+      expect(chunk.cognitiveLevel).toBeUndefined();
+    }
+    expect(MEMORY_INDEX_VERSION).toBe("chunks-v1");
   });
 });

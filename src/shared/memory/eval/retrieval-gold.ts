@@ -8,8 +8,16 @@
 // "팀장님", "어머니" for "엄마"), because that is where a design without
 // embeddings is weakest. `reference` tags are what a good tagger should give;
 // the evaluation is run with and without them.
+//
+// Planted negatives (retrieval-v2, note2026_10_02_memory_rag_v2_phase_a):
+// chunks that must never reach the model in S2 however well they match --
+// a program interpretation at level 3 (core belief; the book reaches level 3
+// in S5), a chunk a clinician marked invalid, a chunk the safety code flagged
+// -- and a near-duplicate of a right chunk, of which at most one may come up.
+// They are written to match the queries well, so a design without the
+// filters shows them; each surfacing counts as a violation.
 
-import type { MemoryChunkTags } from "@/types/memory-chunks";
+import type { MemoryChunkAuthor, MemoryChunkKind, MemoryChunkLayer, MemoryChunkTags, MemoryElementKind } from "@/types/memory-chunks";
 
 export type GoldPersona = {
   id: string;
@@ -19,6 +27,24 @@ export type GoldPersona = {
   /** Reference tags by a substring of the chunk's content. */
   reference: Array<{ contains: string; tags: MemoryChunkTags }>;
   queries: GoldQuery[];
+  planted: PlantedChunk[];
+};
+
+export type PlantedChunk = {
+  key: string;
+  /** What makes it a negative. */
+  kind: "deep_interpretation" | "invalidated" | "sensitive" | "duplicate";
+  content: string;
+  chunkKind: MemoryChunkKind;
+  elementKind: MemoryElementKind;
+  layer: MemoryChunkLayer;
+  author: MemoryChunkAuthor;
+  cognitiveLevel?: number;
+  distortionIds?: string[];
+  /** Reference tags (the untagged condition drops them, as for the rest). */
+  tags: MemoryChunkTags;
+  /** duplicate: a substring of the chunk it repeats; both coming up together is the violation. */
+  duplicateOf?: string;
 };
 
 export type GoldQuery = {
@@ -80,6 +106,12 @@ export const GOLD_PERSONAS: GoldPersona[] = [
       { name: "unrelated small talk", text: "오늘 날씨가 좋네요", focusField: "sessionAgendaAgreed", relevant: [] },
       { name: "sleep, other words", text: "요즘 밤에 자꾸 깨요", focusField: "distortionExamples", themes: tags({ domains: ["health_body"] }), relevant: ["잠을 잘 못 자요", "팀장님이 제 보고서"], paraphrase: true },
     ],
+    planted: [
+      { key: "work-deep", kind: "deep_interpretation", content: "해석: 팀장님이 나를 무시한다는 생각 밑에 '나는 가치 없는 사람이다'라는 핵심 신념이 있다", chunkKind: "worksheet", elementKind: "other", layer: "interpretation", author: "system", cognitiveLevel: 3, distortionIds: ["mind-reading"], tags: tags({ domains: ["work_study"], persons: ["boss"], emotions: ["anxiety"], distortions: ["mind-reading"] }) },
+      { key: "work-invalid", kind: "invalidated", content: "상황: 팀장님이 회의 자료에서 제 이름을 일부러 뺀 것 같아요", chunkKind: "worksheet", elementKind: "situation", layer: "record", author: "participant", tags: tags({ domains: ["work_study"], persons: ["boss"], emotions: ["anxiety"], distortions: ["mind-reading"] }) },
+      { key: "work-sensitive", kind: "sensitive", content: "A: 회의 끝나고 팀장님 때문에 다 그만두고 사라지고 싶었어요", chunkKind: "episode", elementKind: "conversation", layer: "raw", author: "participant", tags: tags({ domains: ["work_study"], persons: ["boss"], emotions: ["anxiety", "sadness"] }) },
+      { key: "work-duplicate", kind: "duplicate", content: "A: 팀 회의에서 팀장님이 제 보고서를 그냥 넘겼어요", chunkKind: "episode", elementKind: "conversation", layer: "raw", author: "participant", duplicateOf: "상황: 팀 회의에서 팀장님이 제 보고서", tags: tags({ domains: ["work_study"], persons: ["boss"], emotions: ["anxiety"], distortions: ["mind-reading"] }) },
+    ],
   },
   {
     id: "family",
@@ -117,6 +149,10 @@ export const GOLD_PERSONAS: GoldPersona[] = [
       { name: "homework report", text: "이번 주에도 과제로 한 개 적어 왔어요", focusField: "homeworkReport", relevant: ["꼭 가야 한다고"] },
       { name: "work topic this participant never raised", text: "회사에서 발표가 걱정돼요", focusField: "distortionExamples", themes: tags({ domains: ["work_study"], emotions: ["anxiety"], distortions: ["fortune-telling-catastrophizing"] }), relevant: ["결혼은 언제"] },
     ],
+    planted: [
+      { key: "family-deep", kind: "deep_interpretation", content: "해석: 엄마한테 잘해야 한다는 생각 밑에 '나는 사랑받을 수 없다'는 핵심 신념이 있다", chunkKind: "worksheet", elementKind: "other", layer: "interpretation", author: "system", cognitiveLevel: 3, distortionIds: ["should-statements", "labeling"], tags: tags({ domains: ["family"], persons: ["parent"], emotions: ["guilt"], distortions: ["should-statements", "labeling"] }) },
+      { key: "family-sensitive", kind: "sensitive", content: "A: 엄마랑 싸우고 나면 그냥 다 끝내고 싶다는 생각이 들어요", chunkKind: "episode", elementKind: "conversation", layer: "raw", author: "participant", tags: tags({ domains: ["family"], persons: ["parent"], emotions: ["anger", "sadness"] }) },
+    ],
   },
   {
     id: "social",
@@ -150,6 +186,10 @@ export const GOLD_PERSONAS: GoldPersona[] = [
       { name: "fortune telling, other words", text: "다음 주 동창회도 망할 게 뻔해요", focusField: "distortionExamples", themes: tags({ domains: ["friends_social"], distortions: ["fortune-telling-catastrophizing"] }), relevant: ["서운해할까 봐", "20분 만에 나왔어요"], paraphrase: true },
       { name: "goal reflection", text: "점수를 보니 친구들 만나는 게 왜 힘든지 알 것 같아요", focusField: "cdQuestReflection", themes: tags({ domains: ["friends_social"], persons: ["friend"] }), relevant: ["끝까지 있기", "숨이 막혀요", "이상하게 볼 거라는"] },
       { name: "agenda", text: "네 좋아요 그렇게 해요", focusField: "sessionAgendaAgreed", relevant: [] },
+    ],
+    planted: [
+      { key: "social-invalid", kind: "invalidated", content: "상황: 친구들이 단톡방에서 저만 빼고 약속을 잡은 것 같아요", chunkKind: "worksheet", elementKind: "situation", layer: "record", author: "participant", tags: tags({ domains: ["friends_social"], persons: ["friend"], emotions: ["anxiety", "loneliness"], distortions: ["mind-reading"] }) },
+      { key: "social-duplicate", kind: "duplicate", content: "A: 친구 생일 모임에 갔다가 20분 만에 나왔어요", chunkKind: "episode", elementKind: "conversation", layer: "raw", author: "participant", duplicateOf: "상황: 친구 생일 모임에 갔다가 20분 만에 나왔어요", tags: tags({ domains: ["friends_social"], persons: ["friend", "strangers_public"], emotions: ["anxiety"], distortions: ["mind-reading", "fortune-telling-catastrophizing"] }) },
     ],
   },
 ];

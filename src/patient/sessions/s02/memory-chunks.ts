@@ -6,7 +6,7 @@
 
 import { COGNITIVE_DISTORTIONS } from "@/shared/protocol/cognitive-distortions";
 import { clean, distortionIdsFromNames, distortionName, isKoreanLocale, type ChunkDraft, type WorksheetChunker } from "@/shared/memory/chunk-builder";
-import { OPENING_STEP, type RetrievalAffinity } from "@/shared/memory/chunk-scorer";
+import { OPENING_STEP, type RetrievalSlots } from "@/shared/memory/chunk-scorer";
 
 function at(list: unknown, index: number): unknown {
   return Array.isArray(list) ? list[index] : undefined;
@@ -59,29 +59,22 @@ export const s02MemoryChunks: WorksheetChunker = (fields, locale) => {
 };
 
 /**
- * Which earlier chunks matter at each S02 step (chunk-scorer.ts), keyed by the
- * field the conversation is on (s02/prompt-fields.ts). At the opening the
- * participant's own S01 moment and last week's homework are what the bridge
- * can pick up; in the fifteen-pattern walkthrough their own S01 moment,
- * homework rows and conversation are where an example of theirs may already
- * be. Problems and goal are background everywhere, so they only come up when
- * what the participant says or the themes point to them.
+ * The S02 steps that are about something specific from before
+ * (chunk-scorer.ts, retrieval-v2), keyed by the field the conversation is on
+ * (s02/prompt-fields.ts). The session opens by asking about last week's
+ * practice and then hears the homework report: last week's homework is what
+ * those two moments are about, so it is offered whatever was said. The
+ * opening also gets the participant's own S01 moment (the level-1 diagram),
+ * because the book's Session 2 opens by going back to that diagram ("Did that
+ * diagram I showed you…", de Oliveira 2015, PDF p.52 / pr.36). Every
+ * other step -- the fifteen-pattern walkthrough included -- gets only what
+ * the participant's words or the current themes point to. The basic bridge
+ * (previousS01*, session-continuity.ts) carries the S01 problems and goal
+ * to every S02 call regardless.
+ * Replaces the v1 step-affinity table (kept in eval/scorer-v1.ts for
+ * comparison), note2026_10_02_memory_rag_v2_phase_a.
  */
-export const s02RetrievalAffinity: RetrievalAffinity = {
-  [OPENING_STEP]: { own_case: 0.6, homework: 0.6 },
-  // A counsellor's note is meant to carry across sessions: at every step it
-  // comes up when what is being said matches it, never on its own.
-  "*": { problem: 0.25, goal: 0.25, clinician_note: 0.35 },
-  homeworkReport: { homework: 1, homework_report: 1 },
-  // Only their own S01 moment qualifies here on its own; homework rows,
-  // conversation and the rest need what they are saying, or the pattern
-  // being discussed (themes), to point to them -- otherwise every row of
-  // every pattern would crowd in.
-  distortionExamples: { own_case: 1, homework: 0.35, conversation: 0.3, cycle: 0.3, problem: 0.3, distortion_example: 0.3, alternative_thought: 0.3 },
-  cdQuestFrequency: { own_case: 0.4, homework: 0.4 },
-  cdQuestIntensity: { own_case: 0.4, homework: 0.4 },
-  cdQuestStatedScores: { own_case: 0.4, homework: 0.4 },
-  cdQuestReflection: { goal: 0.6, problem: 0.6 },
-  cdQuestPriorityTypes: { problem: 1, goal: 1, own_case: 0.6 },
-  homeworkCommitment: { homework: 0.5 },
+export const s02RetrievalSlots: RetrievalSlots = {
+  [OPENING_STEP]: ["homework", "homework_report", "own_case"],
+  homeworkReport: ["homework", "homework_report"],
 };

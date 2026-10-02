@@ -49,7 +49,8 @@ export async function buildSessionSnapshot(runtimeSessionId: string, context: { 
 
   const retrievals = await settle(listMemoryChunkRetrievals(runtimeSessionId), []);
   const chunkIds = new Set(retrievals.flatMap((retrieval) => retrieval.selected.map((item) => item.chunkId)));
-  const chunks = chunkIds.size ? (await settle(listMemoryChunks(session.participantId, { includeSuppressed: true }), [])).filter((chunk) => chunkIds.has(chunk.id)) : [];
+  // Suppressed and invalidated chunks too: what matters is what was shown.
+  const chunks = chunkIds.size ? (await settle(listMemoryChunks(session.participantId, { includeSuppressed: true, includeInvalid: true }), [])).filter((chunk) => chunkIds.has(chunk.id)) : [];
   const chunkById = new Map(chunks.map((chunk) => [chunk.id, chunk]));
   const memory = retrievals.map((retrieval) => ({
     messageId: retrieval.messageId ?? null,
@@ -58,7 +59,12 @@ export async function buildSessionSnapshot(runtimeSessionId: string, context: { 
     indexVersion: retrieval.indexVersion,
     shown: retrieval.selected.map((item) => {
       const chunk = chunkById.get(item.chunkId);
-      return { chunkId: item.chunkId, score: item.score, parts: item.parts, kind: chunk?.chunkKind, elementKind: chunk?.elementKind, fromSession: chunk?.sessionIndex, content: chunk?.content };
+      // Provenance (sql/043) and the chunk's validity as the session ends.
+      return {
+        chunkId: item.chunkId, score: item.score, parts: item.parts, surfacedThisSession: item.surfacedThisSession ?? false,
+        kind: chunk?.chunkKind, elementKind: chunk?.elementKind, author: chunk?.author, layer: chunk?.layer, cognitiveLevel: chunk?.cognitiveLevel ?? null,
+        validity: chunk ? (chunk.validity?.state ?? "valid") : undefined, fromSession: chunk?.sessionIndex, content: chunk?.content,
+      };
     }),
   }));
 

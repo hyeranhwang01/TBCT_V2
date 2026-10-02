@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TAG_PROMPT_VERSION, setChunkTaggerForTests, tagParticipantChunks } from "@/shared/memory/chunk-tagger";
-import { TAG_AXES, sanitizeTags } from "@/shared/memory/memory-tags";
+import { CHUNK_TAG_AXES, TAG_AXES, sanitizeTags, tagSetJsonSchema } from "@/shared/memory/memory-tags";
 import { getOrCreateParticipantForUser, recordParticipantMemoryConsent } from "@/shared/api/participant-api";
 import { listMemoryChunks, saveMemoryChunks } from "@/shared/data/repositories/memory-chunk-repository";
 import type { MemoryChunk } from "@/types/memory-chunks";
 
 function chunk(participantId: string, id: string, content: string, distortionIds: string[] = []): MemoryChunk {
-  return { id, participantId, runtimeSessionId: "RS-1", sessionDefinitionId: "tbct-s01", sessionIndex: 1, chunkKind: "worksheet", elementKind: "own_case", fieldNames: [], sourceMessageIds: [], content, distortionIds, sourceCreatedAt: "2026-09-20T00:00:00.000Z", indexVersion: "chunks-v1", tags: null, suppressed: false, createdAt: "2026-09-20T00:00:00.000Z" };
+  return { id, participantId, runtimeSessionId: "RS-1", sessionDefinitionId: "tbct-s01", sessionIndex: 1, chunkKind: "worksheet", elementKind: "own_case", fieldNames: [], sourceMessageIds: [], content, distortionIds, sourceCreatedAt: "2026-09-20T00:00:00.000Z", indexVersion: "chunks-v1", author: "participant", layer: "record", sensitivityFlags: [], tags: null, suppressed: false, createdAt: "2026-09-20T00:00:00.000Z" };
 }
 
 async function participantWith(decision?: "granted" | "declined") {
@@ -81,5 +81,14 @@ describe("tagging a participant's chunks", () => {
     const items = (body.tools as Array<{ input_schema: { properties: { chunks: { items: { properties: Record<string, { items?: { enum?: string[] } }> } } } } }>)[0].input_schema.properties.chunks.items.properties;
     expect(items.persons.items?.enum).toEqual(TAG_AXES.persons);
     expect(items.distortions.items?.enum).toEqual(TAG_AXES.distortions);
+    // tags-v2: no core-belief categories in what the tagger may choose.
+    expect(items.beliefs).toBeUndefined();
+    expect(JSON.stringify(body.system)).not.toMatch(/helpless|unlovable|worthless|beliefs/);
+    expect(TAG_PROMPT_VERSION).toBe("tags-v2/p1");
+  });
+
+  it("leaves the turn tool's currentThemes schema as it was, beliefs included", () => {
+    expect(tagSetJsonSchema().required).toEqual(["domains", "persons", "emotions", "beliefs", "distortions"]);
+    expect(tagSetJsonSchema(CHUNK_TAG_AXES).required).toEqual(["domains", "persons", "emotions", "distortions"]);
   });
 });

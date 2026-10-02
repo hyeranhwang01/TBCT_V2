@@ -105,7 +105,7 @@ S01 and S02 do not use the node engine below. One system prompt per session (`sr
 
 ### 3c. Cross-session memory (2026-09-27)
 
-Consent (`src/shared/memory/memory-consent.ts`, popup in PatientShell) → chunks at completion (`memory-indexer.ts` → `chunk-builder.ts`, per-session cut in `s0N/memory-chunks.ts`, table sql/027) → tags (`chunk-tagger.ts`, closed list `memory-tags.ts`) → per-call retrieval in `prompt-session-api.ts` (`memory-retrieval.ts`, `chunk-scorer.ts`, log sql/029). Clinician side: `/runtime/memory-review` (`memory-chunks-page.tsx`), inspector cards. Evaluation: `src/shared/memory/eval/`, `scripts/eval-memory-retrieval.ts`. Details: [TBCT_SESSIONS_1_3.md](TBCT_SESSIONS_1_3.md).
+Consent (`src/shared/memory/memory-consent.ts`, popup in PatientShell) → chunks at completion (`memory-indexer.ts` → `chunk-builder.ts`, per-session cut in `s0N/memory-chunks.ts`, table sql/027) → tags (`chunk-tagger.ts`, closed list `memory-tags.ts`) → per-call retrieval in `prompt-session-api.ts` (`memory-retrieval.ts`, `chunk-scorer.ts` retrieval-v2 with `session-levels.ts`, log sql/029). Provenance and validity events: sql/043-044. Clinician side: `/runtime/memory-review` (`memory-chunks-page.tsx`: suppress, mark invalid/valid), inspector cards. Evaluation: `src/shared/memory/eval/` (v1 baseline in `scorer-v1.ts`), `scripts/eval-memory-retrieval.ts`. Details: [TBCT_SESSIONS_1_3.md](TBCT_SESSIONS_1_3.md).
 
 ### 3d. RCT backend (2026-09-28)
 
