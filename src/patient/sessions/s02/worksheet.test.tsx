@@ -236,3 +236,45 @@ describe("S02 worksheet", () => {
     expect(signalValue("내 예시")).toBe("2");
   });
 });
+
+// Tidied examples shown in place of the recorded words, which stay the value
+// (.claude/TASK_SCOPE.json note2026_10_05_worksheet_display_version).
+describe("S02 worksheet (display text)", () => {
+  const RAW = ["음 시험 망치면 인생 끝이라고 그냥 생각했는데 그런 것 같아요", NO_EXAMPLE_MARKER];
+  const SHOWN = ["시험 망치면 인생 끝이라고 생각했다", NO_EXAMPLE_MARKER];
+
+  function renderTidied(displayItems: string[], onEdit: (key: string, value: unknown) => void = () => {}) {
+    const view = viewWith({ distortionExamples: RAW });
+    const fields = view.fields.map((item) => (item.binding.canonicalFieldKey === "distortionExamples" && item.value ? { ...item, value: { ...item.value, displayItems } } : item));
+    return render(<S02Worksheet view={{ ...view, fields }} activeCanonicalFieldKey="distortionExamples" onConfirm={() => {}} onEdit={onEdit} busy={false} locale="ko-KR" readOnly allowEdit />);
+  }
+
+  it("shows the tidied example and counts from the recorded list", () => {
+    renderTidied(SHOWN);
+    const row = screen.getByTestId("s02-distortion-row-1");
+    expect(within(row).getByText(SHOWN[0])).toBeInTheDocument();
+    expect(within(row).queryByText(RAW[0])).toBeNull();
+    expect(signalValue("내 예시")).toBe("1");
+  });
+
+  it("shows the recorded words when there is no display list that matches", () => {
+    renderTidied([SHOWN[0]]);
+    expect(within(screen.getByTestId("s02-distortion-row-1")).getByText(RAW[0])).toBeInTheDocument();
+  });
+
+  it("edits from the shown text, saves the participant's words in place of the recorded ones, and saves nothing when unchanged", () => {
+    const onEdit = vi.fn();
+    renderTidied(SHOWN, onEdit);
+    const row = screen.getByTestId("s02-distortion-row-1");
+    fireEvent.click(within(row).getByText(SHOWN[0]));
+    const box = within(row).getByRole("textbox") as HTMLTextAreaElement;
+    expect(box.value).toBe(SHOWN[0]);
+    fireEvent.click(within(row).getByRole("button", { name: "저장" }));
+    expect(onEdit).not.toHaveBeenCalled();
+
+    fireEvent.click(within(row).getByText(SHOWN[0]));
+    fireEvent.change(within(row).getByRole("textbox"), { target: { value: "시험을 망치면 끝장이라고 생각했다" } });
+    fireEvent.click(within(row).getByRole("button", { name: "저장" }));
+    expect(onEdit).toHaveBeenCalledWith("distortionExamples", ["시험을 망치면 끝장이라고 생각했다", NO_EXAMPLE_MARKER]);
+  });
+});

@@ -6,6 +6,7 @@ import { ScoreChip, SessionSignals } from "@/patient/components/worksheet-render
 import { COGNITIVE_DISTORTIONS } from "@/shared/protocol/cognitive-distortions";
 import { NO_EXAMPLE_MARKER, cdQuestScore, type CdQuestGrade } from "@/patient/sessions/s02/cdquest-score";
 import { GradeButtons } from "@/patient/sessions/s02/cdquest-form";
+import { shownItemsOf } from "@/shared/worksheet/field-display";
 import type { WorksheetFieldView, WorksheetView } from "@/types/worksheet";
 
 // Session 2's worksheet: the Cognitive Distortions List (book appendix Table
@@ -153,6 +154,10 @@ export function S02Worksheet({
   const scoreField = view.fields.find((item) => item.binding.canonicalFieldKey === "cdQuestScores");
   const totalField = view.fields.find((item) => item.binding.canonicalFieldKey === "cdQuestTotal");
   const rows = rowsOf(field);
+  // What each row shows: the tidied example where there is one, the recorded
+  // words otherwise (note2026_10_05_worksheet_display_version). `rows` stays
+  // the recorded list -- counts and saves are made from it.
+  const shownRows = shownItemsOf(field?.value);
   const scores = numbersOf(scoreField);
   // The two halves the score was built from.
   const frequencies = numbersOf(view.fields.find((item) => item.binding.canonicalFieldKey === "cdQuestFrequency"));
@@ -228,6 +233,7 @@ export function S02Worksheet({
               name={korean ? distortion.nameKo : distortion.nameEn[0]}
               description={korean ? distortion.descriptionKo : distortion.descriptionEn}
               example={rows[index]}
+              shown={shownRows[index]}
               score={scores[index] ?? undefined}
               frequency={frequencies[index] ?? null}
               intensity={intensities[index] ?? null}
@@ -250,6 +256,7 @@ function DistortionRow({
   name,
   description,
   example,
+  shown,
   score,
   frequency,
   intensity,
@@ -264,6 +271,8 @@ function DistortionRow({
   name: string;
   description: string;
   example?: string;
+  /** The text the row shows for `example` (tidied, or the same words). */
+  shown?: string;
   score?: number;
   frequency: number | null;
   intensity: number | null;
@@ -278,8 +287,9 @@ function DistortionRow({
   const [scoring, setScoring] = useState(false);
   const [draftFrequency, setDraftFrequency] = useState<CdQuestGrade | null>(null);
   const [draftIntensity, setDraftIntensity] = useState<CdQuestGrade | null>(null);
-  const [draft, setDraft] = useState(isFilled(example) ? (example as string) : "");
   const filled = isFilled(example);
+  const text = filled ? (shown || (example as string)) : "";
+  const [draft, setDraft] = useState(text);
   const lookedAt = example !== undefined;
 
   return (
@@ -370,7 +380,9 @@ function DistortionRow({
                 size="sm"
                 disabled={busy}
                 onClick={() => {
-                  onSave(draft);
+                  // Saving the shown text unchanged would put the tidied
+                  // text in place of the recorded words.
+                  if (draft.trim() !== text.trim()) onSave(draft);
                   setEditing(false);
                 }}
               >
@@ -386,12 +398,12 @@ function DistortionRow({
             type="button"
             disabled={!editable || busy}
             onClick={() => {
-              setDraft(filled ? (example as string) : "");
+              setDraft(text);
               setEditing(true);
             }}
             className={`mt-0.5 w-full rounded-panel px-2 py-1 text-left text-sm ${filled ? "text-text-primary" : "text-text-muted"} ${editable ? "hover:bg-surface-hover" : "cursor-default"}`}
           >
-            {filled ? example : lookedAt ? (korean ? "이 유형에는 예시 없음" : "no example for this one") : "…"}
+            {filled ? text : lookedAt ? (korean ? "이 유형에는 예시 없음" : "no example for this one") : "…"}
           </button>
         )}
       </div>

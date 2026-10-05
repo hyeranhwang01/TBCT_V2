@@ -6,6 +6,7 @@ import { WorksheetCell } from "@/patient/components/worksheet-renderers/shared";
 import { DistortionTable } from "@/patient/sessions/s01/distortion-table";
 import { CcdLevel1Diagram, EditableListItem, EditableText, Placeholder, S01Box, S01EditContext, fieldText, scrollWithinPanel } from "@/patient/sessions/s01/worksheet-diagram";
 import { S01_LABELS, s01Locale } from "@/patient/sessions/s01/worksheet-labels";
+import { shownItemsOf } from "@/shared/worksheet/field-display";
 import type { WorksheetFieldView, WorksheetView } from "@/types/worksheet";
 
 // Session 1 worksheets, rebuilt to match the two paper worksheets filled
@@ -45,9 +46,11 @@ function isFilled(field?: WorksheetFieldView): boolean {
   return value !== undefined && value !== null && value !== "";
 }
 
+/** A list as shown -- tidied items where there are some (shownItemsOf). Kept
+ * index-aligned with the recorded list: EditableListItem edits by index. */
 function listValue(field?: WorksheetFieldView): string[] {
   const value = field?.value?.value;
-  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+  if (Array.isArray(value)) return shownItemsOf(field?.value).filter(Boolean);
   const text = fieldText(field);
   return text ? [text] : [];
 }

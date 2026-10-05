@@ -152,6 +152,8 @@ async function upsertFieldValue(instanceId: string, fieldDefinitionId: string, p
     value: "value" in patch ? patch.value : current?.value,
     displayValue: patch.displayValue ?? current?.displayValue,
     participantVerbatim: patch.participantVerbatim ?? current?.participantVerbatim,
+    // note2026_10_05_worksheet_display_version: [] clears it (JSON-safe, unlike undefined).
+    displayItems: patch.displayItems ?? current?.displayItems,
   };
   await pool.query(
     `INSERT INTO worksheet_field_values (id, instance_id, field_definition_id, status, provenance, confidence, source_turn_id, confirmed_at, updated_at, data)

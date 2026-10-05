@@ -93,6 +93,8 @@ export async function dispatchFakeWorksheetStoreOp(op: WorksheetStoreOp): Promis
         value: "value" in op.patch ? op.patch.value : current?.value,
         displayValue: op.patch.displayValue ?? current?.displayValue,
         participantVerbatim: op.patch.participantVerbatim ?? current?.participantVerbatim,
+        // note2026_10_05_worksheet_display_version: [] clears it, as in worksheet-store.ts.
+        displayItems: op.patch.displayItems ?? current?.displayItems,
       };
       values.set(op.fieldDefinitionId, next);
       fieldValuesByInstance.set(op.instanceId, values);

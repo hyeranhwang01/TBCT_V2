@@ -1,5 +1,6 @@
 import { runtimeFetch } from "@/shared/runtime/resolve-store-url";
 import { normalizeWorksheetEditValue } from "@/shared/runtime/field-correction";
+import { carryListDisplay } from "@/shared/worksheet/field-display";
 import type { WorksheetFieldValueRecord, WorksheetView } from "@/types/worksheet";
 
 // Saving a worksheet edit (.claude/TASK_SCOPE.json
@@ -31,7 +32,10 @@ export function withOptimisticWorksheetEdit(view: WorksheetView, worksheetFieldK
   if ("issue" in normalized) return view;
   // Same stored shape as editWorksheetField: an emptied box reads as "".
   const value = normalized.value ?? "";
-  const displayValue = Array.isArray(value) ? value.join(", ") : String(value);
-  const nextValue = { ...target.value, value, displayValue, status: "participant_edited" as const };
+  // The edit replaces the tidy text too (note2026_10_05_worksheet_display_version),
+  // as editWorksheetField does: a list keeps it for the items not edited.
+  const carried = target.value.displayItems ? carryListDisplay(target.value.value, value, target.value.displayItems) : undefined;
+  const displayValue = carried ? carried.join(", ") : Array.isArray(value) ? value.join(", ") : String(value);
+  const nextValue = { ...target.value, value, displayValue, ...(target.value.displayItems ? { displayItems: carried ?? [] } : {}), status: "participant_edited" as const };
   return { ...view, fields: view.fields.map((field) => (field === target ? { ...field, value: nextValue } : field)) };
 }

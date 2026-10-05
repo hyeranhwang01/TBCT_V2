@@ -39,6 +39,8 @@ import {
 } from "@/shared/data/repositories/worksheet-repository";
 import { applyWorksheetEdit, confirmedSummariesAfterWorksheetEdit } from "@/shared/runtime/field-correction";
 import { realignListRatingsAfterEdit, refreshListRatingPointers } from "@/shared/runtime/runtime-context";
+import { PROMPT_DISPLAY_FIELD, promptFieldDisplay } from "@/shared/runtime/prompt-driven-sessions";
+import { carryListDisplay, shownListItems } from "@/shared/worksheet/field-display";
 import type { ConfirmedSummaryRecord } from "@/types/runtime-session";
 import type { CohortProgressSummaryRow, ProgressSeries, SessionProgressCard, WorksheetFieldDefinitionRecord, WorksheetFieldProvenance, WorksheetFieldStatus, WorksheetFieldValueRecord, WorksheetHistoryRow, WorksheetHistoryView, WorksheetView } from "@/types/worksheet";
 
@@ -93,6 +95,13 @@ export async function projectRuntimeFieldsToWorksheet(input: {
    * confirmed, with their original answer as participantVerbatim. Passed on
    * every projection so a later turn never knocks it back to a draft. */
   confirmedSummaries?: Record<string, ConfirmedSummaryRecord>;
+  /** Prompt-driven sessions (note2026_10_05_worksheet_display_version): the
+   * tidied text the worksheet shows, by field name (runtimeContext.fields
+   * .promptFieldDisplay). `value` stays the recorded words; a field with
+   * display text gets it as displayValue (displayItems for a list) and its
+   * recorded words as participantVerbatim. Without this map nothing changes
+   * for any session. */
+  display?: Record<string, string | string[]>;
 }): Promise<void> {
   if (!hasWorksheetBindings(input.sessionDefinitionId)) return;
   const { instance, fieldDefinitions } = await ensureTemplateAndInstance(input.runtimeSessionId, input.sessionDefinitionId);
@@ -128,14 +137,19 @@ export async function projectRuntimeFieldsToWorksheet(input: {
     const status: WorksheetFieldStatus = unchanged ? (existing?.status ?? "draft_extracted") : "draft_extracted";
 
     if (definition.valueType === "text_list" && Array.isArray(rawValue)) {
+      // displayItems is written only when a display map was passed, and then
+      // always ([] = none), so a list that lost its tidy text loses it here too.
+      const shown = input.display ? shownListItems(rawValue, input.display[definition.canonicalFieldKey]) : undefined;
+      const tidy = shown?.some((text, index) => text !== String(rawValue[index] ?? "")) ? shown : undefined;
       const fieldValue = await upsertWorksheetFieldValue(instance.id, definition.id, {
-        status, provenance, sourceTurnId: input.sourceTurnId, value: rawValue, displayValue: displayValueFor(rawValue),
+        status, provenance, sourceTurnId: input.sourceTurnId, value: rawValue, displayValue: tidy ? tidy.join(", ") : displayValueFor(rawValue), ...(input.display ? { displayItems: tidy ?? [] } : {}),
       });
       await replaceWorksheetCollectionItems(fieldValue.id, rawValue.map((item, index) => {
         const confirmed = input.confirmedSummaries?.[`${definition.canonicalFieldKey}#${index}`];
+        const itemTidy = tidy && tidy[index] !== String(item ?? "") ? tidy[index] : undefined;
         return confirmed && confirmed.summary === item
           ? { value: item, displayValue: String(item), status: "participant_confirmed" as WorksheetFieldStatus, provenance: "participant_confirmed_summary" as WorksheetFieldProvenance, sourceTurnId: input.sourceTurnId, participantVerbatim: confirmed.original, confirmedAt: confirmed.confirmedAt }
-          : { value: item, displayValue: String(item), status, provenance, sourceTurnId: input.sourceTurnId };
+          : { value: item, displayValue: itemTidy ?? String(item), status, provenance, sourceTurnId: input.sourceTurnId, ...(itemTidy ? { participantVerbatim: String(item) } : {}) };
       }));
       await appendWorksheetFieldRevision({ fieldValueId: fieldValue.id, status, provenance, sourceTurnId: input.sourceTurnId, snapshot: rawValue });
       continue;
@@ -150,8 +164,12 @@ export async function projectRuntimeFieldsToWorksheet(input: {
       continue;
     }
 
+    // Tidy text for a recorded text value (note2026_10_05_worksheet_display_version):
+    // shown in place of the words, which stay as value and participantVerbatim.
+    const tidy = input.display?.[definition.canonicalFieldKey];
+    const shownText = typeof tidy === "string" && typeof rawValue === "string" && tidy.trim() && tidy !== rawValue ? tidy : undefined;
     const fieldValue = await upsertWorksheetFieldValue(instance.id, definition.id, {
-      status, provenance, sourceTurnId: input.sourceTurnId, value: rawValue, displayValue: displayValueFor(rawValue),
+      status, provenance, sourceTurnId: input.sourceTurnId, value: rawValue, displayValue: shownText ?? displayValueFor(rawValue), ...(shownText ? { participantVerbatim: rawValue as string } : {}),
     });
     if (!unchanged) await appendWorksheetFieldRevision({ fieldValueId: fieldValue.id, status, provenance, sourceTurnId: input.sourceTurnId, snapshot: rawValue });
   }
@@ -459,6 +477,18 @@ export async function editWorksheetField(runtimeSessionId: string, sessionDefini
   const edit = applyWorksheetEdit(previousFields, key, binding.valueType, nextValue);
   if (!edit.ok) throw new WorksheetEditError(edit.issue);
   const fields = edit.fields;
+  // The edit is the participant's own words: it replaces the recorded value,
+  // and the tidy text of the old words must not show over it
+  // (note2026_10_05_worksheet_display_version). A list keeps the tidy text of
+  // the items the edit did not touch.
+  const hadDisplay = PROMPT_DISPLAY_FIELD in previousFields;
+  const display = promptFieldDisplay(previousFields);
+  const carried = carryListDisplay(edit.before, edit.after, display[key]);
+  if (key in display) {
+    if (carried) display[key] = carried;
+    else delete display[key];
+    fields[PROMPT_DISPLAY_FIELD] = display;
+  }
   realignListRatingsAfterEdit(fields, key, edit.before, edit.after);
   refreshListRatingPointers(fields);
 
@@ -480,12 +510,14 @@ export async function editWorksheetField(runtimeSessionId: string, sessionDefini
   // empty (an undefined value would be dropped from the patch and leave the
   // old one).
   const value = edit.after ?? "";
+  const shownItems = Array.isArray(value) && carried ? carried : undefined;
   const fieldValue = await upsertWorksheetFieldValue(instance.id, definition.id, {
-    status: "participant_edited", provenance: "participant_verbatim", value, displayValue: displayValueFor(value),
+    status: "participant_edited", provenance: "participant_verbatim", value, displayValue: shownItems ? shownItems.join(", ") : displayValueFor(value),
+    ...(hadDisplay && Array.isArray(value) ? { displayItems: shownItems ?? [] } : {}),
   });
   await Promise.all([
     Array.isArray(value)
-      ? replaceWorksheetCollectionItems(fieldValue.id, value.map((item) => ({ value: item, displayValue: String(item), status: "participant_edited" as WorksheetFieldStatus, provenance: "participant_verbatim" as WorksheetFieldProvenance })))
+      ? replaceWorksheetCollectionItems(fieldValue.id, value.map((item, index) => ({ value: item, displayValue: shownItems?.[index] ?? String(item), status: "participant_edited" as WorksheetFieldStatus, provenance: "participant_verbatim" as WorksheetFieldProvenance })))
       : undefined,
     appendWorksheetFieldRevision({ fieldValueId: fieldValue.id, status: "participant_edited", provenance: "participant_verbatim", snapshot: value }),
     appendWorksheetEvent(instance.id, "field_edited", { worksheetFieldKey, before: edit.before ?? null, after: edit.after ?? null }),

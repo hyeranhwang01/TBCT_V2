@@ -41,8 +41,9 @@ import { indexParticipantHomework, tagInBackground } from "@/shared/memory/memor
 import { authorshipViolations, bridgeTexts, retrievalProgramLines, retrieveForTurn, type TurnRetrieval } from "@/shared/memory/memory-retrieval";
 import { saveMemoryChunkRetrieval } from "@/shared/data/repositories/memory-chunk-repository";
 import { sanitizeTags } from "@/shared/memory/memory-tags";
+import { tidyWorksheetValues, type TidyItem } from "@/shared/worksheet/worksheet-tidy";
 import { generatePromptSessionTurn, type PromptHistoryMessage, type PromptSessionResult, type PromptSessionTurn } from "@/shared/dialogue-agent/prompt-session-agent";
-import { PROMPT_FOCUS_FIELD, PROMPT_INPUT_HINT, PROMPT_THEMES_FIELD, checkFieldUpdates, derivePromptSessionFields, promptSessionFieldValues, type PromptInputHint } from "@/shared/runtime/prompt-driven-sessions";
+import { PROMPT_DISPLAY_FIELD, PROMPT_FOCUS_FIELD, PROMPT_INPUT_HINT, PROMPT_THEMES_FIELD, checkFieldDisplay, checkFieldUpdates, nextFieldDisplay, promptFieldDisplay, promptSessionFieldSet, derivePromptSessionFields, promptSessionFieldValues, type PromptInputHint } from "@/shared/runtime/prompt-driven-sessions";
 import type { ClinicalStageNode, PromptItem } from "@/shared/protocol/source-fidelity-types";
 import type { RuntimePromptItem } from "@/types/protocol-runtime";
 import type { PatientInput, RuntimeCycleResult, RuntimeMessage, RuntimeSession, RuntimeSessionStatus, RuntimeSessionView, SessionExecutionLog } from "@/types/runtime-session";
@@ -373,8 +374,32 @@ async function runChain(sessionId: string, options: { notes: string[]; participa
     // moment the program stops to ask about safety.
     if (turn.safetyConcern) return deliverSafetyClarification(view, anchor, session.runtimeContext.fields, "model_safety_concern", retrieval);
 
+    // Worksheet display text (note2026_10_05_worksheet_display_version): the
+    // recorded words above stay as they are; the map of tidy text the
+    // worksheet shows instead is kept in step with them -- a field whose
+    // words changed this turn loses the tidy text of its old words (a list
+    // keeps it for the items that did not change). Tidy text for the new
+    // words comes from a separate small model call (worksheet-tidy.ts, at most
+    // a few seconds; nothing on failure) and is accepted only where
+    // checkFieldDisplay finds it drawn from those words.
+    const previousFields = session.runtimeContext.fields;
+    const changedNames = Object.keys(accepted).filter((name) => JSON.stringify(accepted[name]) !== JSON.stringify(previousFields[name]));
+    const specs = new Map(promptSessionFieldSet(session.sessionDefinitionId).fields.map((spec) => [spec.name, spec]));
+    const tidyItems = changedNames.flatMap((name): TidyItem[] => {
+      const spec = specs.get(name);
+      const value = fields[name];
+      if (spec?.kind === "text" && typeof value === "string") return [{ name, label: spec.label, value }];
+      if (spec?.kind === "text_list" && Array.isArray(value) && value.every((item) => typeof item === "string")) return [{ name, label: spec.label, value: value as string[] }];
+      return [];
+    });
+    const tidy = checkFieldDisplay(session.sessionDefinitionId, await tidyWorksheetValues(tidyItems, { sessionId: session.id }), fields);
+    // Names and reasons only, as for FIELD_REJECTED.
+    if (tidy.rejected.length) void recordRuntimeEvent({ participantId: session.participantId, runtimeSessionId: session.id, category: "validation", severity: "info", code: "FIELD_DISPLAY_REJECTED", detail: { fields: tidy.rejected.map((item) => ({ name: item.name, reason: item.reason })) } });
+    const display = nextFieldDisplay(promptFieldDisplay(previousFields), previousFields, fields, changedNames, tidy.accepted);
+    fields[PROMPT_DISPLAY_FIELD] = display;
+
     try {
-      await projectRuntimeFieldsToWorksheet({ runtimeSessionId: session.id, sessionDefinitionId: session.sessionDefinitionId, fields, sourceTurnId: makeId("TURN") });
+      await projectRuntimeFieldsToWorksheet({ runtimeSessionId: session.id, sessionDefinitionId: session.sessionDefinitionId, fields, sourceTurnId: makeId("TURN"), display });
     } catch (error) {
       console.error("[prompt-session-api] worksheet projection failed", { sessionId, error });
     }

@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { CheckCircle2 } from "lucide-react";
 import { Badge, Button } from "@/shared/components/ui/primitives";
 import { fadeScale, fadeUp, highlightPulse, questComplete } from "@/shared/motion/motion-variants";
+import { shownItemsOf } from "@/shared/worksheet/field-display";
 import type { WorksheetFieldView } from "@/types/worksheet";
 import type { RuntimeMessage, RuntimeMessageRole } from "@/types/runtime-session";
 
@@ -318,7 +319,11 @@ export function WorksheetCell({
   // commas, which saved back as one line would merge them into one item.
   const startEditing = () => {
     const items = Array.isArray(field.value?.value) ? (field.value?.value as unknown[]).map(String) : undefined;
-    setDraft(list && items ? items.join("\n") : (field.value?.displayValue ?? ""));
+    // Edits start from the recorded words, not the tidied text shown
+    // (note2026_10_05_worksheet_display_version) -- the same text for every
+    // value that has no tidied version.
+    const recorded = field.value?.value;
+    setDraft(list && items ? items.join("\n") : typeof recorded === "string" ? recorded : (field.value?.displayValue ?? ""));
     setEditing(true);
   };
 
@@ -362,8 +367,9 @@ export function WorksheetCell({
         <>
           {list ? (
             <ul className="mt-1 space-y-1">
-              {(Array.isArray(field.value?.value) ? (field.value?.value as unknown[]) : []).map((item, index) => (
-                <li key={index} className="rounded-panel border border-border bg-surface-subtle px-2 py-1 text-sm text-text-primary">{String(item)}</li>
+              {/* Tidied items where a prompt-driven session holds them, the recorded words otherwise (note2026_10_05_worksheet_display_version). */}
+              {shownItemsOf(field.value).map((item, index) => (
+                <li key={index} className="rounded-panel border border-border bg-surface-subtle px-2 py-1 text-sm text-text-primary">{item}</li>
               ))}
             </ul>
           ) : chip ? (

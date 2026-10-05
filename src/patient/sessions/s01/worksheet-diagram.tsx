@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, u
 import { QuestCompleteBadge, useJustFilled } from "@/patient/components/worksheet-renderers/shared";
 import { InlineEditor } from "@/patient/components/worksheet-renderers/inline-editor";
 import type { S01Labels } from "@/patient/sessions/s01/worksheet-labels";
+import { shownItemsOf } from "@/shared/worksheet/field-display";
 import type { WorksheetFieldView } from "@/types/worksheet";
 
 // The TBCT Conceptualization Diagram Phase 1 Level 1, as drawn on the paper
@@ -18,10 +19,13 @@ import type { WorksheetFieldView } from "@/types/worksheet";
 
 export type FieldGetter = (key: string) => WorksheetFieldView | undefined;
 
+/** The text the worksheet shows: the tidied text where the session holds one
+ * (displayValue / displayItems, note2026_10_05_worksheet_display_version),
+ * the recorded words otherwise. */
 export function fieldText(field?: WorksheetFieldView): string | undefined {
   const value = field?.value?.value;
   if (value === undefined || value === null || value === "") return undefined;
-  if (Array.isArray(value)) return value.length ? value.map(String).join(", ") : undefined;
+  if (Array.isArray(value)) return value.length ? shownItemsOf(field?.value).join(", ") : undefined;
   return field?.value?.displayValue ?? String(value);
 }
 

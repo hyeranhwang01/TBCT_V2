@@ -122,6 +122,12 @@ export interface WorksheetFieldValueRecord {
   value: unknown;
   displayValue?: string;
   participantVerbatim?: string;
+  /** For a list value: what the worksheet shows for each item, same length
+   * and order as `value` -- the tidied text of a prompt-driven session
+   * (.claude/TASK_SCOPE.json note2026_10_05_worksheet_display_version). The
+   * view carries no collection items, so the per-item display rides here.
+   * [] when there is none; `value` stays the participant's exact words. */
+  displayItems?: string[];
 }
 
 export interface WorksheetCollectionItemRecord {

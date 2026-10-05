@@ -204,3 +204,55 @@ describe("S01Worksheet (clinician)", () => {
     expect(screen.queryByText("Person 2 · Feeling")).toBeNull();
   });
 });
+
+// The worksheet shows the tidied text where the session holds one; the
+// recorded words stay the value (.claude/TASK_SCOPE.json
+// note2026_10_05_worksheet_display_version).
+describe("S01Worksheet (display text)", () => {
+  function tidied(values: Record<string, unknown>, display: Record<string, string | string[]>): WorksheetView {
+    const base = view(values);
+    return {
+      ...base,
+      fields: base.fields.map((item) => {
+        const tidy = display[item.binding.worksheetFieldKey];
+        if (tidy === undefined || !item.value) return item;
+        return Array.isArray(tidy)
+          ? { ...item, value: { ...item.value, displayValue: tidy.join(", "), displayItems: tidy } }
+          : { ...item, value: { ...item.value, displayValue: tidy, participantVerbatim: String(item.value.value) } };
+      }),
+    };
+  }
+  const RAW = { ...OWN_CASE, openingInitialThought: "음 나를 무시하는 거야 그런 것 같아", s01Problems: ["음 불안이 심해요 그냥", "계획대로 안 되면 힘들어요"] };
+  const DISPLAY = { openingInitialThought: "나를 무시하는 거야", s01Problems: ["불안이 심해요", "계획대로 안 되면 힘들어요"] };
+
+  it("shows the tidied text for a value and for list items, and the recorded words where there is none", () => {
+    render(<S01Worksheet view={tidied(RAW, DISPLAY)} onConfirm={noop} onEdit={noop} busy={false} locale="ko-KR" readOnly />);
+    expect(screen.getByText("나를 무시하는 거야")).toBeInTheDocument();
+    expect(screen.queryByText("음 나를 무시하는 거야 그런 것 같아")).toBeNull();
+    expect(screen.getByText("불안이 심해요")).toBeInTheDocument();
+    expect(screen.queryByText("음 불안이 심해요 그냥")).toBeNull();
+    expect(screen.getByText("혼자 울었어요")).toBeInTheDocument();
+  });
+
+  it("falls back to the recorded words when the display list does not match the list", () => {
+    render(<S01Worksheet view={tidied(RAW, { s01Problems: ["불안이 심해요"] })} onConfirm={noop} onEdit={noop} busy={false} locale="ko-KR" readOnly />);
+    expect(screen.getByText("음 불안이 심해요 그냥")).toBeInTheDocument();
+  });
+
+  it("edits a list item from what is shown, keeping the other recorded words as they are", () => {
+    const onEdit = vi.fn();
+    render(<S01Worksheet view={tidied(RAW, DISPLAY)} onConfirm={noop} onEdit={onEdit} busy={false} locale="ko-KR" readOnly allowEdit />);
+    fireEvent.click(screen.getByText("계획대로 안 되면 힘들어요"));
+    fireEvent.change(screen.getByRole("textbox", { name: "나의 어려움" }), { target: { value: "계획이 틀어지면 힘들어요" } });
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+    expect(onEdit).toHaveBeenCalledWith("s01Problems", ["음 불안이 심해요 그냥", "계획이 틀어지면 힘들어요"]);
+  });
+
+  it("does not save the shown text over the recorded words when nothing was changed", () => {
+    const onEdit = vi.fn();
+    render(<S01Worksheet view={tidied(RAW, DISPLAY)} onConfirm={noop} onEdit={onEdit} busy={false} locale="ko-KR" readOnly allowEdit />);
+    fireEvent.click(screen.getByText("나를 무시하는 거야"));
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "그때 스친 생각" }), { key: "Enter" });
+    expect(onEdit).not.toHaveBeenCalled();
+  });
+});

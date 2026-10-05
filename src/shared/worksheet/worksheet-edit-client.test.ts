@@ -41,3 +41,24 @@ describe("withOptimisticWorksheetEdit", () => {
     expect(valueOf(edited, "s01Problems")).toBe(valueOf(before, "s01Problems"));
   });
 });
+
+// A participant edit replaces the tidied text too (.claude/TASK_SCOPE.json
+// note2026_10_05_worksheet_display_version).
+describe("withOptimisticWorksheetEdit with display text", () => {
+  const raw = view({ openingInitialThought: "음 나를 무시하는 거야", s01Problems: ["음 졸리다", "읎오"] });
+  const tidied: WorksheetView = {
+    ...raw,
+    fields: raw.fields.map((field) => (field.definition.worksheetFieldKey === "openingInitialThought"
+      ? { ...field, value: { ...field.value!, displayValue: "나를 무시하는 거야", participantVerbatim: "음 나를 무시하는 거야" } }
+      : { ...field, value: { ...field.value!, displayValue: "졸리다, 읎오", displayItems: ["졸리다", "읎오"] } })),
+  };
+
+  it("shows the edited words in place of the tidied text", () => {
+    expect(valueOf(withOptimisticWorksheetEdit(tidied, "openingInitialThought", "나를 무시했어"), "openingInitialThought")).toMatchObject({ value: "나를 무시했어", displayValue: "나를 무시했어" });
+  });
+
+  it("keeps the tidied text of list items the edit did not touch", () => {
+    expect(valueOf(withOptimisticWorksheetEdit(tidied, "s01Problems", ["음 졸리다", "새 어려움"]), "s01Problems")).toMatchObject({ value: ["음 졸리다", "새 어려움"], displayItems: ["졸리다", "새 어려움"], displayValue: "졸리다, 새 어려움" });
+    expect(valueOf(withOptimisticWorksheetEdit(tidied, "s01Problems", ["새 어려움"]), "s01Problems")).toMatchObject({ value: ["새 어려움"], displayItems: [], displayValue: "새 어려움" });
+  });
+});
