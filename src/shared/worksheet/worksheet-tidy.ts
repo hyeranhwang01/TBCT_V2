@@ -124,6 +124,16 @@ async function callAnthropic(items: TidyItem[], context: { sessionId: string }):
   }
 }
 
+/** Off unless WORKSHEET_TIDY=on (2026-10-06, by the user): in use the tidy
+ * text cut the middle of a situation ("피곤하니까 더 실수하고 놓칠까봐
+ * 불안해서" dropped, leaving a sentence that no longer made sense) and turned
+ * "~같아" into "~같아요"; the check let both through, since it only asked
+ * whether the text came from the words. Until both are fixed the worksheet
+ * shows the recorded words. */
+export function worksheetTidyEnabled() {
+  return (process.env.WORKSHEET_TIDY ?? "").trim().toLowerCase() === "on";
+}
+
 /** Display text for the given recorded values, by field name; {} when the
  * call is not configured or fails. Unchecked: pass it to checkFieldDisplay. */
 export async function tidyWorksheetValues(items: TidyItem[], context: { sessionId: string }): Promise<Record<string, unknown>> {

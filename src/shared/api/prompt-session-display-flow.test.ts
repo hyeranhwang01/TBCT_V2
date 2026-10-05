@@ -26,9 +26,12 @@ describe("prompt-session turn with worksheet display text", () => {
   afterEach(() => {
     fake?.uninstall();
     setWorksheetTidierForTests(undefined);
+    delete process.env.WORKSHEET_TIDY;
   });
   beforeEach(async () => {
     process.env.AI_PROVIDER = "mock";
+    // These tests cover the feature as it works when switched on.
+    process.env.WORKSHEET_TIDY = "on";
     const db = getLocalDb();
     await db.transaction("rw", db.tables, async () => Promise.all(db.tables.map((table) => table.clear())));
   });
@@ -100,6 +103,28 @@ describe("prompt-session turn with worksheet display text", () => {
     fake = installScriptedPromptSession(() => ({ reply: "어떤 생각이 들었나요?", fieldUpdates: { openingInitialThought: THOUGHT } }));
     const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s01" });
     await startRuntimeSession(session.id);
+    expect(await shown(session.id, "openingInitialThought")).toMatchObject({ value: THOUGHT, displayValue: THOUGHT });
+  }, 60_000);
+
+  it("is off by default: no tidy call, and tidy text stored earlier stops showing", async () => {
+    delete process.env.WORKSHEET_TIDY;
+    let called = false;
+    setWorksheetTidierForTests(async () => {
+      called = true;
+      return { openingInitialThought: "나를 무시하는 거야" };
+    });
+    fake = installScriptedPromptSession((_request, index) => (index === 0
+      ? { reply: "어떤 생각이 들었나요?", fieldUpdates: { openingInitialThought: THOUGHT } }
+      : { reply: "그렇군요.", fieldUpdates: {} }));
+    const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId: "tbct-s01" });
+    await startRuntimeSession(session.id);
+    const record = await getRuntimeSessionRecord(session.id);
+    await updateRuntimeSessionRecord(session.id, { runtimeContext: { ...record!.runtimeContext, fields: { ...record!.runtimeContext.fields, [PROMPT_DISPLAY_FIELD]: { openingInitialThought: "나를 무시하는 거야" } } } });
+    const view = await getRuntimeSession(session.id);
+    await submitPatientInput(session.id, { kind: "text", value: "네" }, { clientTurnId: "turn-1", expectedSessionVersion: view!.session.version ?? 0 });
+
+    expect(called).toBe(false);
+    expect((await getRuntimeSessionRecord(session.id))!.runtimeContext.fields[PROMPT_DISPLAY_FIELD]).toEqual({});
     expect(await shown(session.id, "openingInitialThought")).toMatchObject({ value: THOUGHT, displayValue: THOUGHT });
   }, 60_000);
 });

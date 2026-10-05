@@ -41,7 +41,7 @@ import { indexParticipantHomework, tagInBackground } from "@/shared/memory/memor
 import { authorshipViolations, bridgeTexts, retrievalProgramLines, retrieveForTurn, type TurnRetrieval } from "@/shared/memory/memory-retrieval";
 import { saveMemoryChunkRetrieval } from "@/shared/data/repositories/memory-chunk-repository";
 import { sanitizeTags } from "@/shared/memory/memory-tags";
-import { tidyWorksheetValues, type TidyItem } from "@/shared/worksheet/worksheet-tidy";
+import { tidyWorksheetValues, worksheetTidyEnabled, type TidyItem } from "@/shared/worksheet/worksheet-tidy";
 import { generatePromptSessionTurn, type PromptHistoryMessage, type PromptSessionResult, type PromptSessionTurn } from "@/shared/dialogue-agent/prompt-session-agent";
 import { PROMPT_DISPLAY_FIELD, PROMPT_FOCUS_FIELD, PROMPT_INPUT_HINT, PROMPT_THEMES_FIELD, checkFieldDisplay, checkFieldUpdates, nextFieldDisplay, promptFieldDisplay, promptSessionFieldSet, derivePromptSessionFields, promptSessionFieldValues, type PromptInputHint } from "@/shared/runtime/prompt-driven-sessions";
 import type { ClinicalStageNode, PromptItem } from "@/shared/protocol/source-fidelity-types";
@@ -392,10 +392,13 @@ async function runChain(sessionId: string, options: { notes: string[]; participa
       if (spec?.kind === "text_list" && Array.isArray(value) && value.every((item) => typeof item === "string")) return [{ name, label: spec.label, value: value as string[] }];
       return [];
     });
-    const tidy = checkFieldDisplay(session.sessionDefinitionId, await tidyWorksheetValues(tidyItems, { sessionId: session.id }), fields);
+    const tidyOn = worksheetTidyEnabled();
+    const tidy = checkFieldDisplay(session.sessionDefinitionId, tidyOn ? await tidyWorksheetValues(tidyItems, { sessionId: session.id }) : {}, fields);
     // Names and reasons only, as for FIELD_REJECTED.
     if (tidy.rejected.length) void recordRuntimeEvent({ participantId: session.participantId, runtimeSessionId: session.id, category: "validation", severity: "info", code: "FIELD_DISPLAY_REJECTED", detail: { fields: tidy.rejected.map((item) => ({ name: item.name, reason: item.reason })) } });
-    const display = nextFieldDisplay(promptFieldDisplay(previousFields), previousFields, fields, changedNames, tidy.accepted);
+    // Off (worksheet-tidy.ts worksheetTidyEnabled): nothing is kept, so tidy
+    // text stored while it was on stops showing at the next turn.
+    const display = tidyOn ? nextFieldDisplay(promptFieldDisplay(previousFields), previousFields, fields, changedNames, tidy.accepted) : {};
     fields[PROMPT_DISPLAY_FIELD] = display;
 
     try {
