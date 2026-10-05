@@ -1,4 +1,24 @@
 {
+  "note2026_10_05_patient_auth_v2_look": {
+    "task": "Patient sign-in/sign-up and the patient loading cover in the patient app's v2 look (green board + gold, BrandMark, Pt kit), replacing the shared pink-violet/blue auth look for the patient role only. Same AuthForm logic (Supabase login/signup, MFA, forgot/reset, confirm-email); the clinician auth screens are unchanged. The splash shows the green version only on patient routes (/patient/...), the existing one elsewhere.",
+    "userDecision": "2026-10-05, by the user: approved the local design preview (/preview/patient-login) incl. copy for self sign-up ('가입한 이메일과 비밀번호로 들어와 주세요', '처음이신가요? 이메일로 계정을 만들어 주세요', no-account/has-account links) and asked to apply it as is and push.",
+    "sharedFileJustification": "auth-form.tsx and app-splash.tsx are shared with the clinician app; the change branches on role === 'patient' / patient pathname so clinician rendering is identical. The patient chrome lives in a new patient-owned component.",
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/shared/components/auth/auth-form.tsx",
+      "src/shared/components/ui/app-splash.tsx",
+      "src/patient/components/patient-auth-layout.tsx",
+      "src/shared/i18n/dictionaries/ko.ts",
+      "src/shared/i18n/dictionaries/en.ts",
+      "src/app/preview/patient-login/page.tsx"
+    ],
+    "doNotTouch": [
+      "src/patient/sessions/**",
+      "src/shared/protocol/**",
+      "src/shared/memory/**",
+      "src/shared/components/auth/clinician-auth-page.tsx"
+    ]
+  },
   "note2026_10_02_memory_rag_v2_phase_a": {
     "task": "Memory RAG v2, Phase A (plan ~/.claude/plans/witty-wishing-cat.md): storage provenance (author, layer, cognitive_level, sensitivity_flags; sql/043) and append-only validity events (sql/044); tags-v2 for chunk tagging without the helpless/unlovable/worthless axis; retrieval-v2 (filters incl. invalid/sensitive/level-gated interpretations by the TBCT book schedule, fixed slots replacing the step-affinity table, relevance = tags + IDF bigrams, session-index recency with a floor, per-layer quotas with a relevance threshold, within-list de-duplication, no repetition penalty, surfacedThisSession metadata, no usage instructions in program lines); clinician UI/export fields; evaluation with planted negatives and v1/v2/ablation conditions.",
     "userDecision": "2026-10-02, by the user: storage per LongMemEval (keep raw, tags as keys, per-step units); management/output based on SimCounsel with literature-validated fixes; TBCT book session order (level 1 S1-S3, level 2 from S4, level 3 from S5); sensitivity flags come from the safety code automatically (only existing risk signals for now; trauma detection is separate safety-code work); Phase A only (no session-end reflection, no counter-evidence slot yet); prompts not edited.",

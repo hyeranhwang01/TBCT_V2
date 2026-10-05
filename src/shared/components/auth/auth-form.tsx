@@ -3,13 +3,15 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Eye, EyeOff, Heart, Lock, Mail, UserPlus } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Heart, LifeBuoy, Lock, Mail, UserPlus } from "lucide-react";
 import { Button, Card, Field, inputClass } from "@/shared/components/ui/primitives";
 import { Logo } from "@/shared/components/ui/logo";
 import { useT } from "@/shared/i18n/context";
 import { getSupabaseBrowserClient } from "@/shared/supabase/client";
 import { cn } from "@/shared/utils";
 import type { AppRole } from "@/shared/auth/auth-context";
+import { PtButton, PtField, ptInputClass } from "@/patient/components/ui/kit";
+import { PatientAuthLayout, PatientAuthTitle, patientAuthCardClass } from "@/patient/components/patient-auth-layout";
 
 /** Shared page chrome for every branch below (main form, MFA challenge,
  * confirm-email-sent, reset-sent, forgot-password) -- one soft gradient
@@ -33,12 +35,44 @@ function AuthShell({ children }: { children: ReactNode }) {
   );
 }
 
+/** The patient role gets the patient app's own frame (patient-auth-layout.tsx,
+ * note2026_10_05_patient_auth_v2_look); the clinician keeps AuthShell. Top
+ * level, not defined inside AuthForm, so a re-render never remounts the
+ * inputs. */
+function Frame({ patient, children, after }: { patient: boolean; children: ReactNode; after?: ReactNode }) {
+  if (!patient) return <AuthShell>{children}</AuthShell>;
+  return (
+    <PatientAuthLayout>
+      <div className={patientAuthCardClass}>{children}</div>
+      {after}
+    </PatientAuthLayout>
+  );
+}
+
+function SubmitButton({ patient, loading, disabled, children }: { patient: boolean; loading: boolean; disabled?: boolean; children: ReactNode }) {
+  if (patient) {
+    return (
+      <PtButton type="submit" size="lg" block loading={loading} disabled={disabled} className="group mt-1">
+        {children}
+      </PtButton>
+    );
+  }
+  return (
+    <Button type="submit" variant="authGradient" loading={loading} disabled={disabled} className="w-full justify-center py-3">
+      {children}
+    </Button>
+  );
+}
+
 // Shared by clinician-auth-page.tsx and patient-auth-page.tsx -- the two
 // pages are identical apart from which role they sign up as and where a
 // successful login lands, so that's all this component takes as props.
 export function AuthForm({ role, titleKey, redirectTo }: { role: AppRole; titleKey: string; redirectTo: string }) {
   const { t } = useT();
   const router = useRouter();
+  const patient = role === "patient";
+  const fieldInputClass = patient ? ptInputClass : inputClass;
+  const FieldBox = patient ? PtField : Field;
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -168,86 +202,164 @@ export function AuthForm({ role, titleKey, redirectTo }: { role: AppRole; titleK
 
   if (mfaFactorId) {
     return (
-      <AuthShell>
-        <Logo className="mb-4 h-16 w-16" />
-        <h1 className="text-xl font-bold text-text-primary">{t("mfa.challengeTitle")}</h1>
+      <Frame patient={patient}>
+        {!patient && <Logo className="mb-4 h-16 w-16" />}
+        {patient ? <PatientAuthTitle>{t("mfa.challengeTitle")}</PatientAuthTitle> : <h1 className="text-xl font-bold text-text-primary">{t("mfa.challengeTitle")}</h1>}
         <form className="mt-5 grid gap-4" onSubmit={handleMfaSubmit}>
-          <Field label={t("mfa.codeLabel")}>
+          <FieldBox label={t("mfa.codeLabel")}>
             <input
               type="text"
               inputMode="numeric"
               autoComplete="one-time-code"
               required
               maxLength={6}
-              className={inputClass}
+              className={fieldInputClass}
               placeholder={t("mfa.challengePlaceholder")}
               value={mfaCode}
               onChange={(event) => setMfaCode(event.target.value)}
             />
-          </Field>
+          </FieldBox>
           {mfaError && <p className="text-xs text-critical">{mfaError}</p>}
-          <Button type="submit" variant="authGradient" loading={submitting} disabled={!mfaCode.trim()} className="w-full justify-center py-3">
+          <SubmitButton patient={patient} loading={submitting} disabled={!mfaCode.trim()}>
             {t("mfa.challengeSubmit")}
-          </Button>
+          </SubmitButton>
         </form>
-      </AuthShell>
+      </Frame>
     );
   }
 
-  if (confirmSent) {
+  if (confirmSent || resetSent) {
+    const title = confirmSent ? t("auth.confirmEmailTitle") : t("auth.resetPassword.sent");
+    const body = confirmSent ? t("auth.confirmEmailBody", { email }) : t("auth.resetPassword.sentBody", { email });
     return (
-      <AuthShell>
-        <div className="text-center">
-          <Logo className="mx-auto mb-4 h-16 w-16" />
-          <h1 className="text-xl font-bold text-text-primary">{t("auth.confirmEmailTitle")}</h1>
-          <p className="mt-2 text-sm text-text-secondary">{t("auth.confirmEmailBody", { email })}</p>
+      <Frame patient={patient}>
+        <div className={patient ? undefined : "text-center"}>
+          {!patient && <Logo className="mx-auto mb-4 h-16 w-16" />}
+          {patient ? <PatientAuthTitle>{title}</PatientAuthTitle> : <h1 className="text-xl font-bold text-text-primary">{title}</h1>}
+          <p className="mt-2 text-sm text-text-secondary">{body}</p>
         </div>
-      </AuthShell>
-    );
-  }
-
-  if (resetSent) {
-    return (
-      <AuthShell>
-        <div className="text-center">
-          <Logo className="mx-auto mb-4 h-16 w-16" />
-          <h1 className="text-xl font-bold text-text-primary">{t("auth.resetPassword.sent")}</h1>
-          <p className="mt-2 text-sm text-text-secondary">{t("auth.resetPassword.sentBody", { email })}</p>
-        </div>
-      </AuthShell>
+      </Frame>
     );
   }
 
   if (forgotMode) {
     return (
-      <AuthShell>
-        <Logo className="mb-4 h-16 w-16" />
-        <h1 className="text-xl font-bold text-text-primary">{t("auth.resetPassword.title")}</h1>
+      <Frame patient={patient}>
+        {!patient && <Logo className="mb-4 h-16 w-16" />}
+        {patient ? <PatientAuthTitle>{t("auth.resetPassword.title")}</PatientAuthTitle> : <h1 className="text-xl font-bold text-text-primary">{t("auth.resetPassword.title")}</h1>}
         <p className="mt-2 text-sm text-text-secondary">{t("auth.resetPassword.description")}</p>
         <form className="mt-5 grid gap-4" onSubmit={handleForgotPassword}>
-          <Field label={t("auth.email")}>
+          <FieldBox label={t("auth.email")}>
             <input
               type="email"
               required
               autoComplete="email"
-              className={inputClass}
+              className={fieldInputClass}
               value={email}
               onChange={(event) => setEmail(event.target.value)}
             />
-          </Field>
+          </FieldBox>
           {resetError && <p className="text-xs text-critical">{resetError}</p>}
-          <Button type="submit" variant="authGradient" loading={submitting} className="w-full justify-center py-3">
+          <SubmitButton patient={patient} loading={submitting}>
             {t("auth.resetPassword.submit")}
-          </Button>
+          </SubmitButton>
         </form>
         <button
           type="button"
-          className="mt-4 w-full text-center text-xs text-clinical-blue hover:underline"
+          className={cn("mt-4 w-full text-center hover:underline", patient ? "text-[13px] font-semibold text-brand-ink" : "text-xs text-clinical-blue")}
           onClick={() => { setForgotMode(false); setResetError(null); }}
         >
           {t("auth.backToLogin")}
         </button>
-      </AuthShell>
+      </Frame>
+    );
+  }
+
+  if (patient) {
+    const switchMode = (next: "login" | "signup") => { setMode(next); setError(null); };
+    return (
+      <Frame
+        patient
+        after={
+          <>
+            <Link href="/crisis" target="_blank" rel="noopener noreferrer" className="mt-5 flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-[13px] text-text-secondary hover:bg-surface-hover">
+              <LifeBuoy className="h-4 w-4 text-critical" aria-hidden="true" />
+              {t("auth.patientUi.crisisPrompt")} <span className="font-semibold text-text-primary">{t("auth.patientUi.crisisLink")}</span>
+            </Link>
+            <p className="mt-2 text-center text-[12px] text-text-muted">
+              {t("auth.patientUi.clinicianPrompt")}{" "}
+              <Link href="/login" className="font-semibold text-text-secondary hover:underline">{t("auth.patientUi.clinicianLink")}</Link>
+            </p>
+          </>
+        }
+      >
+        <PatientAuthTitle>{mode === "signup" ? t("auth.patientUi.signupTitle") : t("auth.patientUi.loginTitle")}</PatientAuthTitle>
+        <p className="mt-3 text-[14px] leading-relaxed text-text-secondary">{mode === "signup" ? t("auth.patientUi.signupBody") : t("auth.patientUi.loginBody")}</p>
+
+        <div className="mt-6 grid grid-cols-2 rounded-full bg-surface-hover p-1 text-[14px] font-semibold" role="tablist">
+          {(["login", "signup"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={mode === value}
+              onClick={() => switchMode(value)}
+              className={cn("transition-ui h-9 rounded-full", mode === value ? "bg-surface text-text-primary shadow-sm" : "text-text-secondary")}
+            >
+              {value === "signup" ? t("auth.patientUi.tabSignup") : t("auth.patientUi.tabLogin")}
+            </button>
+          ))}
+        </div>
+
+        <form className="mt-6 grid gap-4" onSubmit={handleSubmit}>
+          <PtField label={t("auth.email")}>
+            <input type="email" required autoComplete="email" placeholder="name@example.com" className={ptInputClass} value={email} onChange={(event) => setEmail(event.target.value)} />
+          </PtField>
+          <PtField label={t("auth.password")} hint={mode === "signup" ? t("auth.patientUi.passwordHint") : undefined}>
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                required
+                minLength={8}
+                autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                className={cn(ptInputClass, "pr-11")}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((value) => !value)}
+                aria-label={showPassword ? t("common.hidePassword") : t("common.showPassword")}
+                className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-text-muted hover:bg-surface-hover"
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </PtField>
+          {mode === "login" && (
+            <div className="flex items-center justify-between gap-3 text-[13px]">
+              <label className="flex items-center gap-2 text-text-secondary">
+                <input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} className="h-4 w-4 rounded accent-[rgb(var(--color-brand))]" />
+                {t("auth.rememberMe")}
+              </label>
+              <button type="button" className="font-semibold text-brand-ink hover:underline" onClick={() => { setForgotMode(true); setError(null); }}>
+                {t("auth.forgotPassword")}
+              </button>
+            </div>
+          )}
+          {error && <p className="text-[13px] text-critical">{error}</p>}
+          <SubmitButton patient loading={submitting}>
+            {mode === "signup" ? t("auth.patientUi.submitSignup") : t("auth.patientUi.submitLogin")}
+            <ArrowRight className="h-5 w-5 transition-transform duration-200 group-hover:translate-x-1" aria-hidden="true" />
+          </SubmitButton>
+        </form>
+        <p className="mt-5 text-center text-[13px] text-text-secondary">
+          {mode === "signup" ? t("auth.patientUi.haveAccount") : t("auth.patientUi.noAccount")}{" "}
+          <button type="button" onClick={() => switchMode(mode === "signup" ? "login" : "signup")} className="font-semibold text-brand-ink hover:underline">
+            {mode === "signup" ? t("auth.patientUi.tabLogin") : t("auth.patientUi.tabSignup")}
+          </button>
+        </p>
+      </Frame>
     );
   }
 
@@ -257,7 +369,7 @@ export function AuthForm({ role, titleKey, redirectTo }: { role: AppRole; titleK
         <Logo className="mb-4 h-24 w-24 sm:h-28 sm:w-28" />
         <h1 className="text-2xl font-bold tracking-tight text-text-primary sm:text-[28px]">{t(titleKey)}</h1>
         <p className="mt-2 max-w-xs text-sm text-text-secondary">
-          {role === "patient" ? t("auth.patientWelcome") : t("auth.clinicianWelcome")}
+          {t("auth.clinicianWelcome")}
         </p>
       </div>
 
