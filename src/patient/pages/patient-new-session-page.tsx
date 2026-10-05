@@ -8,6 +8,7 @@ import { PatientShell } from "@/patient/components/patient-shell";
 import { PtButton, PtSkeleton, SessionNumber } from "@/patient/components/ui/kit";
 import { createCanonicalTestRuntimeSession, listCanonicalTestSessions } from "@/shared/api/runtime-session-api";
 import { getOrCreateParticipantForUiLocale } from "@/shared/api/participant-api";
+import { sessionLocaleForStart } from "@/patient/lib/api/patient-locale-sync";
 import { useT } from "@/shared/i18n/context";
 import { useAuth } from "@/shared/auth/auth-context";
 import { sessionMetaFor, sessionUnit } from "@/patient/lib/session-meta";
@@ -20,7 +21,6 @@ export function PatientNewSessionPage() {
   const { user } = useAuth();
   const userId = user?.id ?? "";
   const sessionsQuery = useQuery({ queryKey: ["canonical-test-runtime-sessions"], queryFn: listCanonicalTestSessions });
-  // New sessions inherit the participant's current locale.
   const participantQuery = useQuery({ queryKey: ["runtime-participant", userId], queryFn: () => getOrCreateParticipantForUiLocale(userId, locale), enabled: Boolean(userId) });
   const sessions = sessionsQuery.data ?? [];
   const [startingSessionId, setStartingSessionId] = useState<string | null>(null);
@@ -30,7 +30,9 @@ export function PatientNewSessionPage() {
     try {
       // Navigate as soon as the session row exists (fast, no model call);
       // patient-session-page.tsx starts it on arrival.
-      const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId, locale: participantQuery.data?.locale, participantId: participantQuery.data?.id, patientAlias: participantQuery.data?.alias });
+      // In the language on screen (patient-locale-sync.ts).
+      const sessionLocale = await sessionLocaleForStart(participantQuery.data, locale);
+      const session = await createCanonicalTestRuntimeSession({ sessionDefinitionId, locale: sessionLocale, participantId: participantQuery.data?.id, patientAlias: participantQuery.data?.alias });
       router.push(`/projects/demo/patient/sessions/${session.id}`);
     } catch (error) {
       console.error("Session start failed:", error);

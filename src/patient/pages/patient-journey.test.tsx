@@ -75,7 +75,8 @@ describe("the patient journey with developer mode on", () => {
     act(() => setDevModeEnabled(true));
     screen.getByRole("button", { name: "5회기 (참여 격자) 시작하기" }).click();
     await waitFor(() => expect(createSession).toHaveBeenCalledTimes(1));
-    expect(createSession).toHaveBeenCalledWith(expect.objectContaining({ sessionDefinitionId: "tbct-s05" }));
+    // In the language on screen (Korean here), not whatever the record says.
+    expect(createSession).toHaveBeenCalledWith(expect.objectContaining({ sessionDefinitionId: "tbct-s05", locale: "ko-KR" }));
     await waitFor(() => expect(push).toHaveBeenCalledWith("/projects/demo/patient/sessions/new-session"));
   });
 

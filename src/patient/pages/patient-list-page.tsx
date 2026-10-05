@@ -11,6 +11,7 @@ import { BOARD_BACKGROUND, GRAIN, PageBackdrop, PtButton, PtSkeleton } from "@/p
 import { OnboardingTour } from "@/shared/components/onboarding/onboarding-tour";
 import { createCanonicalTestRuntimeSession, listRuntimeSessionsForParticipant } from "@/shared/api/runtime-session-api";
 import { getOrCreateParticipantForUiLocale } from "@/shared/api/participant-api";
+import { sessionLocaleForStart } from "@/patient/lib/api/patient-locale-sync";
 import { PATIENT_TOUR_STEPS } from "@/shared/onboarding/tour-steps";
 import { useOnboardingTour } from "@/shared/onboarding/use-onboarding-tour";
 import { UI_LOCALE_STORAGE_KEY, useT } from "@/shared/i18n/context";
@@ -171,15 +172,19 @@ export function PatientJourney({
   // otherwise starts it.
   const handleOpen = async (item: { number: number; sessionId?: string } | undefined) => {
     if (!item || isStarting || localPreview) return;
-    if (item.sessionId) {
-      router.push(`${BASE}/sessions/${item.sessionId}`);
-      return;
-    }
     setIsStarting(true);
     try {
+      // The session speaks the language on screen; a participant record
+      // that says otherwise is brought in line, open sessions included, so
+      // resuming switches too (patient-locale-sync.ts).
+      const sessionLocale = await sessionLocaleForStart(participant, locale);
+      if (item.sessionId) {
+        router.push(`${BASE}/sessions/${item.sessionId}`);
+        return;
+      }
       const session = await createCanonicalTestRuntimeSession({
         sessionDefinitionId: `tbct-s${String(item.number).padStart(2, "0")}`,
-        locale: participant?.locale,
+        locale: sessionLocale,
         participantId: participant?.id,
         patientAlias: participant?.alias,
       });

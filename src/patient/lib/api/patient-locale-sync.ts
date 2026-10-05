@@ -50,3 +50,23 @@ export async function applyPatientLocaleChange(participant: Pick<RuntimeParticip
   await updateParticipantProfile(participant.id, { alias: participant.alias, locale: sessionLocale, country: participant.country, status: participant.status });
   return propagateLocaleToOpenSessions(participant, sessionLocale);
 }
+
+/**
+ * The language a session starts in: the one the patient is looking at
+ * (note2026_10_05_session_starts_in_ui_language). Sessions used to copy
+ * participant.locale, which only follows the UI when the patient presses the
+ * language toggle -- so a participant whose record still said en-US (every
+ * account created before getOrCreateParticipantForUiLocale existed) got an
+ * English session under Korean screens. When the record differs it is
+ * brought in line, open sessions included, before the new session is made;
+ * if that update fails the session still starts in the UI language.
+ */
+export async function sessionLocaleForStart(participant: Pick<RuntimeParticipant, "id" | "alias" | "country" | "status" | "locale"> | undefined, uiLocale: UiLocale): Promise<string> {
+  const sessionLocale = UI_LOCALE_TO_SESSION_LOCALE[uiLocale];
+  if (participant && participant.locale !== sessionLocale) {
+    await applyPatientLocaleChange(participant, uiLocale).catch((error: unknown) => {
+      console.error("[patient-locale-sync] participant locale not updated", { participantId: participant.id, error });
+    });
+  }
+  return sessionLocale;
+}

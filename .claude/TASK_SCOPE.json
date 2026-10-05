@@ -1,4 +1,22 @@
 {
+  "note2026_10_05_session_starts_in_ui_language": {
+    "task": "A session starts in the language the patient sees: at both patient start points (home journey, new-session page) the session locale comes from the current UI locale, and the participant record (plus open sessions) is brought in line when it differs. Fixes sessions opening in English under Korean UI for participants whose record still says en-US. Prompts and the session engine are unchanged (the per-call locale line in prompt-session-agent.ts already tells the model the language).",
+    "userDecision": "2026-10-05, by the user: '그렇게 고쳐줘' after the explanation that the language is set by the session locale (not the prompt manuscript) and that the fix is to start from the UI language.",
+    "allowedPaths": [
+      ".claude/TASK_SCOPE.json",
+      "src/patient/lib/api/patient-locale-sync.ts",
+      "src/patient/lib/api/patient-locale-sync.test.ts",
+      "src/patient/pages/patient-list-page.tsx",
+      "src/patient/pages/patient-new-session-page.tsx",
+      "src/patient/pages/patient-journey.test.tsx"
+    ],
+    "doNotTouch": [
+      "docs/prompts/**",
+      "src/shared/protocol/**",
+      "src/shared/dialogue-agent/**",
+      "src/patient/sessions/**"
+    ]
+  },
   "note2026_10_05_patient_auth_v2_look": {
     "task": "Patient sign-in/sign-up and the patient loading cover in the patient app's v2 look (green board + gold, BrandMark, Pt kit), replacing the shared pink-violet/blue auth look for the patient role only. Same AuthForm logic (Supabase login/signup, MFA, forgot/reset, confirm-email); the clinician auth screens are unchanged. The splash shows the green version only on patient routes (/patient/...), the existing one elsewhere.",
     "userDecision": "2026-10-05, by the user: approved the local design preview (/preview/patient-login) incl. copy for self sign-up ('가입한 이메일과 비밀번호로 들어와 주세요', '처음이신가요? 이메일로 계정을 만들어 주세요', no-account/has-account links) and asked to apply it as is and push.",
